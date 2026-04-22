@@ -1,0 +1,1 @@
+DELETE FROM my_day_items WHERE user_id = '44c3f442-d2bd-4419-ae9c-cc92241c1ac3' AND source = 'PERMANENT' AND date = '2026-03-31';

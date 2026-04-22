@@ -1,0 +1,1 @@
+UPDATE pipeline_clients SET ativo = true WHERE stage = 'FECHADO' AND (ativo = false OR ativo IS NULL);

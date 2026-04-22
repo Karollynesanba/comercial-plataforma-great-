@@ -1,0 +1,778 @@
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { SalesGoal } from '@/types';
+import { useAuthSafe } from './AuthContext';
+import { buildDashboardMetrics, endOfMonth, getClientRevenue, getCloseDate, isDateInRange, isRealContract, startOfMonth } from '@/lib/commercialMetrics';
+import { type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
+import { addCriativoToCloud, archiveCriativoInCloud, deletePipelineClientFromCloud, dismissPaymentReminderInCloud, fetchCommercialCloudState, renameCriativoInCloud, saveCloserDailyLogToCloud, savePipelineClientToCloud, savePreSalesDailyLogToCloud, saveSalesGoalToCloud, saveSdrGoalToCloud, setCommercialSetting, type CommercialCloudState } from '@/lib/commercialCloudStore';
+import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+
+export type PipelineStage = 'NOVO' | 'NO_SHOW' | 'TAXA_INTERESSE' | 'NEGOCIACAO' | 'PERDIDO' | 'FECHADO';
+export type Vendedor = 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDRO_JUAN' | 'CAETANO';
+export type Equipe = string;
+export type Faturamento =
+  | '0_A_10K'
+  | '10K_A_20K'
+  | '20K_A_30K'
+  | '30K_A_50K'
+  | '50K_A_80K'
+  | '80K_A_100K'
+  | '100K_A_150K'
+  | '150K_A_250K'
+  | '250K_A_400K'
+  | '400K_A_600K'
+  | '600K_A_1M'
+  | '1M_PLUS'
+  | '0_A_15K'
+  | '15K_A_30K'
+  | '50K_A_100K'
+  | '100K_PLUS'
+  | 'NAO_INFORMADO'
+  | 'PERSONALIZADO';
+export type Pacote = 'COMPLETO' | 'TRAFEGO_E_CRIATIVOS' | 'ATENDIMENTO' | 'TRAFEGO' | 'COMPLETO_NOVA_ERA' | 'TRAFEGO_ARTES_IA' | 'TRAFEGO_CONSULTORIA' | 'IA' | 'TRAFEGO_ROTEIRO' | 'TRAFEGO_IA';
+export type Periodo = 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'TAXA_INTERESSE';
+export type PagadorAnuncio = 'CLIENTE' | 'GREAT';
+export type TemSocio = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
+export type TemMkt = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
+export type TemSecretaria = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
+export type SalaoOuClinica = string;
+export type Agendador = 'MIGUEL' | 'PEDRO' | 'HEBERT' | 'CLED' | 'CAETANO';
+export type PodeInvestir = 'SIM' | 'NAO';
+
+export const TEAM_IDS = {
+  EQUIPE_7: 'team-equipe-7',
+  TROPA_DE_ELITE: 'team-tropa-de-elite',
+} as const;
+
+export const AGENDADOR_OPTIONS = [
+  { value: 'MIGUEL' as Agendador, label: 'Miguel' },
+  { value: 'PEDRO' as Agendador, label: 'Pedro' },
+  { value: 'HEBERT' as Agendador, label: 'Hebert' },
+  { value: 'CLED' as Agendador, label: 'Cled' },
+  { value: 'CAETANO' as Agendador, label: 'Caetano' },
+];
+
+export const OFFICIAL_SDR_OPTIONS = [
+  { value: 'MIGUEL' as Agendador, label: 'Miguel' },
+  { value: 'HEBERT' as Agendador, label: 'Herbert' },
+];
+
+export const OFFICIAL_SDR_VALUES = OFFICIAL_SDR_OPTIONS.map((option) => option.value);
+
+export const TEM_SOCIO_OPTIONS = [
+  { value: 'SIM' as TemSocio, label: 'Sim' },
+  { value: 'NAO' as TemSocio, label: 'Nao' },
+  { value: 'NAO_PERGUNTADO' as TemSocio, label: 'Nao Perguntado' },
+];
+
+export const TEM_MKT_OPTIONS = [
+  { value: 'SIM' as TemMkt, label: 'Sim' },
+  { value: 'NAO' as TemMkt, label: 'Nao' },
+  { value: 'NAO_PERGUNTADO' as TemMkt, label: 'Nao Perguntado' },
+];
+
+export const TEM_SECRETARIA_OPTIONS = [
+  { value: 'SIM' as TemSecretaria, label: 'Sim' },
+  { value: 'NAO' as TemSecretaria, label: 'Nao' },
+  { value: 'NAO_PERGUNTADO' as TemSecretaria, label: 'Nao Perguntado' },
+];
+
+export const SALAO_OU_CLINICA_OPTIONS = [
+  { value: 'ESTETICA_BELEZA' as SalaoOuClinica, label: 'Estética e beleza' },
+  { value: 'FISIOTERAPIA' as SalaoOuClinica, label: 'Fisioterapia' },
+  { value: 'PSICOLOGIA' as SalaoOuClinica, label: 'Psicologia' },
+  { value: 'SALAO_BELEZA' as SalaoOuClinica, label: 'Salão de beleza' },
+  { value: 'NUTRICIONISTA' as SalaoOuClinica, label: 'Nutricionista' },
+  { value: 'ODONTOLOGIA' as SalaoOuClinica, label: 'Odontologia' },
+];
+
+export const PODE_INVESTIR_OPTIONS = [
+  { value: 'SIM' as PodeInvestir, label: 'Sim' },
+  { value: 'NAO' as PodeInvestir, label: 'Nao' },
+];
+
+export interface PipelineClient {
+  id: string;
+  ativo: boolean;
+  clientName: string;
+  clinicName: string;
+  telefone?: string;
+  vendedor?: Vendedor;
+  criativo: string;
+  equipe: Equipe;
+  faturamento: Faturamento;
+  faturamentoPersonalizado?: string;
+  podeInvestir?: PodeInvestir;
+  pacote: Pacote;
+  periodo: Periodo;
+  indicacao?: string;
+  entrada: number;
+  isMrr?: boolean;
+  mrrEntrada?: number;
+  mrrRemaining?: number;
+  dataEntrada: Date;
+  stage: PipelineStage;
+  lastStageChange?: Date;
+  lostReason?: string;
+  noShowReason?: string;
+  notes?: string;
+  agendadoPor?: Agendador;
+  agendadoVia?: string;
+  pagadorAnuncio?: PagadorAnuncio;
+  temSocio?: TemSocio;
+  temMkt?: TemMkt;
+  temSecretaria?: TemSecretaria;
+  salaoOuClinica?: SalaoOuClinica;
+  createdByUserId: string | null;
+  dealValue?: number;
+  plan?: 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'TAXA_INTERESSE';
+  creativeSource?: string;
+  entryDate?: Date;
+  meetingDate?: string;
+  meetingTime?: string;
+  paymentDeadline?: Date;
+  expectedCloseDate?: Date;
+  assignedSDR?: string;
+  assignedCloser?: string;
+  followupDone?: boolean;
+  createdAt?: Date;
+}
+
+export interface PaymentReminder {
+  id: string;
+  clientId: string;
+  clientName: string;
+  clinicName: string;
+  dealValue: number;
+  paymentDeadline: Date;
+  dismissed: boolean;
+  createdAt: Date;
+}
+
+export interface SDRGoal {
+  id: string;
+  agendador: Agendador;
+  month: string;
+  goalCount: number;
+  createdAt: Date;
+}
+
+export const STAGE_LABELS: Record<PipelineStage, string> = {
+  NOVO: 'Novo Lead',
+  NO_SHOW: 'No Show',
+  TAXA_INTERESSE: 'Taxa de Interesse',
+  NEGOCIACAO: 'Negociacao',
+  PERDIDO: 'Perdido',
+  FECHADO: 'Fechado',
+};
+
+export const STAGE_ORDER: PipelineStage[] = ['NOVO', 'NO_SHOW', 'TAXA_INTERESSE', 'NEGOCIACAO', 'PERDIDO', 'FECHADO'];
+
+export const VENDEDOR_OPTIONS = [
+  { value: 'HERBERT' as Vendedor, label: 'Herbert' },
+  { value: 'CLED' as Vendedor, label: 'Cled' },
+  { value: 'PEDRO_H' as Vendedor, label: 'Pedro H' },
+  { value: 'PEDRO_JUAN' as Vendedor, label: 'Pedro Juan' },
+  { value: 'CAETANO' as Vendedor, label: 'Caetano' },
+];
+
+export const EQUIPE_OPTIONS = [
+  { value: TEAM_IDS.TROPA_DE_ELITE, label: 'Tropa de Elite' },
+  { value: TEAM_IDS.EQUIPE_7, label: 'Equipe 7' },
+];
+
+export const FATURAMENTO_OPTIONS = [
+  { value: '0_A_10K' as Faturamento, label: 'R$ 0 até R$ 10 mil' },
+  { value: '10K_A_20K' as Faturamento, label: 'R$ 10 mil até R$ 20 mil' },
+  { value: '20K_A_30K' as Faturamento, label: 'R$ 20 mil até R$ 30 mil' },
+  { value: '30K_A_50K' as Faturamento, label: 'R$ 30 mil até R$ 50 mil' },
+  { value: '50K_A_80K' as Faturamento, label: 'R$ 50 mil até R$ 80 mil' },
+  { value: '80K_A_100K' as Faturamento, label: 'R$ 80 mil até R$ 100 mil' },
+  { value: '100K_A_150K' as Faturamento, label: 'R$ 100 mil até R$ 150 mil' },
+  { value: '150K_A_250K' as Faturamento, label: 'R$ 150 mil até R$ 250 mil' },
+  { value: '250K_A_400K' as Faturamento, label: 'R$ 250 mil até R$ 400 mil' },
+  { value: '400K_A_600K' as Faturamento, label: 'R$ 400 mil até R$ 600 mil' },
+  { value: '600K_A_1M' as Faturamento, label: 'R$ 600 mil até R$ 1 milhão' },
+  { value: '1M_PLUS' as Faturamento, label: 'Mais de R$ 1 milhão' },
+  { value: 'NAO_INFORMADO' as Faturamento, label: 'Nao Informado' },
+];
+
+export const PACOTE_OPTIONS = [
+  { value: 'COMPLETO' as Pacote, label: 'Completo' },
+  { value: 'TRAFEGO_E_CRIATIVOS' as Pacote, label: 'Trafego e Criativos' },
+  { value: 'ATENDIMENTO' as Pacote, label: 'Atendimento' },
+  { value: 'TRAFEGO' as Pacote, label: 'Trafego' },
+  { value: 'COMPLETO_NOVA_ERA' as Pacote, label: 'Completo Nova Era' },
+  { value: 'TRAFEGO_ARTES_IA' as Pacote, label: 'Trafego e Artes + IA' },
+  { value: 'TRAFEGO_CONSULTORIA' as Pacote, label: 'Trafego + Consultoria' },
+  { value: 'IA' as Pacote, label: 'IA' },
+  { value: 'TRAFEGO_ROTEIRO' as Pacote, label: 'Trafego + Roteiro' },
+  { value: 'TRAFEGO_IA' as Pacote, label: 'Trafego + IA' },
+];
+
+export const PERIODO_OPTIONS = [
+  { value: 'MENSAL' as Periodo, label: '30 Dias' },
+  { value: 'TRIMESTRAL' as Periodo, label: '90 Dias' },
+  { value: 'SEMESTRAL' as Periodo, label: '180 Dias' },
+  { value: 'TAXA_INTERESSE' as Periodo, label: 'Taxa de Interesse' },
+];
+
+export const PAGADOR_ANUNCIO_OPTIONS = [
+  { value: 'CLIENTE' as PagadorAnuncio, label: 'Cliente' },
+  { value: 'GREAT' as PagadorAnuncio, label: 'Great' },
+];
+
+export const INDICACAO_OPTIONS = [
+  { value: 'SIM', label: 'Sim' },
+  { value: 'NAO', label: 'Nao' },
+];
+
+export const LOST_REASON_OPTIONS = ['Sem orcamento', 'Nao respondeu', 'Fechou com concorrente', 'Nao faz sentido agora', 'Outro'];
+
+interface CommercialContextType {
+  pipelineClients: PipelineClient[];
+  salesGoals: SalesGoal[];
+  currentGoal: SalesGoal | null;
+  paymentReminders: PaymentReminder[];
+  criativos: string[];
+  nextTeamInQueue: Equipe;
+  sdrGoals: SDRGoal[];
+  preSalesDailyLogs: PreSalesDailyLog[];
+  closerDailyLogs: CloserDailyLog[];
+  getNextTeamLabel: () => string;
+  addPipelineClient: (client: Omit<PipelineClient, 'id' | 'createdByUserId'>, skipAgendamentoSync?: boolean) => Promise<void>;
+  updatePipelineClient: (id: string, data: Partial<PipelineClient>) => void;
+  movePipelineClient: (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => void;
+  deletePipelineClient: (id: string) => void;
+  setSalesGoal: (month: string, goalValue: number) => Promise<void>;
+  setSDRGoal: (agendador: Agendador, month: string, goalCount: number) => Promise<void>;
+  upsertPreSalesDailyLog: (log: Omit<PreSalesDailyLog, 'id' | 'updatedAt'>) => void;
+  upsertCloserDailyLog: (log: Omit<CloserDailyLog, 'id' | 'updatedAt'>) => void;
+  dismissReminder: (id: string) => void;
+  addCriativo: (criativo: string) => void;
+  updateCriativo: (oldCriativo: string, newCriativo: string) => void;
+  deleteCriativo: (criativo: string) => void;
+  getGoalStats: () => {
+    totalSold: number;
+    remaining: number;
+    projection: number;
+    dailyNeeded: number;
+    percentAchieved: number;
+    daysRemaining: number;
+    totalBusinessDays: number;
+    businessDaysPassed: number;
+    status: 'ok' | 'risk' | 'danger';
+  };
+  getPipelineStats: () => {
+    totalValue: number;
+    negotiationValue: number;
+    closedValue: number;
+    conversionRate: number;
+    averageTicket: number;
+    leadCount: number;
+  };
+  getStatsByVendedor: (vendedor: Vendedor) => {
+    totalLeads: number;
+    closedValue: number;
+    closedCount: number;
+    conversionRate: number;
+  };
+  getSDRStats: (agendador: Agendador, month?: string) => {
+    scheduledCount: number;
+    closedCount: number;
+    goalCount: number;
+    percentAchieved: number;
+  };
+}
+
+const CommercialContext = createContext<CommercialContextType | undefined>(undefined);
+const currentMonth = new Date().toISOString().slice(0, 7);
+const EMPTY_COMMERCIAL_STATE: CommercialCloudState = {
+  pipelineClients: [],
+  salesGoals: [],
+  sdrGoals: [],
+  preSalesDailyLogs: [],
+  closerDailyLogs: [],
+  paymentReminders: [],
+  criativos: [],
+  teamPointer: TEAM_IDS.EQUIPE_7,
+};
+
+function revivePipelineClient(client: any): PipelineClient {
+  return {
+    ...client,
+    dataEntrada: client.dataEntrada ? new Date(client.dataEntrada) : undefined,
+    lastStageChange: client.lastStageChange ? new Date(client.lastStageChange) : undefined,
+    entryDate: client.entryDate ? new Date(client.entryDate) : undefined,
+    paymentDeadline: client.paymentDeadline ? new Date(client.paymentDeadline) : undefined,
+    expectedCloseDate: client.expectedCloseDate ? new Date(client.expectedCloseDate) : undefined,
+    createdAt: client.createdAt ? new Date(client.createdAt) : undefined,
+  };
+}
+
+function reviveSalesGoal(goal: any): SalesGoal {
+  return {
+    ...goal,
+    createdAt: goal.createdAt ? new Date(goal.createdAt) : new Date(),
+  };
+}
+
+function reviveReminder(reminder: any): PaymentReminder {
+  return {
+    ...reminder,
+    paymentDeadline: reminder.paymentDeadline ? new Date(reminder.paymentDeadline) : new Date(),
+    createdAt: reminder.createdAt ? new Date(reminder.createdAt) : new Date(),
+  };
+}
+
+function reviveSdrGoal(goal: any): SDRGoal {
+  return {
+    ...goal,
+    createdAt: goal.createdAt ? new Date(goal.createdAt) : new Date(),
+  };
+}
+
+function countBusinessDays(startDate: Date, endDate: Date): number {
+  let count = 0;
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) {
+      count += 1;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
+
+export function CommercialProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
+  const authContext = useAuthSafe();
+  const user = authContext?.user;
+  const logActivity = authContext?.logActivity ?? (() => {});
+  const [cloudState, setCloudState] = useState<CommercialCloudState>(EMPTY_COMMERCIAL_STATE);
+
+  const refreshCommercialState = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setCloudState(EMPTY_COMMERCIAL_STATE);
+      return;
+    }
+
+    const next = await fetchCommercialCloudState(user?.id);
+    setCloudState({
+      ...next,
+      teamPointer: next.teamPointer || TEAM_IDS.EQUIPE_7,
+    });
+    queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+    queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
+    queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
+  }, [queryClient, user?.id]);
+
+  useEffect(() => {
+    void refreshCommercialState();
+  }, [refreshCommercialState]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('commercial-shared-state')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_clients' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agenda_events' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamento_leads' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'commercial_goals' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sdr_goals' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pre_sales_daily_logs' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'closer_daily_logs' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_reminders' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'criativos' }, () => void refreshCommercialState())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'commercial_settings' }, () => void refreshCommercialState())
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [refreshCommercialState]);
+
+  const pipelineClients = useMemo(() => cloudState.pipelineClients.map(revivePipelineClient), [cloudState.pipelineClients]);
+  const salesGoals = useMemo(() => cloudState.salesGoals.map(reviveSalesGoal), [cloudState.salesGoals]);
+  const sdrGoals = useMemo(() => cloudState.sdrGoals.map(reviveSdrGoal), [cloudState.sdrGoals]);
+  const preSalesDailyLogs = cloudState.preSalesDailyLogs;
+  const closerDailyLogs = cloudState.closerDailyLogs;
+  const paymentReminders = useMemo(() => cloudState.paymentReminders.map(reviveReminder), [cloudState.paymentReminders]);
+  const criativos = cloudState.criativos;
+  const lastTeamPointer = cloudState.teamPointer || TEAM_IDS.EQUIPE_7;
+
+  const nextTeamInQueue: string = lastTeamPointer === TEAM_IDS.TROPA_DE_ELITE
+    ? TEAM_IDS.EQUIPE_7
+    : TEAM_IDS.TROPA_DE_ELITE;
+
+  const getNextTeamLabel = useCallback(() => {
+    const team = EQUIPE_OPTIONS.find((option) => option.value === nextTeamInQueue);
+    return team?.label || 'Equipe';
+  }, [nextTeamInQueue]);
+
+  const currentGoal = salesGoals.find((goal) => goal.month === currentMonth) || null;
+
+  const addPipelineClient = useCallback(async (client: Omit<PipelineClient, 'id' | 'createdByUserId'>) => {
+    const newClient: PipelineClient = {
+      ...client,
+      id: `pipeline-${crypto.randomUUID()}`,
+      createdByUserId: user?.id || null,
+      createdAt: new Date(),
+      dataEntrada: client.dataEntrada || new Date(),
+    };
+
+    try {
+      const savedClient = await savePipelineClientToCloud(newClient, user?.id);
+      if (savedClient) {
+        setCloudState((current) => {
+          const exists = current.pipelineClients.some((item) => item.id === savedClient.id);
+          return {
+            ...current,
+            pipelineClients: exists
+              ? current.pipelineClients.map((item) => (item.id === savedClient.id ? savedClient : item))
+              : [savedClient, ...current.pipelineClients],
+          };
+        });
+      }
+    } catch (error) {
+      await refreshCommercialState();
+      throw error;
+    }
+
+    refreshCommercialState().catch((refreshError) => {
+      console.warn('Lead saved, but the immediate refresh failed. The lead remains in local state and will sync again on the next realtime event.', refreshError);
+    });
+
+    logActivity('CLIENT_CREATED', 'Pipeline', newClient.id, `Cliente ${newClient.clientName} criado`);
+  }, [logActivity, refreshCommercialState, user?.id]);
+
+  const updatePipelineClient = useCallback((id: string, data: Partial<PipelineClient>) => {
+    const previousClient = pipelineClients.find((client) => client.id === id);
+    if (!previousClient) return;
+    const updatedClient = { ...previousClient, ...data };
+
+    setCloudState((current) => ({
+      ...current,
+      pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
+    }));
+    void savePipelineClientToCloud(updatedClient, user?.id)
+      .then(refreshCommercialState)
+      .catch(() => void refreshCommercialState());
+  }, [pipelineClients, refreshCommercialState, user?.id]);
+
+  const movePipelineClient = useCallback((id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
+    const previousClient = pipelineClients.find((client) => client.id === id);
+    if (!previousClient) return;
+    const updatedClient: PipelineClient = {
+      ...previousClient,
+      ...extraData,
+      stage: newStage,
+      ativo: newStage !== 'PERDIDO',
+      lostReason: newStage === 'PERDIDO' ? lostReason || previousClient.lostReason : previousClient.lostReason,
+      lastStageChange: new Date(),
+    };
+
+    setCloudState((current) => ({
+      ...current,
+      pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
+    }));
+    void savePipelineClientToCloud(updatedClient, user?.id)
+      .then(refreshCommercialState)
+      .catch(() => void refreshCommercialState());
+  }, [pipelineClients, refreshCommercialState, user?.id]);
+
+  const deletePipelineClient = useCallback((id: string) => {
+    const removed = pipelineClients.find((client) => client.id === id);
+    setCloudState((current) => ({
+      ...current,
+      pipelineClients: current.pipelineClients.filter((client) => client.id !== id),
+    }));
+    if (removed) {
+      void deletePipelineClientFromCloud(removed)
+        .then(refreshCommercialState)
+        .catch(() => void refreshCommercialState());
+    }
+  }, [pipelineClients, refreshCommercialState]);
+
+  const setSalesGoal = useCallback(async (month: string, goalValue: number) => {
+    setCloudState((current) => {
+      const existing = current.salesGoals.find((goal) => goal.month === month);
+      const nextGoal = existing
+        ? current.salesGoals.map((goal) => goal.month === month ? { ...goal, goalValue } : goal)
+        : [...current.salesGoals, { id: `goal-${crypto.randomUUID()}`, month, goalValue, currentValue: 0, createdByUserId: user?.id || 'cloud-user', createdAt: new Date() }];
+      return { ...current, salesGoals: nextGoal };
+    });
+    try {
+      await saveSalesGoalToCloud(month, goalValue, user?.id);
+      await refreshCommercialState();
+    } catch (error) {
+      await refreshCommercialState();
+      throw error;
+    }
+  }, [refreshCommercialState, user?.id]);
+
+  const setSDRGoal = useCallback(async (agendador: Agendador, month: string, goalCount: number) => {
+    setCloudState((current) => {
+      const existing = current.sdrGoals.find((goal) => goal.agendador === agendador && goal.month === month);
+      const nextGoals = existing
+        ? current.sdrGoals.map((goal) => goal.agendador === agendador && goal.month === month ? { ...goal, goalCount } : goal)
+        : [...current.sdrGoals, { id: `sdr-goal-${crypto.randomUUID()}`, agendador, month, goalCount, createdAt: new Date() }];
+      return { ...current, sdrGoals: nextGoals };
+    });
+    try {
+      await saveSdrGoalToCloud(agendador, month, goalCount, user?.id);
+      await refreshCommercialState();
+    } catch (error) {
+      await refreshCommercialState();
+      throw error;
+    }
+  }, [refreshCommercialState, user?.id]);
+
+  const upsertPreSalesDailyLog = useCallback((log: Omit<PreSalesDailyLog, 'id' | 'updatedAt'>) => {
+    const normalized = {
+      ...log,
+      contacts: Math.max(0, Number(log.contacts) || 0),
+      qualified: Math.max(0, Number(log.qualified) || 0),
+      scheduled: Math.max(0, Number(log.scheduled) || 0),
+      noShowCalls: Math.max(0, Number(log.noShowCalls) || 0),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCloudState((current) => {
+      const existing = current.preSalesDailyLogs.find((item) => item.date === log.date && item.sdr === log.sdr);
+      const preSalesDailyLogs = existing
+        ? current.preSalesDailyLogs.map((item) => item.id === existing.id ? { ...item, ...normalized } : item)
+        : [{ id: `pre-sales-log-${crypto.randomUUID()}`, ...normalized }, ...current.preSalesDailyLogs];
+      return { ...current, preSalesDailyLogs };
+    });
+    void savePreSalesDailyLogToCloud(log, user?.id).then(refreshCommercialState);
+  }, [refreshCommercialState, user?.id]);
+
+  const upsertCloserDailyLog = useCallback((log: Omit<CloserDailyLog, 'id' | 'updatedAt'>) => {
+    const normalized = {
+      ...log,
+      agendada: Math.max(0, Number(log.agendada) || 0),
+      realizada: Math.max(0, Number(log.realizada) || 0),
+      pitch: Math.max(0, Number(log.pitch) || 0),
+      vendas: Math.max(0, Number(log.vendas) || 0),
+      valor: Math.max(0, Number(log.valor) || 0),
+      primeiraParcela: Math.max(0, Number(log.primeiraParcela) || 0),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCloudState((current) => {
+      const existing = current.closerDailyLogs.find((item) => item.date === log.date && item.closer === log.closer);
+      const closerDailyLogs = existing
+        ? current.closerDailyLogs.map((item) => item.id === existing.id ? { ...item, ...normalized } : item)
+        : [{ id: `closer-log-${crypto.randomUUID()}`, ...normalized }, ...current.closerDailyLogs];
+      return { ...current, closerDailyLogs };
+    });
+    void saveCloserDailyLogToCloud(log, user?.id).then(refreshCommercialState);
+  }, [refreshCommercialState, user?.id]);
+
+  const dismissReminder = useCallback((id: string) => {
+    setCloudState((current) => ({
+      ...current,
+      paymentReminders: current.paymentReminders.map((reminder) => reminder.id === id ? { ...reminder, dismissed: true } : reminder),
+    }));
+    void dismissPaymentReminderInCloud(id, user?.id).then(refreshCommercialState);
+  }, [refreshCommercialState, user?.id]);
+
+  const addCriativo = useCallback((criativo: string) => {
+    const normalized = criativo.trim().toUpperCase();
+    if (!normalized) return;
+
+    setCloudState((current) => ({
+      ...current,
+      criativos: current.criativos.includes(normalized) ? current.criativos : [...current.criativos, normalized].sort(),
+    }));
+    void addCriativoToCloud(normalized, user?.id).then(refreshCommercialState);
+  }, [refreshCommercialState, user?.id]);
+
+  const updateCriativo = useCallback((oldCriativo: string, newCriativo: string) => {
+    const normalized = newCriativo.trim().toUpperCase();
+    if (!normalized) return;
+
+    setCloudState((current) => ({
+      ...current,
+      criativos: current.criativos.map((criativo) => criativo === oldCriativo ? normalized : criativo),
+      pipelineClients: current.pipelineClients.map((client) => client.criativo === oldCriativo ? { ...client, criativo: normalized } : client),
+    }));
+    void renameCriativoInCloud(oldCriativo, normalized).then(refreshCommercialState);
+  }, [refreshCommercialState]);
+
+  const deleteCriativo = useCallback((criativo: string) => {
+    setCloudState((current) => ({
+      ...current,
+      criativos: current.criativos.filter((item) => item !== criativo),
+    }));
+    void archiveCriativoInCloud(criativo).then(refreshCommercialState);
+  }, [refreshCommercialState]);
+
+  const getGoalStats = useCallback(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const today = new Date(year, month, now.getDate());
+    const totalBusinessDays = countBusinessDays(monthStart, monthEnd);
+    const businessDaysPassed = countBusinessDays(monthStart, today);
+    const businessDaysRemaining = countBusinessDays(new Date(year, month, now.getDate() + 1), monthEnd);
+    const metrics = buildDashboardMetrics(pipelineClients, currentGoal?.goalValue || 0, { start: monthStart, end: monthEnd });
+    const totalSold = metrics.totalRevenue;
+    const goalValue = currentGoal?.goalValue || 0;
+    const remaining = Math.max(0, goalValue - totalSold);
+    const dailyAverage = businessDaysPassed > 0 ? totalSold / businessDaysPassed : 0;
+    const projection = dailyAverage * totalBusinessDays;
+    const dailyNeeded = businessDaysRemaining > 0 ? remaining / businessDaysRemaining : remaining;
+    const percentAchieved = goalValue > 0 ? (totalSold / goalValue) * 100 : 0;
+    const expectedProgress = totalBusinessDays > 0 ? (businessDaysPassed / totalBusinessDays) * 100 : 0;
+    let status: 'ok' | 'risk' | 'danger' = 'ok';
+
+    if (percentAchieved < expectedProgress * 0.8) {
+      status = 'danger';
+    } else if (percentAchieved < expectedProgress) {
+      status = 'risk';
+    }
+
+    return {
+      totalSold,
+      remaining,
+      projection,
+      dailyNeeded,
+      percentAchieved,
+      daysRemaining: businessDaysRemaining,
+      totalBusinessDays,
+      businessDaysPassed,
+      status,
+    };
+  }, [currentGoal, pipelineClients]);
+
+  const getPipelineStats = useCallback(() => {
+    const activeClients = pipelineClients.filter((client) => client.stage !== 'PERDIDO' && client.ativo);
+    const metrics = buildDashboardMetrics(pipelineClients, currentGoal?.goalValue || 0, { start: startOfMonth(), end: endOfMonth() });
+    const totalValue = activeClients.reduce((sum, client) => sum + getClientRevenue(client), 0);
+    const leadCount = pipelineClients.filter((client) => client.stage !== 'FECHADO' && client.stage !== 'PERDIDO' && client.ativo).length;
+
+    return {
+      totalValue,
+      negotiationValue: metrics.negotiationValue,
+      closedValue: metrics.totalRevenue,
+      conversionRate: metrics.conversionRate,
+      averageTicket: metrics.averageTicket,
+      leadCount,
+    };
+  }, [currentGoal, pipelineClients]);
+
+  const getStatsByVendedor = useCallback((vendedor: Vendedor) => {
+    const vendedorClients = pipelineClients.filter((client) => client.vendedor === vendedor);
+    const closedClients = vendedorClients.filter(isRealContract);
+    const totalLeads = vendedorClients.length;
+    const closedValue = closedClients.reduce((sum, client) => sum + getClientRevenue(client), 0);
+    const closedCount = closedClients.length;
+    const conversionRate = totalLeads > 0 ? (closedCount / totalLeads) * 100 : 0;
+
+    return {
+      totalLeads,
+      closedValue,
+      closedCount,
+      conversionRate,
+    };
+  }, [pipelineClients]);
+
+  const getSDRStats = useCallback((agendador: Agendador, month?: string) => {
+    const targetMonth = month || currentMonth;
+    const [year, monthNumber] = targetMonth.split('-').map(Number);
+    const monthStart = new Date(year, monthNumber - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(year, monthNumber, 0, 23, 59, 59, 999);
+    const scheduledLeads = pipelineClients.filter((client) => {
+      if (client.agendadoPor !== agendador) return false;
+      const scheduleDate = client.meetingDate || client.dataEntrada || client.entryDate || client.createdAt || client.lastStageChange;
+      return isDateInRange(scheduleDate, { start: monthStart, end: monthEnd });
+    });
+    const scheduledCount = scheduledLeads.length;
+    const goalData = sdrGoals.find((goal) => goal.agendador === agendador && goal.month === targetMonth);
+    const goalCount = goalData?.goalCount || 0;
+    const percentAchieved = goalCount > 0 ? (scheduledCount / goalCount) * 100 : 0;
+
+    return {
+      scheduledCount,
+      closedCount: scheduledCount,
+      goalCount,
+      percentAchieved,
+    };
+  }, [pipelineClients, sdrGoals]);
+
+  const value = useMemo<CommercialContextType>(() => ({
+    pipelineClients,
+    salesGoals,
+    currentGoal,
+    paymentReminders,
+    criativos,
+    nextTeamInQueue,
+      sdrGoals,
+      preSalesDailyLogs,
+      closerDailyLogs,
+      getNextTeamLabel,
+    addPipelineClient,
+    updatePipelineClient,
+    movePipelineClient,
+    deletePipelineClient,
+    setSalesGoal,
+      setSDRGoal,
+      upsertPreSalesDailyLog,
+      upsertCloserDailyLog,
+      dismissReminder,
+    addCriativo,
+    updateCriativo,
+    deleteCriativo,
+    getGoalStats,
+    getPipelineStats,
+    getStatsByVendedor,
+    getSDRStats,
+  }), [
+    addCriativo,
+    addPipelineClient,
+    criativos,
+    currentGoal,
+    deleteCriativo,
+    deletePipelineClient,
+    dismissReminder,
+    getGoalStats,
+    getNextTeamLabel,
+    getPipelineStats,
+    getSDRStats,
+    getStatsByVendedor,
+    movePipelineClient,
+    nextTeamInQueue,
+    paymentReminders,
+    pipelineClients,
+    salesGoals,
+    sdrGoals,
+      preSalesDailyLogs,
+      closerDailyLogs,
+      setSDRGoal,
+      setSalesGoal,
+      upsertPreSalesDailyLog,
+      upsertCloserDailyLog,
+      updateCriativo,
+    updatePipelineClient,
+  ]);
+
+  return <CommercialContext.Provider value={value}>{children}</CommercialContext.Provider>;
+}
+
+export function useCommercial() {
+  const context = useContext(CommercialContext);
+  if (context === undefined) {
+    throw new Error('useCommercial must be used within a CommercialProvider');
+  }
+  return context;
+}
+
+export function useCommercialSafe() {
+  return useContext(CommercialContext);
+}

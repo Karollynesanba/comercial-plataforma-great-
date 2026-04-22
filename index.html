@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR" suppressHydrationWarning>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Great Assessoria - Gestão Comercial e Operacional</title>
+    <meta name="description" content="Plataforma completa para gestão comercial e operacional. Acompanhe metas, clientes e performance em um só lugar." />
+    <meta name="author" content="Great Assessoria" />
+
+    <meta property="og:title" content="Great Assessoria" />
+    <meta property="og:description" content="Plataforma completa para gestão comercial e operacional." />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    
+    <!-- Favicon SVG -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%23E10600' d='M24 4L42 14V34L24 44L6 34V14L24 4Z'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='white' font-size='24' font-weight='800' font-family='Inter, sans-serif'%3EG%3C/text%3E%3C/svg%3E" />
+    
+    <!-- Theme color -->
+    <meta name="theme-color" content="#0B0B0D" />
+    
+    <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('theme');
+          if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

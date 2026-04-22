@@ -1,0 +1,19 @@
+project_id = "bwucqiqnxwdqapunbwip"
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.send-agenda-reminders]
+verify_jwt = false
+
+[functions.send-manual-reminder]
+verify_jwt = false
+
+[functions.generate-recurring-expenses]
+verify_jwt = false
+
+[functions.fetch-status]
+verify_jwt = false
+
+[functions.support-ai-chat]
+verify_jwt = false

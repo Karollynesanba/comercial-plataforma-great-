@@ -1,0 +1,1 @@
+ALTER TABLE public.my_day_items ADD COLUMN IF NOT EXISTS completed_at timestamptz;

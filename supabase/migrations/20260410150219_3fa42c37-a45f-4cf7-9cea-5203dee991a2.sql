@@ -1,0 +1,1 @@
+ALTER TABLE public.pipeline_clients ADD COLUMN agendado_via text DEFAULT NULL;

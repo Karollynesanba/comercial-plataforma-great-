@@ -1,0 +1,1 @@
+ALTER TABLE public.operational_clients ADD COLUMN start_meeting_date DATE;
