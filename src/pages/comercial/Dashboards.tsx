@@ -18,6 +18,7 @@ import {
   Pie,
   Cell,
   Legend,
+  LabelList,
   AreaChart,
   Area,
   ComposedChart,
@@ -418,8 +419,14 @@ export default function ComercialDashboards() {
     }))
     .sort((a, b) => b.value - a.value);
 
+  const revenueSparklineValues = monthlyEvolution.map((item) => item.revenue);
+  const dealsSparklineValues = monthlyEvolution.map((item) => item.deals);
+  const ticketSparklineValues = monthlyEvolution.map((item) => item.avgTicket);
+  const goalSparklineValues = monthlyEvolution.map((item) => (goalValue > 0 ? (item.revenue / goalValue) * 100 : 0));
+  const negotiationSparklineValues = monthlyEvolution.map((item) => Math.max(0, item.revenue * 0.12));
+
   return (
-    <div className="space-y-8 animate-in">
+    <div className="space-y-8 animate-in bg-transparent">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -465,36 +472,49 @@ export default function ComercialDashboards() {
             label="Faturamento"
             value={`R$ ${(currentMonthData.totalRevenue / 1000).toFixed(1)}k`}
             icon={<DollarSign className="h-5 w-5" />}
-            variant="success"
+            featured
+            sparklineValues={revenueSparklineValues}
+            className="min-h-[150px]"
           />
           <KPICard
             label="Contratos Fechados"
             value={currentMonthData.closedCount.toString()}
             icon={<Target className="h-5 w-5" />}
+            variant="primary"
+            sparklineValues={dealsSparklineValues}
+            className="min-h-[150px]"
           />
           <KPICard
             label="Ticket Médio"
             value={formatBRLShort(currentMonthData.avgTicket)}
             icon={<DollarSign className="h-5 w-5" />}
+            variant="info"
+            sparklineValues={ticketSparklineValues}
+            className="min-h-[150px]"
           />
           <KPICard
             label="Meta"
             value={`${stats.percentAchieved.toFixed(0)}%`}
             icon={<Target className="h-5 w-5" />}
             trend={stats.percentAchieved >= 100 ? 'up' : stats.percentAchieved >= 70 ? 'neutral' : 'down'}
+            variant="success"
+            sparklineValues={goalSparklineValues}
+            className="min-h-[150px]"
           />
           <KPICard
             label="Em Negociação"
             value={`R$ ${(pipelineStats.negotiationValue / 1000).toFixed(1)}k`}
             icon={<Users className="h-5 w-5" />}
             variant="warning"
+            sparklineValues={negotiationSparklineValues}
+            className="min-h-[150px]"
           />
         </div>
 
         {/* Gráficos do período selecionado */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Vendas por dia/mês */}
-          <Card>
+          <Card className="overflow-hidden bg-white/95">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Activity className="h-5 w-5 text-primary" />
@@ -506,42 +526,113 @@ export default function ComercialDashboards() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={dailySalesChartData}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="day" className="text-xs" />
-                  <YAxis 
-                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-                    className="text-xs"
-                  />
-                  <RechartsTooltip 
-                    formatter={(value: number) => [formatBRL(value), 'Vendas']}
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#22c55e" 
-                    strokeWidth={2}
-                    fillOpacity={1} 
-                    fill="url(#colorValue)" 
-                  />
-                </AreaChart>
+                {periodFilter === 'current_month' ? (
+                  <AreaChart data={dailySalesChartData}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#e10600" stopOpacity={0.35}/>
+                        <stop offset="95%" stopColor="#e10600" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                    <XAxis dataKey="day" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                    <YAxis 
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                      className="text-xs"
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="#94a3b8"
+                    />
+                    <RechartsTooltip 
+                      formatter={(value: number) => [formatBRL(value), 'Vendas']}
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#e10600" 
+                      strokeWidth={3}
+                      dot={{ r: 3, fill: '#e10600' }}
+                      activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }}
+                      fillOpacity={1} 
+                      fill="url(#colorValue)" 
+                    />
+                  </AreaChart>
+                ) : (
+                  <ComposedChart data={monthlyEvolution}>
+                    <defs>
+                      <linearGradient id="colorMonthlyRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#e10600" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#e10600" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorMonthlyDeals" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.95} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0.9} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                    <XAxis dataKey="month" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                    <YAxis 
+                      yAxisId="left"
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                      className="text-xs"
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="#94a3b8"
+                    />
+                    <YAxis 
+                      yAxisId="right" 
+                      orientation="right"
+                      className="text-xs"
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="#94a3b8"
+                    />
+                    <RechartsTooltip 
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || !payload.length) return null;
+                        const data = payload[0]?.payload;
+                        return (
+                          <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                            <p className="font-medium text-foreground mb-2">{label}</p>
+                            <p className="text-sm text-green-500">
+                              Faturamento: R$ {Math.round(data.revenue).toLocaleString('pt-BR')}
+                            </p>
+                            <p className="text-sm text-blue-500">
+                              Vendas: {data.deals}
+                            </p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar 
+                      yAxisId="right"
+                      dataKey="deals" 
+                      fill="url(#colorMonthlyDeals)"
+                      radius={[6, 6, 0, 0]}
+                      barSize={34}
+                    />
+                    <Line 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="revenue" 
+                      stroke="#e10600" 
+                      strokeWidth={3}
+                      dot={{ fill: '#e10600', r: 5 }}
+                      activeDot={{ r: 7 }}
+                    />
+                  </ComposedChart>
+                )}
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Vendas por categoria */}
-          <Card>
+          <Card className="overflow-hidden bg-white/95">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <PieChartIcon className="h-5 w-5 text-primary" />
@@ -556,8 +647,8 @@ export default function ComercialDashboards() {
                     data={categoryPieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius={74}
+                    outerRadius={114}
                     paddingAngle={2}
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
@@ -581,7 +672,7 @@ export default function ComercialDashboards() {
           </Card>
 
           {/* Vendas por vendedor */}
-          <Card>
+          <Card className="overflow-hidden bg-white/95">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
@@ -592,13 +683,22 @@ export default function ComercialDashboards() {
             <CardContent>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={sellerBarData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <defs>
+                    <linearGradient id="sellerGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#ff3b3b" />
+                      <stop offset="100%" stopColor="#e10600" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
                   <XAxis 
                     type="number" 
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                     className="text-xs"
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="#94a3b8"
                   />
-                  <YAxis type="category" dataKey="name" className="text-xs" width={80} />
+                  <YAxis type="category" dataKey="name" className="text-xs" width={80} tickLine={false} axisLine={false} stroke="#94a3b8" />
                   <RechartsTooltip 
                     formatter={(value: number) => [formatBRL(value), 'Vendas']}
                     contentStyle={{ 
@@ -607,16 +707,16 @@ export default function ComercialDashboards() {
                       borderRadius: '8px',
                     }}
                   />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill="url(#sellerGradient)" radius={[0, 10, 10, 0]} maxBarSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           <div className="lg:col-span-2">
-            <Card className="border-primary/30">
-              <CardHeader className="space-y-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <Card className="overflow-hidden border-rose-100/80 bg-gradient-to-br from-white via-white to-rose-50/30 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
+              <CardHeader className="space-y-4 border-b border-rose-100/70 bg-gradient-to-r from-rose-50/30 to-transparent">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Lightbulb className="h-5 w-5 text-primary" />
@@ -626,7 +726,7 @@ export default function ComercialDashboards() {
                       Agendamentos contam os leads do CRM com data e hora de reunião; vendas e receita usam os fechados do período.
                     </CardDescription>
                   </div>
-                  <div className="w-full md:w-[280px]">
+                  <div className="w-full md:w-[320px] space-y-2">
                     <Select value={selectedCreative} onValueChange={setSelectedCreative}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecionar criativo" />
@@ -640,6 +740,15 @@ export default function ComercialDashboards() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <PeriodFilter
+                      value={periodFilter}
+                      onChange={setPeriodFilter}
+                      customStart={customStart}
+                      customEnd={customEnd}
+                      onCustomChange={(s, e) => { setCustomStart(s); setCustomEnd(e); }}
+                      showIcon={false}
+                      className="justify-end"
+                    />
                   </div>
                 </div>
               </CardHeader>
@@ -650,24 +759,28 @@ export default function ComercialDashboards() {
                     label="Agendamentos"
                     value={selectedCreativeSummary.appointments.toString()}
                     icon={<Activity className="h-5 w-5" />}
+                    className="min-h-[132px]"
                   />
                   <KPICard
                     label="Vendas"
                     value={selectedCreativeSummary.sales.toString()}
                     icon={<Target className="h-5 w-5" />}
                     variant="success"
+                    className="min-h-[132px]"
                   />
                   <KPICard
                     label="Receita"
                     value={formatBRL(selectedCreativeSummary.revenue)}
                     icon={<DollarSign className="h-5 w-5" />}
                     variant="success"
+                    className="min-h-[132px]"
                   />
                   <KPICard
                     label="Conversão"
                     value={`${selectedCreativeSummary.conversionRate.toFixed(1)}%`}
                     icon={<BarChart3 className="h-5 w-5" />}
                     trend={selectedCreativeSummary.conversionRate >= 25 ? 'up' : selectedCreativeSummary.conversionRate >= 15 ? 'neutral' : 'down'}
+                    className="min-h-[132px]"
                   />
                 </div>
 
@@ -684,10 +797,10 @@ export default function ComercialDashboards() {
                     </CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={300}>
-                        <ComposedChart data={creativeFocusData}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis dataKey="name" className="text-xs" />
-                          <YAxis className="text-xs" />
+                        <ComposedChart data={creativeFocusData} barCategoryGap="28%" barGap={8}>
+                          <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                          <XAxis dataKey="name" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                          <YAxis className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
                           <RechartsTooltip
                             contentStyle={{
                               backgroundColor: 'hsl(var(--card))',
@@ -701,8 +814,8 @@ export default function ComercialDashboards() {
                             }}
                           />
                           <Legend />
-                          <Bar dataKey="appointments" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Agendamentos" />
-                          <Bar dataKey="sales" fill="#22c55e" radius={[4, 4, 0, 0]} name="Vendas" />
+                          <Bar dataKey="appointments" fill="#8b5cf6" radius={[8, 8, 0, 0]} name="Agendamentos" maxBarSize={36} />
+                          <Bar dataKey="sales" fill="#22c55e" radius={[8, 8, 0, 0]} name="Vendas" maxBarSize={36} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </CardContent>
@@ -720,14 +833,17 @@ export default function ComercialDashboards() {
                     </CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={creativeFocusData} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <BarChart data={creativeFocusData} layout="vertical" barCategoryGap="18%">
+                          <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
                           <XAxis
                             type="number"
                             tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                             className="text-xs"
+                            tickLine={false}
+                            axisLine={false}
+                            stroke="#94a3b8"
                           />
-                          <YAxis type="category" dataKey="name" className="text-xs" width={120} />
+                          <YAxis type="category" dataKey="name" className="text-xs" width={120} tickLine={false} axisLine={false} stroke="#94a3b8" />
                           <RechartsTooltip
                             formatter={(value: number) => [formatBRL(value), 'Receita']}
                             contentStyle={{
@@ -736,14 +852,21 @@ export default function ComercialDashboards() {
                               borderRadius: '8px',
                             }}
                           />
-                          <Bar dataKey="revenue" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                          <Bar dataKey="revenue" fill="#f59e0b" radius={[0, 10, 10, 0]} barSize={18} maxBarSize={22}>
+                            <LabelList
+                              dataKey="revenue"
+                              position="right"
+                              formatter={(value: number) => formatBRLShort(value)}
+                              className="fill-foreground"
+                            />
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </CardContent>
                   </Card>
                 </div>
 
-                <Card className="border-border/60">
+                <Card className="overflow-hidden border-0 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <BarChart3 className="h-5 w-5 text-primary" />
@@ -754,15 +877,15 @@ export default function ComercialDashboards() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-hidden rounded-xl border border-border">
+                    <div className="overflow-hidden rounded-2xl border border-border/60">
                       <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-muted-foreground">
+                        <thead className="bg-muted/40 text-muted-foreground">
                           <tr>
-                            <th className="px-4 py-3 text-left font-medium">Criativo</th>
-                            <th className="px-4 py-3 text-right font-medium">Agendamentos</th>
-                            <th className="px-4 py-3 text-right font-medium">Vendas</th>
-                            <th className="px-4 py-3 text-right font-medium">Conversão</th>
-                            <th className="px-4 py-3 text-right font-medium">Receita</th>
+                            <th className="px-5 py-4 text-left font-medium">Criativo</th>
+                            <th className="px-5 py-4 text-right font-medium">Agendamentos</th>
+                            <th className="px-5 py-4 text-right font-medium">Vendas</th>
+                            <th className="px-5 py-4 text-right font-medium">Conversão</th>
+                            <th className="px-5 py-4 text-right font-medium">Receita</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -771,29 +894,34 @@ export default function ComercialDashboards() {
                               <tr
                                 key={row.name}
                                 className={cn(
-                                  'border-t border-border/60',
+                                  'border-t border-border/60 transition-colors hover:bg-rose-50/60',
                                   selectedCreative !== 'all' && selectedCreative === row.name ? 'bg-primary/5' : 'bg-background'
                                 )}
                               >
-                                <td className="px-4 py-3 font-medium">{row.name}</td>
-                                <td className="px-4 py-3 text-right">{row.appointments}</td>
-                                <td className="px-4 py-3 text-right">{row.sales}</td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="px-5 py-4 font-medium">{row.name}</td>
+                                <td className="px-5 py-4 text-right">{row.appointments}</td>
+                                <td className="px-5 py-4 text-right">{row.sales}</td>
+                                <td className="px-5 py-4 text-right">
                                   <Badge
                                     variant="outline"
                                     className={cn(
-                                      row.conversionRate >= 25 ? 'border-success text-success' : row.conversionRate >= 15 ? 'border-primary text-primary' : 'border-muted-foreground text-muted-foreground'
+                                      'rounded-full px-3 py-1 font-medium',
+                                      row.conversionRate >= 25
+                                        ? 'border-success bg-success/10 text-success'
+                                        : row.conversionRate >= 15
+                                          ? 'border-warning bg-warning/10 text-warning'
+                                          : 'border-destructive bg-destructive/10 text-destructive'
                                     )}
                                   >
                                     {row.conversionRate.toFixed(1)}%
                                   </Badge>
                                 </td>
-                                <td className="px-4 py-3 text-right font-semibold">{formatBRL(row.revenue)}</td>
+                                <td className="px-5 py-4 text-right font-semibold">{formatBRL(row.revenue)}</td>
                               </tr>
                             ))
                           ) : (
                             <tr>
-                              <td className="px-4 py-6 text-center text-muted-foreground" colSpan={5}>
+                              <td className="px-5 py-6 text-center text-muted-foreground" colSpan={5}>
                                 Nenhum criativo encontrado no período selecionado.
                               </td>
                             </tr>
@@ -872,7 +1000,7 @@ export default function ComercialDashboards() {
         </div>
 
         {/* Gráfico principal de evolução */}
-        <Card className="border-primary/30">
+        <Card className="overflow-hidden bg-white/95">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
@@ -885,21 +1013,27 @@ export default function ComercialDashboards() {
               <ComposedChart data={monthlyEvolution}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#e10600" stopOpacity={0.35}/>
+                    <stop offset="95%" stopColor="#e10600" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="month" className="text-xs" />
+                <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                <XAxis dataKey="month" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
                 <YAxis 
                   yAxisId="left"
                   tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                   className="text-xs"
+                  tickLine={false}
+                  axisLine={false}
+                  stroke="#94a3b8"
                 />
                 <YAxis 
                   yAxisId="right" 
                   orientation="right"
                   className="text-xs"
+                  tickLine={false}
+                  axisLine={false}
+                  stroke="#94a3b8"
                 />
                 <RechartsTooltip 
                   content={({ active, payload, label }) => {
@@ -928,8 +1062,8 @@ export default function ComercialDashboards() {
                   yAxisId="left"
                   type="monotone" 
                   dataKey="revenue" 
-                  stroke="#22c55e" 
-                  strokeWidth={2}
+                  stroke="#e10600" 
+                  strokeWidth={3}
                   fillOpacity={1} 
                   fill="url(#colorRevenue)"
                   name="Faturamento"
@@ -938,9 +1072,10 @@ export default function ComercialDashboards() {
                   yAxisId="right" 
                   dataKey="deals" 
                   fill="#3b82f6" 
-                  radius={[4, 4, 0, 0]}
+                  radius={[8, 8, 0, 0]}
                   name="Vendas"
-                  opacity={0.8}
+                  opacity={0.85}
+                  maxBarSize={28}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -948,7 +1083,7 @@ export default function ComercialDashboards() {
         </Card>
 
         {/* Ticket médio ao longo do tempo */}
-        <Card>
+        <Card className="overflow-hidden bg-white/95">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
@@ -959,11 +1094,14 @@ export default function ComercialDashboards() {
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={monthlyEvolution}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="month" className="text-xs" />
+                <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                <XAxis dataKey="month" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
                 <YAxis 
                   tickFormatter={(value) => `${(value / 1000).toFixed(1)}k`}
                   className="text-xs"
+                  tickLine={false}
+                  axisLine={false}
+                  stroke="#94a3b8"
                 />
                 <RechartsTooltip 
                   content={({ active, payload, label }) => {
@@ -1012,17 +1150,27 @@ export default function ComercialDashboards() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {investmentRecommendations.map((rec, index) => (
-            <Card 
-              key={index} 
+            <Card
+              key={index}
               className={cn(
-                "border-l-4",
-                rec.priority === 'high' ? "border-l-warning" : rec.priority === 'medium' ? "border-l-primary" : "border-l-success"
+                'relative overflow-hidden border-0 bg-white/95 shadow-[0_4px_20px_rgba(0,0,0,0.06)]',
+                rec.priority === 'high'
+                  ? 'bg-gradient-to-r from-amber-50/80 via-white to-white'
+                  : rec.priority === 'medium'
+                    ? 'bg-gradient-to-r from-emerald-50/70 via-white to-white'
+                    : 'bg-gradient-to-r from-sky-50/70 via-white to-white'
               )}
             >
-              <CardContent className="p-5">
+              <span
+                className={cn(
+                  'absolute left-0 top-0 h-full w-1.5 rounded-r-full',
+                  rec.priority === 'high' ? 'bg-warning' : rec.priority === 'medium' ? 'bg-primary' : 'bg-success'
+                )}
+              />
+              <CardContent className="relative p-5">
                 <div className="flex items-start gap-4">
                   <div className={cn(
-                    "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                    "h-11 w-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
                     rec.priority === 'high' ? "bg-warning/20" : rec.priority === 'medium' ? "bg-primary/20" : "bg-success/20"
                   )}>
                     {rec.icon}

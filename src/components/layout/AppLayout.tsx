@@ -7,7 +7,7 @@ import { CommandPaletteProvider } from '@/hooks/useCommandPalette';
 export function AppLayout() {
   return (
     <CommandPaletteProvider>
-      <div className="min-h-screen bg-[#f7f7f8]">
+      <div className="min-h-screen bg-[#F7F7F9]">
         <AppSidebar />
         <div className="pl-[260px] transition-all duration-300">
           <Topbar />

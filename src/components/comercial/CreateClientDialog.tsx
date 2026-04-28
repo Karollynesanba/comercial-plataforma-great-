@@ -52,7 +52,7 @@ const formSchema = z.object({
   agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'HEBERT', 'CLED', 'CAETANO'] as const, {
     required_error: 'Informe quem agendou',
   }),
-  agendadoVia: z.enum(['LIGACAO', 'MENSAGEM'] as const, { required_error: 'Informe se foi por ligacao ou mensagem' }),
+  agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
   temSocio: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem socio' }),
   temMkt: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem marketing' }),
   temSecretaria: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem secretaria' }),
@@ -389,6 +389,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     <SelectContent className="bg-popover">
                       <SelectItem value="LIGACAO">Ligacao</SelectItem>
                       <SelectItem value="MENSAGEM">Mensagem</SelectItem>
+                      <SelectItem value="CALENDLY">Calendly</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

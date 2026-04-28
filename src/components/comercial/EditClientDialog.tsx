@@ -108,7 +108,7 @@ const formSchema = z.object({
   periodo: z.enum(['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'TAXA_INTERESSE'] as const),
   indicacao: z.string().optional(),
   agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'HEBERT', 'CLED', 'CAETANO'] as const).optional().nullable(),
-  agendadoVia: z.enum(['LIGACAO', 'MENSAGEM'] as const, { required_error: 'Informe se foi por ligação ou mensagem' }),
+  agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
   isMrr: z.enum(['SIM', 'NAO'] as const),
   mrrRemaining: z.string().optional(),
   temSocio: z.enum(['SIM', 'NAO', 'NAO_PERGUNTADO'] as const).optional(),
@@ -130,6 +130,7 @@ interface EditClientDialogProps {
 export function EditClientDialog({ open, onOpenChange, client }: EditClientDialogProps) {
   const { updatePipelineClient, criativos } = useCommercial();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isNovoLead = client?.stage === 'NOVO';
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -169,7 +170,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         clientName: client.clientName,
         clinicName: client.clinicName,
         telefone: client.telefone || '',
-        vendedor: client.vendedor,
+        vendedor: client.stage === 'NOVO' ? undefined : client.vendedor,
         criativo: client.criativo,
         equipe: client.equipe,
         faturamento: normalizeFaturamentoBucket(client.faturamento),
@@ -178,7 +179,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         periodo: client.periodo,
         indicacao: client.indicacao || 'NAO',
         agendadoPor: client.agendadoPor || undefined,
-        agendadoVia: (client.agendadoVia as 'LIGACAO' | 'MENSAGEM') || undefined,
+        agendadoVia: (client.agendadoVia as 'LIGACAO' | 'MENSAGEM' | 'CALENDLY') || undefined,
         isMrr: client.isMrr ? 'SIM' : 'NAO',
         mrrRemaining: client.mrrRemaining ? client.mrrRemaining.toString() : '',
         entrada: client.entrada.toString(),
@@ -205,7 +206,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         clientName: data.clientName,
         clinicName: data.clinicName,
         telefone: data.telefone,
-        vendedor: data.vendedor as Vendedor,
+        vendedor: client.stage === 'NOVO' ? undefined : data.vendedor as Vendedor | undefined,
         criativo: data.criativo,
         equipe: data.equipe as Equipe,
         faturamento: normalizeFaturamentoBucket(data.faturamento) as Faturamento,
@@ -288,36 +289,38 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
               )}
             />
 
-            {/* Row 2: Vendedor e Equipe */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="vendedor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vendedor</FormLabel>
-                    <Select 
-                      onValueChange={(val) => field.onChange(val === '__none__' ? null : val)} 
-                      value={field.value || '__none__'}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-popover">
-                        <SelectItem value="__none__">Sem vendedor</SelectItem>
-                        {VENDEDOR_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Row 2: Equipe e, quando aplicavel, Vendedor */}
+            <div className={`grid gap-4 ${isNovoLead ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {!isNovoLead && (
+                <FormField
+                  control={form.control}
+                  name="vendedor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vendedor</FormLabel>
+                      <Select
+                        onValueChange={(val) => field.onChange(val === '__none__' ? null : val)}
+                        value={field.value || '__none__'}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-popover">
+                          <SelectItem value="__none__">Sem vendedor</SelectItem>
+                          {VENDEDOR_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -524,7 +527,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
               />
             </div>
 
-            {/* Row 5.5: Agendado Via (Ligação/Mensagem) */}
+            {/* Row 5.5: Agendado Via */}
             <FormField
               control={form.control}
               name="agendadoVia"
@@ -534,12 +537,13 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                   <Select onValueChange={field.onChange} value={field.value || ''}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Ligação ou Mensagem" />
+                        <SelectValue placeholder="Ligação, Mensagem ou Calendly" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-popover">
                       <SelectItem value="LIGACAO">Ligação</SelectItem>
                       <SelectItem value="MENSAGEM">Mensagem</SelectItem>
+                      <SelectItem value="CALENDLY">Calendly</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

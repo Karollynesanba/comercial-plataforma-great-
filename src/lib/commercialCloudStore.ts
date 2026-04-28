@@ -424,6 +424,7 @@ export async function setCommercialSetting(key: string, value: string, userId?: 
     setting_key: key,
     setting_value: value,
     updated_at: new Date().toISOString(),
+    updated_by_user_id: userId ?? null,
   }, { onConflict: 'setting_key' });
 
   if (error) throw error;

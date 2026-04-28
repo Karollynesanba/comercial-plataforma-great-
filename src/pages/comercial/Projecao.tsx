@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Calculator, CalendarDays, DollarSign, Presentation, Target, TrendingUp, Users } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { formatBRL, formatBRLShort } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
+import { setCommercialSetting } from '@/lib/commercialCloudStore';
 
 const DEFAULT_TICKET = 12000;
 const DEFAULT_CONVERSION_RATE = 25;
@@ -16,6 +19,26 @@ const DEFAULT_PITCH_RATE = 65;
 const DEFAULT_TRAFFIC_INVESTMENT = 10000;
 const DEFAULT_COST_PER_LEAD = 100;
 const DEFAULT_SCHEDULING_RATE = 100;
+const PROJECTION_SETTING_KEY = 'commercial_projection_state_v1';
+
+type ProjectionState = {
+  scheduledMeetings: number;
+  completedMeetings: number;
+  pitchMeetings: number;
+  sales: number;
+  trafficInvestment: number;
+  costPerLead: number;
+  schedulingRate: number[];
+  showRate: number[];
+  pitchRate: number[];
+  conversionRate: number[];
+  averageTicket: number;
+  targetRevenue: number;
+  simulationMode: SimulationMode;
+  fixedMetrics: Record<FixedMetric, boolean>;
+};
+
+type SyncStatus = 'loading' | 'saving' | 'saved' | 'error';
 
 function toNumber(value: string) {
   const normalized = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
@@ -257,6 +280,7 @@ function calculateGoalTrafficPlan({
 }
 
 export default function ComercialProjecao() {
+  const { user } = useAuth();
   const [scheduledMeetings, setScheduledMeetings] = useState(100);
   const [completedMeetings, setCompletedMeetings] = useState(70);
   const [pitchMeetings, setPitchMeetings] = useState(45);
@@ -280,6 +304,8 @@ export default function ComercialProjecao() {
     trafficInvestment: false,
     costPerLead: false,
   });
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
+  const hasHydratedRef = useRef(false);
 
   const toggleFixedMetric = (metric: FixedMetric) => {
     setFixedMetrics((current) => ({
@@ -287,6 +313,131 @@ export default function ComercialProjecao() {
       [metric]: !current[metric],
     }));
   };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function hydrateProjectionState() {
+      if (!isSupabaseConfigured) {
+        if (isMounted) {
+          hasHydratedRef.current = true;
+          setSyncStatus('saved');
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('commercial_settings')
+          .select('setting_value')
+          .eq('setting_key', PROJECTION_SETTING_KEY)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data?.setting_value) {
+          const parsed = JSON.parse(data.setting_value) as Partial<ProjectionState>;
+
+          if (!isMounted) return;
+
+          setScheduledMeetings(parsed.scheduledMeetings ?? 100);
+          setCompletedMeetings(parsed.completedMeetings ?? 70);
+          setPitchMeetings(parsed.pitchMeetings ?? 45);
+          setSales(parsed.sales ?? 12);
+          setTrafficInvestment(parsed.trafficInvestment ?? DEFAULT_TRAFFIC_INVESTMENT);
+          setCostPerLead(parsed.costPerLead ?? DEFAULT_COST_PER_LEAD);
+          setSchedulingRate(parsed.schedulingRate ?? [DEFAULT_SCHEDULING_RATE]);
+          setShowRate(parsed.showRate ?? [DEFAULT_SHOW_RATE]);
+          setPitchRate(parsed.pitchRate ?? [DEFAULT_PITCH_RATE]);
+          setConversionRate(parsed.conversionRate ?? [DEFAULT_CONVERSION_RATE]);
+          setAverageTicket(parsed.averageTicket ?? DEFAULT_TICKET);
+          setTargetRevenue(parsed.targetRevenue ?? 300000);
+          setSimulationMode(parsed.simulationMode ?? 'traffic');
+          setFixedMetrics(parsed.fixedMetrics ?? {
+            scheduledMeetings: false,
+            completedMeetings: false,
+            pitchMeetings: false,
+            sales: false,
+            averageTicket: false,
+            conversionRate: false,
+            trafficInvestment: false,
+            costPerLead: false,
+          });
+        }
+
+        if (isMounted) {
+          hasHydratedRef.current = true;
+          setSyncStatus('saved');
+        }
+      } catch (error) {
+        console.error('Erro ao carregar configuracao da projecao:', error);
+        if (isMounted) {
+          hasHydratedRef.current = true;
+          setSyncStatus('error');
+        }
+      }
+    }
+
+    void hydrateProjectionState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedRef.current || !isSupabaseConfigured) return;
+
+    const nextState: ProjectionState = {
+      scheduledMeetings,
+      completedMeetings,
+      pitchMeetings,
+      sales,
+      trafficInvestment,
+      costPerLead,
+      schedulingRate,
+      showRate,
+      pitchRate,
+      conversionRate,
+      averageTicket,
+      targetRevenue,
+      simulationMode,
+      fixedMetrics,
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      setSyncStatus('saving');
+
+      void setCommercialSetting(PROJECTION_SETTING_KEY, JSON.stringify(nextState), user?.id)
+        .then(() => {
+          setSyncStatus('saved');
+        })
+        .catch((error) => {
+          console.error('Erro ao salvar configuracao da projecao:', error);
+          setSyncStatus('error');
+        });
+    }, 600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    averageTicket,
+    completedMeetings,
+    conversionRate,
+    costPerLead,
+    fixedMetrics,
+    pitchMeetings,
+    pitchRate,
+    sales,
+    scheduledMeetings,
+    schedulingRate,
+    showRate,
+    simulationMode,
+    targetRevenue,
+    trafficInvestment,
+    user?.id,
+  ]);
 
   const trafficProjection = useMemo(() => {
     return calculateTrafficProjection({
@@ -428,6 +579,12 @@ export default function ComercialProjecao() {
         </h1>
         <p className="text-muted-foreground mt-1">
           Simule manualmente o funil do proximo mes e veja quais metricas sao necessarias para bater a meta de faturamento.
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {syncStatus === 'loading' && 'Carregando configuracao salva do banco...'}
+          {syncStatus === 'saving' && 'Salvando projecao no banco...'}
+          {syncStatus === 'saved' && 'Projecao sincronizada com o banco de dados.'}
+          {syncStatus === 'error' && 'Falha ao sincronizar a projecao com o banco. Revise a conexao com o Supabase.'}
         </p>
       </div>
 

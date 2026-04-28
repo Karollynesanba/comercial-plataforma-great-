@@ -103,7 +103,7 @@ export default function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const { filterByMonth } = useMonthFilter();
 
-  // When the user wants "Todo o período", ensure the month filter doesn't hide anything
+  // When the user wants "Todo o per?odo", ensure the month filter doesn't hide anything
 
   // Clear day filter when period filter changes to a preset
 
@@ -491,29 +491,29 @@ export default function PipelinePage() {
               value={formatBRL(stats.totalValue)}
               subtitle="Entrada fechada + restante MRR + taxa de interesse"
               icon={<DollarSign className="h-5 w-5" />}
-              variant="primary"
+              variant="danger"
             />
             <KPICard
-              label="Em Negociação"
+              label="Em negociação"
               value={formatBRL(stats.negotiationValue)}
               icon={<Handshake className="h-5 w-5" />}
               variant="warning"
             />
             <KPICard
-              label="Fechado no Mês"
-              value={formatBRL(stats.closedValue)}
-              icon={<CheckCircle className="h-5 w-5" />}
-              variant="success"
-            />
-            <KPICard
-              label="Taxa de Conversão"
+              label="Taxa de conversão"
               value={`${stats.conversionRate.toFixed(1)}%`}
               icon={<Target className="h-5 w-5" />}
             />
             <KPICard
-              label="Ticket Médio"
+              label="Ticket médio"
               value={formatBRL(stats.averageTicket)}
               icon={<TrendingUp className="h-5 w-5" />}
+            />
+            <KPICard
+              label="Fechado no mês"
+              value={formatBRL(stats.closedValue)}
+              icon={<CheckCircle className="h-5 w-5" />}
+              variant="success"
             />
             <KPICard
               label="MRR Planejado"
@@ -523,7 +523,6 @@ export default function PipelinePage() {
               variant="success"
             />
           </div>
-
           <>
               {/* Filters */}
               <Card>
@@ -778,7 +777,7 @@ export default function PipelinePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover {selectedCardIds.size} lead(s)?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação irá remover permanentemente os {selectedCardIds.size} leads selecionados do pipeline. Não pode ser desfeita.
+              Esta a??o ir? remover permanentemente os {selectedCardIds.size} leads selecionados do pipeline. N?o pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -794,7 +793,7 @@ export default function PipelinePage() {
       <CelebrationAnimation
         show={showCelebration}
         type="sale"
-        title={celebrationData ? `🎉 ${celebrationData.clientName} fechou!` : undefined}
+        title={celebrationData ? `\u{1F389} ${celebrationData.clientName} fechou!` : undefined}
         subtitle={celebrationData ? `Valor: ${formatBRL(celebrationData.value)}` : undefined}
         onComplete={() => setShowCelebration(false)}
       />

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PipelineClient, VENDEDOR_OPTIONS, PACOTE_OPTIONS, Pacote, Vendedor, Periodo, PERIODO_OPTIONS, AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
-import { Building2, GripVertical, Clock, AlertTriangle, Pencil, Trash2, User, StickyNote, CalendarClock, PhoneOff, MessageSquare, Phone, MessageCircle } from 'lucide-react';
+import { Building2, GripVertical, Clock, AlertTriangle, Pencil, Trash2, User, StickyNote, CalendarClock, PhoneOff, MessageSquare, Phone, MessageCircle, Calendar } from 'lucide-react';
 import { cn, formatBRL } from '@/lib/utils';
 import { differenceInDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -135,6 +135,13 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
   const pacoteLabel = PACOTE_OPTIONS.find(p => p.value === client.pacote)?.label || client.pacote;
   const periodoLabel = PERIODO_OPTIONS.find(p => p.value === client.periodo)?.label || client.periodo;
   const agendadorLabel = client.agendadoPor ? AGENDADOR_OPTIONS.find(a => a.value === client.agendadoPor)?.label : null;
+  const agendadoViaLabel = client.agendadoVia === 'LIGACAO'
+    ? 'Ligacao'
+    : client.agendadoVia === 'MENSAGEM'
+      ? 'Mensagem'
+      : client.agendadoVia === 'CALENDLY'
+        ? 'Calendly'
+        : client.agendadoVia;
 
   const handleCheckbox = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -250,10 +257,12 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
               'flex items-center gap-1 px-2 py-0.5 rounded text-[10px]',
               client.agendadoVia === 'LIGACAO'
                 ? 'bg-emerald-500/20 text-emerald-400'
-                : 'bg-blue-500/20 text-blue-400'
+                : client.agendadoVia === 'CALENDLY'
+                  ? 'bg-violet-500/20 text-violet-400'
+                  : 'bg-blue-500/20 text-blue-400'
             )}>
-              {client.agendadoVia === 'LIGACAO' ? <Phone className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />}
-              {client.agendadoVia === 'LIGACAO' ? 'Ligacao' : 'Mensagem'}
+              {client.agendadoVia === 'LIGACAO' ? <Phone className="h-3 w-3" /> : client.agendadoVia === 'CALENDLY' ? <Calendar className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />}
+              {agendadoViaLabel}
             </span>
           )}
         </div>

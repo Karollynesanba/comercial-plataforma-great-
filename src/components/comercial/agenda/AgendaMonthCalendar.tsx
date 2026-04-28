@@ -1,20 +1,20 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { 
-  format, 
-  addMonths, 
-  subMonths, 
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
+import {
+  addMinutes,
+  addMonths,
   eachDayOfInterval,
-  isSameMonth,
+  endOfMonth,
+  endOfWeek,
+  format,
   isSameDay,
+  isSameMonth,
   isToday,
   parseISO,
-  addMinutes
+  startOfMonth,
+  startOfWeek,
+  subMonths,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -36,7 +36,6 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
-  // Get all days to display (including days from prev/next months to fill the grid)
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
@@ -45,17 +44,15 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
     return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   }, [currentDate]);
 
-  // Group events by day
   const eventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
-    events.forEach(event => {
+    events.forEach((event) => {
       const key = event.event_date;
       if (!map.has(key)) {
         map.set(key, []);
       }
       map.get(key)!.push(event);
     });
-    // Sort events by time within each day
     map.forEach((dayEvents) => {
       dayEvents.sort((a, b) => a.event_time.localeCompare(b.event_time));
     });
@@ -74,7 +71,6 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
     onDayClick?.(day);
   };
 
-  // Get events for selected day
   const selectedDayEvents = useMemo(() => {
     if (!selectedDay) return [];
     const key = format(selectedDay, 'yyyy-MM-dd');
@@ -82,48 +78,59 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
   }, [selectedDay, eventsByDay]);
 
   return (
-    <div className="bg-card rounded-xl border shadow-sm flex flex-col h-[calc(100vh-200px)]">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+    <div className="flex h-[calc(100vh-200px)] flex-col overflow-hidden rounded-[32px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-white/60">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200/70 px-6 py-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              onClick={goToPreviousMonth}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={goToToday}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 rounded-xl border-slate-200 bg-white px-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              onClick={goToToday}
+            >
               Hoje
             </Button>
-            <Button variant="outline" size="icon" onClick={goToNextMonth}>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              onClick={goToNextMonth}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <h2 className="text-xl font-semibold capitalize">
+          <h2 className="text-xl font-extrabold capitalize tracking-tight text-slate-950">
             {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
           </h2>
         </div>
-        <Button onClick={() => onAddEvent(selectedDay || new Date())}>
-          <Plus className="h-4 w-4 mr-2" />
+        <Button
+          onClick={() => onAddEvent(selectedDay || new Date())}
+          className="rounded-xl bg-red-600 px-4 py-2.5 font-semibold shadow-[0_8px_24px_rgba(220,38,38,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-[0_12px_28px_rgba(220,38,38,0.28)]"
+        >
+          <Plus className="mr-2 h-4 w-4" />
           Novo Evento
         </Button>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Calendar Grid */}
-        <div className="flex-1 p-4 flex flex-col">
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col p-5">
+          <div className="mb-3 grid grid-cols-7 gap-2">
             {WEEKDAYS.map((day) => (
-              <div 
-                key={day} 
-                className="text-center text-sm font-medium text-muted-foreground py-2"
-              >
+              <div key={day} className="py-2 text-center text-sm font-semibold tracking-wide text-slate-500">
                 {day}
               </div>
             ))}
           </div>
 
-          {/* Calendar days */}
-          <div className="grid grid-cols-7 gap-1 flex-1">
+          <div className="grid flex-1 grid-cols-7 gap-2">
             {calendarDays.map((day) => {
               const dateKey = format(day, 'yyyy-MM-dd');
               const dayEvents = eventsByDay.get(dateKey) || [];
@@ -137,36 +144,30 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                   key={dateKey}
                   onClick={() => handleDayClick(day)}
                   className={cn(
-                    "min-h-[80px] p-1 rounded-lg cursor-pointer transition-all border",
-                    isCurrentMonth 
-                      ? "bg-background hover:bg-muted/50" 
-                      : "bg-muted/30 text-muted-foreground hover:bg-muted/50",
-                    isSelected && "ring-2 ring-primary",
-                    "flex flex-col"
+                    'group min-h-[92px] cursor-pointer rounded-[18px] border border-slate-200/70 bg-white p-2.5 shadow-[0_2px_12px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_22px_rgba(15,23,42,0.08)]',
+                    isCurrentMonth ? 'text-slate-950' : 'bg-slate-50/70 text-slate-400',
+                    isSelected && 'ring-2 ring-red-500/40'
                   )}
                 >
-                  {/* Day number */}
                   <div className="flex items-center justify-between px-1">
                     <span
                       className={cn(
-                        "w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium",
-                        isDayToday && "bg-primary text-primary-foreground",
+                        'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all duration-200',
+                        isDayToday
+                          ? 'bg-red-600 text-white shadow-[0_8px_18px_rgba(220,38,38,0.22)]'
+                          : 'bg-slate-100 text-slate-900 group-hover:bg-slate-200'
                       )}
                     >
                       {format(day, 'd')}
                     </span>
                     {eventCount > 0 && (
-                      <Badge 
-                        variant="secondary" 
-                        className="h-5 px-1.5 text-xs"
-                      >
+                      <Badge variant="secondary" className="h-5 rounded-full px-1.5 text-[10px] font-semibold">
                         {eventCount}
                       </Badge>
                     )}
                   </div>
 
-                  {/* Event previews (show first 2-3) */}
-                  <div className="flex-1 mt-1 space-y-0.5 overflow-hidden">
+                  <div className="mt-2 space-y-1 overflow-hidden">
                     {dayEvents.slice(0, 3).map((event) => (
                       <EventCardTooltip key={event.id} event={event}>
                         <div
@@ -174,7 +175,7 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                             e.stopPropagation();
                             onEventClick(event);
                           }}
-                          className="text-[10px] px-1.5 py-0.5 rounded truncate text-white cursor-pointer hover:opacity-80"
+                          className="truncate rounded-lg px-2 py-1 text-[10px] font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                           style={{ backgroundColor: event.color || '#3b82f6' }}
                         >
                           {event.event_time.slice(0, 5)} {event.title}
@@ -182,9 +183,7 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                       </EventCardTooltip>
                     ))}
                     {eventCount > 3 && (
-                      <div className="text-[10px] text-muted-foreground px-1.5">
-                        +{eventCount - 3} mais
-                      </div>
+                      <div className="px-2 text-[10px] font-medium text-slate-500">+{eventCount - 3} mais</div>
                     )}
                   </div>
                 </div>
@@ -193,35 +192,25 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
           </div>
         </div>
 
-        {/* Side panel - Selected day details */}
-        <div className="w-72 border-l bg-muted/20 flex flex-col">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold">
-              {selectedDay 
-                ? format(selectedDay, "EEEE, d 'de' MMMM", { locale: ptBR })
-                : 'Selecione um dia'
-              }
+        <div className="flex w-80 flex-col border-l border-slate-200/70 bg-slate-50/70">
+          <div className="border-b border-slate-200/70 p-5">
+            <h3 className="text-base font-bold text-slate-950">
+              {selectedDay ? format(selectedDay, "EEEE, d 'de' MMMM", { locale: ptBR }) : 'Selecione um dia'}
             </h3>
             {selectedDay && (
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-slate-500">
                 {selectedDayEvents.length} evento{selectedDayEvents.length !== 1 ? 's' : ''}
               </p>
             )}
           </div>
 
           <ScrollArea className="flex-1">
-            <div className="p-4 space-y-2">
+            <div className="space-y-3 p-5">
               {selectedDay && selectedDayEvents.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Nenhum evento neste dia
-                  </p>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => onAddEvent(selectedDay)}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
+                <div className="rounded-[18px] border border-dashed border-slate-200 bg-white p-5 text-center shadow-sm">
+                  <p className="mb-3 text-sm text-slate-500">Nenhum evento neste dia</p>
+                  <Button size="sm" variant="outline" onClick={() => onAddEvent(selectedDay)}>
+                    <Plus className="mr-1 h-4 w-4" />
                     Adicionar
                   </Button>
                 </div>
@@ -237,21 +226,19 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                   <div
                     key={event.id}
                     onClick={() => onEventClick(event)}
-                    className="p-3 rounded-lg border bg-card cursor-pointer hover:shadow-md transition-shadow"
+                    className="cursor-pointer rounded-[16px] border border-slate-200/70 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(15,23,42,0.08)]"
                   >
-                    <div className="flex items-start gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="mt-1 h-3 w-3 flex-shrink-0 rounded-full shadow-sm"
                         style={{ backgroundColor: event.color || '#3b82f6' }}
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-950">{event.title}</p>
+                        <p className="text-xs text-slate-500">
                           {event.event_time.slice(0, 5)} – {endTime}
                         </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {event.client_name}
-                        </p>
+                        <p className="truncate text-xs text-slate-500">{event.client_name}</p>
                       </div>
                     </div>
                   </div>
@@ -261,13 +248,9 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
           </ScrollArea>
 
           {selectedDay && (
-            <div className="p-4 border-t">
-              <Button 
-                className="w-full" 
-                size="sm"
-                onClick={() => onAddEvent(selectedDay)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
+            <div className="border-t border-slate-200/70 p-5">
+              <Button className="w-full rounded-xl bg-red-600 font-semibold shadow-[0_8px_24px_rgba(220,38,38,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-[0_12px_28px_rgba(220,38,38,0.28)]" size="sm" onClick={() => onAddEvent(selectedDay)}>
+                <Plus className="mr-2 h-4 w-4" />
                 Novo Evento
               </Button>
             </div>

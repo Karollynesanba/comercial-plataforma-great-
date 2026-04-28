@@ -208,7 +208,7 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
     return {
       total,
       newLeadCount: filteredClients.filter((lead) => (lead.stage || lead.status) === 'NOVO').length,
-      todayLeads: filteredClients.filter((lead) => {
+      todayAppointments: filteredClients.filter((lead) => {
         const date = toLocalDate(getScheduleDate(lead as PipelineClient) as string | Date | null | undefined);
         return date ? isSameLocalDay(date, new Date()) : false;
       }).length,
@@ -229,19 +229,22 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 to-red-600" />
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <Clock className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm text-muted-foreground">Hoje</p>
-                <p className="text-2xl font-bold">{metrics.todayLeads}</p>
+                <p className="text-2xl font-bold">{metrics.todayAppointments}</p>
+                <p className="text-xs text-muted-foreground">Agendamentos marcados para o dia atual</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-slate-300 to-slate-400" />
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-primary" />
@@ -252,7 +255,8 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
             </div>
           </CardContent>
         </Card>
-        <Card className="border-green-500/30">
+        <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <UserCheck className="h-5 w-5 text-green-600" />
@@ -263,7 +267,8 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
             </div>
           </CardContent>
         </Card>
-        <Card className="border-red-500/30">
+        <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-400 to-red-600" />
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <UserX className="h-5 w-5 text-red-600" />
@@ -274,7 +279,8 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 to-amber-500" />
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <DollarSign className="h-5 w-5 text-amber-600" />
@@ -288,18 +294,28 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="h-4 w-4" />Evolucao: No Show x Realizados</CardTitle></CardHeader>
           <CardContent>
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={evolutionData}>
-                  <XAxis dataKey="month" />
-                  <YAxis />
+                  <defs>
+                    <linearGradient id="realizadosLineFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="noShowLineFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#EF4444" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#EF4444" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} stroke="#94A3B8" />
+                  <YAxis axisLine={false} tickLine={false} stroke="#94A3B8" />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="Realizados" stroke="#10B981" strokeWidth={2} />
-                  <Line type="monotone" dataKey="No Show" stroke="#EF4444" strokeWidth={2} />
+                  <Line type="monotone" dataKey="Realizados" stroke="#10B981" strokeWidth={3} dot={false} activeDot={{ r: 5 }} fill="url(#realizadosLineFill)" />
+                  <Line type="monotone" dataKey="No Show" stroke="#EF4444" strokeWidth={3} dot={false} activeDot={{ r: 5 }} fill="url(#noShowLineFill)" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -310,18 +326,18 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Target className="h-4 w-4" />Performance SDRs</CardTitle></CardHeader>
           <CardContent>
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sdrPerformanceData}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} stroke="#94A3B8" />
+                  <YAxis axisLine={false} tickLine={false} stroke="#94A3B8" />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="Realizados" fill="#10B981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="No Show" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Realizados" fill="#10B981" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="No Show" fill="#EF4444" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -330,34 +346,40 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><DollarSign className="h-4 w-4" />Distribuicao por Faturamento</CardTitle></CardHeader>
           <CardContent>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={metrics.faturamentoData}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
+                  <defs>
+                    <linearGradient id="faturamentoBarFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.95} />
+                      <stop offset="100%" stopColor="#60A5FA" stopOpacity={0.75} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} stroke="#94A3B8" />
+                  <YAxis axisLine={false} tickLine={false} stroke="#94A3B8" />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="url(#faturamentoBarFill)" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Target className="h-4 w-4" />Top Criativos</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {metrics.criativoData.map((item, index) => (
-                <div key={item.name} className="space-y-1">
+                <div key={item.name} className="space-y-1 rounded-xl px-2 py-1 transition-all duration-200 hover:bg-slate-50">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="truncate">{item.name}</span>
+                    <span className="truncate font-medium">{item.name}</span>
                     <span className="font-semibold">{item.value}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${(item.value / Math.max(metrics.criativoData[0]?.value || 1, 1)) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} />
+                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full shadow-sm" style={{ width: `${(item.value / Math.max(metrics.criativoData[0]?.value || 1, 1)) * 100}%`, backgroundColor: COLORS[index % COLORS.length] }} />
                   </div>
                 </div>
               ))}
@@ -367,13 +389,13 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+        <Card className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Clock className="h-4 w-4" />Por Horario</CardTitle></CardHeader>
           <CardContent>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={metrics.horarioData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
+                  <Pie data={metrics.horarioData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={46} outerRadius={82} paddingAngle={3} label>
                     {metrics.horarioData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
@@ -383,13 +405,13 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-[28px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Building2 className="h-4 w-4" />Ãrea de atuaÃ§Ã£o</CardTitle></CardHeader>
           <CardContent>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={metrics.salaoClinicaData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
+                  <Pie data={metrics.salaoClinicaData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={46} outerRadius={82} paddingAngle={3} label>
                     {metrics.salaoClinicaData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
                   </Pie>
                   <Tooltip />

@@ -4,7 +4,7 @@ interface LogoProps {
   variant?: 'full' | 'mark';
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  theme?: 'default' | 'light';
+  theme?: 'default' | 'light' | 'dark';
 }
 
 const sizes = {
@@ -15,7 +15,8 @@ const sizes = {
 };
 
 export function Logo({ variant = 'full', className, size = 'md', theme = 'default' }: LogoProps) {
-  const isLight = theme === 'light';
+  const isLight = theme === 'light' || theme === 'dark';
+  const isDark = theme === 'dark';
   const hexagonFill = isLight ? '#dc2626' : 'hsl(var(--primary))';
 
   if (variant === 'mark') {
@@ -67,7 +68,7 @@ export function Logo({ variant = 'full', className, size = 'md', theme = 'defaul
       <div className="flex flex-col">
         <span className={cn(
           'font-bold tracking-tight leading-none',
-          isLight ? 'text-gray-900' : '',
+          isDark ? 'text-white' : isLight ? 'text-gray-900' : '',
           size === 'sm' && 'text-lg',
           size === 'md' && 'text-xl',
           size === 'lg' && 'text-2xl',
@@ -77,7 +78,7 @@ export function Logo({ variant = 'full', className, size = 'md', theme = 'defaul
         </span>
         <span className={cn(
           'font-medium leading-none',
-          isLight ? 'text-gray-500' : 'text-muted-foreground',
+          isDark ? 'text-white/60' : isLight ? 'text-gray-500' : 'text-muted-foreground',
           size === 'sm' && 'text-[10px]',
           size === 'md' && 'text-xs',
           size === 'lg' && 'text-sm',

@@ -145,6 +145,8 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     ? 'Ligação'
     : pipelineClient?.agendadoVia === 'MENSAGEM'
       ? 'Mensagem'
+      : pipelineClient?.agendadoVia === 'CALENDLY'
+        ? 'Calendly'
       : 'Sem informação';
   const agendadorLabel = pipelineClient?.agendadoPor
     ? AGENDADOR_OPTIONS.find((option) => option.value === pipelineClient.agendadoPor)?.label || pipelineClient.agendadoPor
@@ -276,19 +278,19 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[1180px] lg:max-w-[1320px] max-h-[94vh] overflow-hidden p-0">
-        <div className="max-h-[94vh] overflow-y-auto bg-gradient-to-br from-white via-white to-slate-50 p-0">
-        <DialogHeader className="border-b border-slate-100 px-6 py-5">
-          <DialogTitle className="text-2xl font-black tracking-tight text-slate-950">
+      <DialogContent className="w-[calc(100vw-2rem)] max-h-[94vh] overflow-hidden rounded-[30px] border border-slate-200/70 bg-white p-0 shadow-[0_30px_80px_rgba(15,23,42,0.16)] sm:max-w-[1180px] lg:max-w-[1320px]">
+        <div className="max-h-[94vh] overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-slate-50 p-0">
+        <DialogHeader className="border-b border-slate-200/70 px-8 py-6">
+          <DialogTitle className="text-[1.8rem] font-black tracking-tight text-slate-950 sm:text-3xl">
             {isEditingEvent ? 'Editar evento' : event.title}
           </DialogTitle>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm leading-6 text-slate-500">
             Visão consolidada do agendamento, do lead e do pipeline vinculado.
           </p>
         </DialogHeader>
 
         {isEditingEvent ? (
-          <div className="space-y-4 px-6 py-6">
+          <div className="space-y-5 px-8 py-7">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label>Título</Label>
@@ -337,7 +339,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
               </div>
             </div>
 
-            <div className="sticky bottom-0 -mx-6 mt-6 flex justify-end gap-2 border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur">
+            <div className="sticky bottom-0 -mx-8 mt-6 flex justify-end gap-2 border-t border-slate-200/70 bg-white/95 px-8 py-4 backdrop-blur-xl">
               <Button variant="outline" onClick={() => setIsEditingEvent(false)}>Cancelar</Button>
               <Button onClick={handleSaveEvent} disabled={updateEvent.isPending}>
                 {updateEvent.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -346,9 +348,9 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
             </div>
           </div>
         ) : (
-          <div className="space-y-5 px-6 py-6">
-            <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="space-y-5 px-8 py-7">
+            <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
@@ -357,7 +359,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                           <button
                             type="button"
                             aria-label="Alterar cor do evento"
-                            className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:scale-105 hover:border-slate-300"
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-105 hover:border-slate-300 hover:shadow-md"
                           >
                             <span className="h-3.5 w-3.5 rounded-full ring-2 ring-white" style={{ backgroundColor: event.color }} />
                           </button>
@@ -377,7 +379,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                                   setIsColorPickerOpen(false);
                                   await handleColorChange(color.value);
                                 }}
-                                className="group flex flex-col items-center gap-1 rounded-xl border border-slate-100 p-2 transition hover:border-slate-300 hover:bg-slate-50"
+                                className="group flex flex-col items-center gap-1 rounded-xl border border-slate-100 p-2 transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm"
                               >
                                 <span
                                   className="h-7 w-7 rounded-full border border-white shadow-sm ring-1 ring-slate-200 transition group-hover:scale-105"
@@ -389,19 +391,19 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                           </div>
                         </PopoverContent>
                       </Popover>
-                      <p className="text-2xl font-black tracking-tight text-slate-950">{event.client_name}</p>
+                      <p className="text-[1.8rem] font-black tracking-tight text-slate-950">{event.client_name}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white hover:bg-slate-950">
+                      <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white shadow-sm hover:bg-slate-950">
                         <CalendarDays className="mr-1 h-3.5 w-3.5" />
                         {eventDateLabel} • {eventTimeLabel}
                       </Badge>
-                      <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-3 py-1">
+                      <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 shadow-sm">
                         <Phone className="mr-1 h-3.5 w-3.5" />
                         {event.client_phone || 'Sem telefone'}
                       </Badge>
                       {pipelineClient?.agendadoPor && (
-                        <Badge variant="outline" className="rounded-full border-red-200 bg-red-50 px-3 py-1 text-red-700">
+                        <Badge variant="outline" className="rounded-full border-red-200 bg-red-50 px-3 py-1 text-red-700 shadow-sm">
                           <User2 className="mr-1 h-3.5 w-3.5" />
                           {AGENDADOR_OPTIONS.find((option) => option.value === pipelineClient.agendadoPor)?.label || pipelineClient.agendadoPor}
                         </Badge>
@@ -410,11 +412,11 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingLead((current) => !current)} className="rounded-full">
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingLead((current) => !current)} className="rounded-full transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100">
                       <Edit3 className="mr-2 h-4 w-4" />
                       {isEditingLead ? 'Fechar edição' : 'Editar lead'}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingEvent(true)} className="rounded-full">
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingEvent(true)} className="rounded-full transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100">
                       <Edit3 className="mr-2 h-4 w-4" />
                       Editar evento
                     </Button>
@@ -422,25 +424,25 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 </div>
 
                 <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-                  <div className="rounded-[1.3rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.3rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Data</p>
                     <p className="mt-2 text-base font-black text-slate-950">{eventDateLabel}</p>
                   </div>
-                  <div className="rounded-[1.3rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.3rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Horário</p>
                     <p className="mt-2 text-base font-black text-slate-950">{eventTimeLabel}</p>
                   </div>
-                  <div className="rounded-[1.3rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.3rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Telefone</p>
                     <p className="mt-2 text-base font-black text-slate-950">{event.client_phone || 'Sem telefone'}</p>
                   </div>
-                  <div className="rounded-[1.3rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.3rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Agendamento</p>
                     <p className="mt-2 text-base font-black text-slate-950">{pipelineClient?.agendadoVia ? agendadoViaLabel : 'Sem informação'}</p>
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-[1.6rem] border border-slate-100 bg-slate-50 p-5">
+                <div className="mt-6 rounded-[1.6rem] border border-slate-100 bg-[#F9FAFB] p-5 shadow-sm">
                   <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                     <BadgeInfo className="h-4 w-4 text-primary" />
                     Observações do evento
@@ -451,7 +453,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 </div>
               </div>
 
-              <div className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
+              <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">Painel do lead</p>
@@ -460,42 +462,42 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 </div>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Quem agendou</p>
                     <p className="mt-2 text-base font-black text-slate-950">{agendadorLabel}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Ligação ou mensagem</p>
                     <p className="mt-2 text-base font-black text-slate-950">{agendadoViaLabel}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tem sócio?</p>
                     <p className="mt-2 text-base font-black text-slate-950">{leadForm.tem_socio === 'SIM' ? 'Sim' : leadForm.tem_socio === 'NAO' ? 'Não' : 'Sem informação'}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tem marketing?</p>
                     <p className="mt-2 text-base font-black text-slate-950">{leadForm.tem_mkt === 'SIM' ? 'Sim' : leadForm.tem_mkt === 'NAO' ? 'Não' : 'Sem informação'}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tem secretária?</p>
                     <p className="mt-2 text-base font-black text-slate-950">{leadForm.tem_secretaria === 'SIM' ? 'Sim' : leadForm.tem_secretaria === 'NAO' ? 'Não' : 'Sem informação'}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Área de atuação</p>
                     <p className="mt-2 text-base font-black text-slate-950">{areaAtuacaoLabel}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Faturamento</p>
                     <p className="mt-2 text-base font-black text-slate-950">{faturamentoLabel}</p>
                   </div>
-                  <div className="rounded-[1.2rem] bg-slate-50 p-4">
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Funil / criativo</p>
                     <p className="mt-2 text-base font-black text-slate-950">{funilLabel}</p>
                   </div>
                 </div>
 
                 {isEditingLead ? (
-                  <div className="mt-6 rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50 p-5">
+                  <div className="mt-6 rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50 p-5 shadow-sm">
                     <div className="grid gap-3 md:grid-cols-2">
                       <div>
                         <Label>Faturamento</Label>
@@ -578,13 +580,13 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 ) : null}
               </div>
             </div>
-            <div className="sticky bottom-0 -mx-6 flex flex-col gap-3 border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-              <Button variant="destructive" onClick={handleDelete} disabled={deleteEvent.isPending}>
+            <div className="sticky bottom-0 -mx-8 flex flex-col gap-3 border-t border-slate-200/70 bg-white/95 px-8 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+              <Button variant="destructive" onClick={handleDelete} disabled={deleteEvent.isPending} className="shadow-sm transition duration-200 hover:-translate-y-0.5">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Excluir
               </Button>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handleManualReminder}>
+                <Button variant="outline" onClick={handleManualReminder} className="shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
                   <Bell className="h-4 w-4 mr-2" />
                   Lembrete manual
                 </Button>
@@ -592,12 +594,12 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   <Button variant="outline" onClick={() => {
                     onDuplicate(event);
                     onOpenChange(false);
-                  }}>
+                  }} className="shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
                     <Copy className="h-4 w-4 mr-2" />
                     Duplicar
                   </Button>
                 )}
-                <Button onClick={() => setIsEditingEvent(true)}>Editar evento</Button>
+                <Button onClick={() => setIsEditingEvent(true)} className="bg-red-600 text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:bg-red-700">Editar evento</Button>
               </div>
             </div>
           </div>

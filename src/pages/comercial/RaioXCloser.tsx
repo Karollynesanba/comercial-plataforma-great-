@@ -86,6 +86,12 @@ type CloserSheetMetrics = {
   primeiraParcela: number;
 };
 
+type CloserSheetRates = {
+  realizadasRate: number;
+  pitchRate: number;
+  vendasRate: number;
+};
+
 type WeekGroup = {
   label: string;
   dates: string[];
@@ -181,6 +187,12 @@ export default function RaioXCloser() {
     () => CLOSERS_FROM_CALLS_SHEET.map((closer) => buildCloserCallMetrics(closer, getCloserTotals(visibleDates, closer))),
     [drafts, visibleDates]
   );
+  const closerPerformanceRanking = useMemo(
+    () => [...closerCallStats].sort((a, b) => b.valor - a.valor || b.vendas - a.vendas || b.conversionRate - a.conversionRate),
+    [closerCallStats]
+  );
+  const bestCloser = closerPerformanceRanking[0]?.closer;
+  const worstCloser = closerPerformanceRanking[closerPerformanceRanking.length - 1]?.closer;
   const monthlyEvolution = useMemo(() => buildCloserLogEvolution(closerDailyLogs), [closerDailyLogs]);
 
   const updateCloserDraft = (date: string, closer: CloserName, field: keyof CloserDailyDraft, value: string) => {
@@ -315,16 +327,16 @@ export default function RaioXCloser() {
             </CardHeader>
             <CardContent>
               <div className="overflow-auto rounded-2xl border bg-background">
-                <Table className="min-w-[2500px] text-xs">
+                <Table className="min-w-[2900px] text-xs">
                   <TableHeader>
                     <TableRow className="bg-slate-950 text-white hover:bg-slate-950">
                       <TableHead className="sticky left-0 z-20 w-[92px] bg-slate-950 text-white">Período</TableHead>
                       {CLOSERS_FROM_CALLS_SHEET.map((closer) => (
-                        <TableHead key={closer} className="border-l-2 border-red-600 text-center text-white" colSpan={9}>
+                        <TableHead key={closer} className="border-l-2 border-red-600 text-center text-white" colSpan={12}>
                           {CLOSER_LABELS[closer]}
                         </TableHead>
                       ))}
-                      <TableHead className="border-l-2 border-red-600 text-center text-white" colSpan={9}>Total</TableHead>
+                      <TableHead className="border-l-2 border-red-600 text-center text-white" colSpan={12}>Total</TableHead>
                     </TableRow>
                     <TableRow className="bg-red-600 text-white hover:bg-red-600">
                       <TableHead className="sticky left-0 z-20 bg-red-600 text-white">Dia</TableHead>
@@ -360,24 +372,64 @@ export default function RaioXCloser() {
           </Card>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {closerCallStats.map((closer) => (
-              <Card key={closer.closer} className="rounded-[1.8rem] border-slate-100 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Users className="h-5 w-5 text-primary" />
-                    {closer.closer}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <MetricLine label="Agendadas" value={closer.agendada} />
-                  <MetricLine label="Realizadas" value={closer.realizada} />
-                  <MetricLine label="Pitch" value={closer.pitch} />
-                  <MetricLine label="Vendas" value={closer.vendas} success />
-                  <MetricLine label="Conversão" value={toPct(closer.conversionRate)} />
-                  <MetricLine label="Valor" value={formatBRL(closer.valor)} success />
-                </CardContent>
-              </Card>
-            ))}
+            {closerPerformanceRanking.map((closer, index) => {
+              const conversionTone = getConversionTone(closer.conversionRate);
+              const isBest = closer.closer === bestCloser;
+              const isWorst = closer.closer === worstCloser;
+
+              return (
+                <Card
+                  key={closer.closer}
+                  className={cn(
+                    'group relative overflow-hidden rounded-[1.8rem] border bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(15,23,42,0.12)]',
+                    isBest && 'border-emerald-200 shadow-emerald-50/80',
+                    isWorst && 'border-red-200 shadow-red-50/80',
+                    !isBest && !isWorst && 'border-slate-100'
+                  )}
+                >
+                  <div className={cn('h-1.5', isBest ? 'bg-emerald-400' : isWorst ? 'bg-red-400' : 'bg-slate-200')} />
+                  <CardHeader className="space-y-3 pb-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                          #{index + 1} closer
+                        </p>
+                        <CardTitle className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight text-slate-950">
+                          <Users className="h-5 w-5 text-primary" />
+                          {closer.closer}
+                        </CardTitle>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'rounded-full px-3 py-1 text-xs font-black shadow-sm',
+                          conversionTone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                          conversionTone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-700',
+                          conversionTone === 'destructive' && 'border-red-200 bg-red-50 text-red-700'
+                        )}
+                      >
+                        {toPct(closer.conversionRate)}
+                      </Badge>
+                    </div>
+                    <div className="rounded-[1.25rem] bg-slate-50/90 px-4 py-4">
+                      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Faturamento</p>
+                      <div className="mt-2 flex items-end justify-between gap-3">
+                        <p className="text-3xl font-black tracking-tight text-emerald-700">{formatBRL(closer.valor)}</p>
+                        <p className="text-sm font-bold text-slate-500">Vendas {closer.vendas}</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 pb-6">
+                    <div className="grid grid-cols-2 gap-3">
+                      <MetricLine label="Agendadas" value={closer.agendada} />
+                      <MetricLine label="Realizadas" value={closer.realizada} />
+                      <MetricLine label="Pitch" value={closer.pitch} />
+                      <MetricLine label="Vendas" value={closer.vendas} success />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           <Card className="rounded-[2rem] border-slate-100 shadow-sm">
@@ -402,12 +454,25 @@ export default function RaioXCloser() {
             <CardContent>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={monthlyEvolution}>
-                  <XAxis dataKey="month" />
-                  <YAxis />
+                  <CartesianGrid stroke="#e5e7eb" strokeDasharray="4 4" opacity={0.75} />
+                  <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontWeight: 600 }} />
+                  <YAxis tick={{ fill: '#94a3b8', fontWeight: 600 }} />
                   <Tooltip />
                   <Legend />
                   {CLOSERS_FROM_CALLS_SHEET.map((closer, index) => (
-                    <Line key={closer} type="monotone" dataKey={closer} stroke={COLORS[index % COLORS.length]} strokeWidth={2.5} />
+                    <Line
+                      key={closer}
+                      type="monotone"
+                      dataKey={closer}
+                      stroke={COLORS[index % COLORS.length]}
+                      strokeWidth={closer === bestCloser ? 4.5 : 2.6}
+                      strokeOpacity={closer === bestCloser ? 1 : 0.4}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      dot={false}
+                      activeDot={{ r: 6 }}
+                      isAnimationActive
+                    />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
@@ -417,9 +482,9 @@ export default function RaioXCloser() {
 
         <TabsContent value="comparativo" className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="Leads" value={totals.leads} detail="Entrada no pipeline" />
+            <MetricCard label="Leads" value={totals.leads} detail="Entrada no pipeline" tone="default" />
             <MetricCard label="Vendas" value={totals.revenueDeals} detail="Fechado + Taxa de interesse" tone="success" />
-            <MetricCard label="Contratos fechados" value={totals.closedContracts} detail="Somente coluna Fechado" tone="success" />
+            <MetricCard label="Contratos fechados" value={totals.closedContracts} detail="Somente coluna Fechado" tone="default" />
             <MetricCard label="Faturamento" value={formatBRL(totals.revenue)} detail={`Ticket ${formatBRL(totals.averageTicket)}`} tone="success" />
           </div>
 
@@ -832,13 +897,30 @@ function getCloserDraftMetrics(draft: CloserDailyDraft | undefined): CloserSheet
   };
 }
 
+function getCloserSheetRates(metrics: CloserSheetMetrics): CloserSheetRates {
+  return {
+    realizadasRate: rate(metrics.realizada, metrics.agendada),
+    pitchRate: rate(metrics.pitch, metrics.agendada),
+    vendasRate: rate(metrics.vendas, metrics.agendada),
+  };
+}
+
+function getConversionTone(value: number) {
+  if (value > 0.5) return 'success' as const;
+  if (value >= 0.2) return 'warning' as const;
+  return 'destructive' as const;
+}
+
 function CloserMetricHeader() {
   return (
     <>
       <TableHead className="border-l-2 border-red-800 px-2 text-center text-white">SE agendada</TableHead>
       <TableHead className="px-2 text-center text-white">SE realizada</TableHead>
+      <TableHead className="px-1 text-center text-white">Realizadas %</TableHead>
       <TableHead className="px-1 text-center text-white">Pitch</TableHead>
+      <TableHead className="px-1 text-center text-white">Pitch %</TableHead>
       <TableHead className="px-1 text-center text-white">Vendas</TableHead>
+      <TableHead className="px-1 text-center text-white">Vendas %</TableHead>
       <TableHead className="px-2 text-center text-white">Valor</TableHead>
       <TableHead className="px-2 text-center text-white">Ticket médio</TableHead>
       <TableHead className="px-2 text-center text-white">Cash collected</TableHead>
@@ -863,8 +945,11 @@ function EditableCloserBlock({
     <>
       <EditableNumberCell value={draft.agendada} onChange={(value) => onChange('agendada', value)} onBlur={onBlur} separated />
       <EditableNumberCell value={draft.realizada} onChange={(value) => onChange('realizada', value)} onBlur={onBlur} />
+      <FormulaCell value={toPct(rate(metrics.realizada, metrics.agendada))} />
       <EditableNumberCell value={draft.pitch} onChange={(value) => onChange('pitch', value)} onBlur={onBlur} />
+      <FormulaCell value={toPct(rate(metrics.pitch, metrics.agendada))} />
       <EditableNumberCell value={draft.vendas} onChange={(value) => onChange('vendas', value)} onBlur={onBlur} />
+      <FormulaCell value={toPct(rate(metrics.vendas, metrics.agendada))} />
       <EditableNumberCell value={draft.valor} onChange={(value) => onChange('valor', value)} onBlur={onBlur} />
       <FormulaCell value={formatBRL(metrics.vendas ? metrics.valor / metrics.vendas : 0)} />
       <FormulaCell value={toPct(rate(metrics.primeiraParcela, metrics.valor))} />
@@ -879,8 +964,11 @@ function ReadonlyCloserBlock({ metrics }: { metrics: CloserSheetMetrics }) {
     <>
       <ReadonlySheetCell value={metrics.agendada} separated />
       <ReadonlySheetCell value={metrics.realizada} />
+      <ReadonlySheetCell value={toPct(rate(metrics.realizada, metrics.agendada))} />
       <ReadonlySheetCell value={metrics.pitch} />
+      <ReadonlySheetCell value={toPct(rate(metrics.pitch, metrics.agendada))} />
       <ReadonlySheetCell value={metrics.vendas} />
+      <ReadonlySheetCell value={toPct(rate(metrics.vendas, metrics.agendada))} />
       <ReadonlySheetCell value={formatBRL(metrics.valor)} />
       <ReadonlySheetCell value={formatBRL(metrics.vendas ? metrics.valor / metrics.vendas : 0)} />
       <ReadonlySheetCell value={toPct(rate(metrics.primeiraParcela, metrics.valor))} />
@@ -951,10 +1039,13 @@ function FormulaCell({ value }: { value: string | number }) {
 }
 
 function CloserTable({ rows }: { rows: CloserCallMetrics[] }) {
+  const rankedRows = [...rows].sort((a, b) => b.valor - a.valor || b.vendas - a.vendas || b.conversionRate - a.conversionRate);
+  const topCloser = rankedRows[0]?.closer;
   return (
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead className="w-20">#</TableHead>
           <TableHead>Closer</TableHead>
           <TableHead className="text-center">Agendadas</TableHead>
           <TableHead className="text-center">Realizadas</TableHead>
@@ -967,20 +1058,37 @@ function CloserTable({ rows }: { rows: CloserCallMetrics[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {[...rows].sort((a, b) => b.valor - a.valor || b.vendas - a.vendas).map((closer) => (
-          <TableRow key={closer.closer}>
-            <TableCell className="font-semibold text-slate-900">{closer.closer}</TableCell>
+        {rankedRows.map((closer, index) => (
+          <TableRow
+            key={closer.closer}
+            className={cn(
+              'transition-colors hover:bg-slate-50/80',
+              closer.closer === topCloser && 'bg-emerald-50/60'
+            )}
+          >
+            <TableCell className="font-black text-slate-500">#{index + 1}</TableCell>
+            <TableCell className={cn('font-semibold text-slate-900', closer.closer === topCloser && 'text-emerald-800')}>
+              {closer.closer}
+            </TableCell>
             <TableCell className="text-center">{closer.agendada}</TableCell>
             <TableCell className="text-center">{closer.realizada}</TableCell>
             <TableCell className="text-center">{closer.pitch}</TableCell>
             <TableCell className="text-center font-bold text-emerald-700">{closer.vendas}</TableCell>
             <TableCell className="text-center">{toPct(closer.showUpRate)}</TableCell>
             <TableCell className="text-center">
-              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+              <Badge
+                variant="outline"
+                className={cn(
+                  'rounded-full px-3 py-1 font-black',
+                  getConversionTone(closer.conversionRate) === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                  getConversionTone(closer.conversionRate) === 'warning' && 'border-amber-200 bg-amber-50 text-amber-700',
+                  getConversionTone(closer.conversionRate) === 'destructive' && 'border-red-200 bg-red-50 text-red-700'
+                )}
+              >
                 {toPct(closer.conversionRate)}
               </Badge>
             </TableCell>
-            <TableCell className="text-right font-bold">{formatBRL(closer.valor)}</TableCell>
+            <TableCell className="text-right font-bold text-emerald-700">{formatBRL(closer.valor)}</TableCell>
             <TableCell className="text-right">{formatBRL(closer.ticketMedio)}</TableCell>
           </TableRow>
         ))}
@@ -990,12 +1098,32 @@ function CloserTable({ rows }: { rows: CloserCallMetrics[] }) {
 }
 
 function MetricCard({ label, value, detail, tone = 'default' }: { label: string; value: string | number; detail: string; tone?: 'default' | 'success' }) {
-  const toneClass = tone === 'success' ? 'border-emerald-100 bg-emerald-50/60' : 'border-slate-100 bg-white';
+  const toneClass = tone === 'success'
+    ? 'border-transparent bg-[linear-gradient(135deg,#12b981,#24c7a1)] text-white shadow-[0_18px_40px_rgba(16,185,129,0.22)]'
+    : 'border-transparent bg-[#1f2c44] text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)]';
   return (
-    <div className={`rounded-[1.6rem] border p-5 shadow-sm ${toneClass}`}>
-      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <p className="mt-4 text-3xl font-black tracking-tight text-slate-950">{value}</p>
-      <p className="mt-1 text-sm font-medium text-slate-500">{detail}</p>
+    <div className={`group rounded-[1.6rem] border p-5 transition duration-200 ease-out hover:-translate-y-0.5 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="max-w-[12rem] text-[11px] font-black uppercase tracking-[0.22em] text-white/75">{label}</p>
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/14 text-xl text-white/90 shadow-inner shadow-white/5">
+          {tone === 'success' ? '↗' : '◎'}
+        </div>
+      </div>
+      <p className="mt-7 text-[2.55rem] font-black tracking-tight text-white">{value}</p>
+      <p className="mt-2 text-sm font-medium text-white/80">{detail}</p>
+      <div className="mt-5 h-10 overflow-hidden rounded-2xl">
+        <div className="h-full w-full bg-[linear-gradient(180deg,rgba(255,255,255,0.1),rgba(255,255,255,0))]">
+          <svg viewBox="0 0 240 44" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+            <path
+              d="M0 35 C28 32, 35 26, 58 29 C82 32, 98 16, 122 20 C146 24, 166 10, 186 15 C206 20, 220 13, 240 7"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1012,3 +1140,4 @@ function MetricLine({ label, value, success = false }: { label: string; value: s
 function toPct(value: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
+

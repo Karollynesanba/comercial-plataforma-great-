@@ -148,7 +148,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
           event_time: selectedTime || duplicateFrom.event_time.slice(0, 5),
           duration_minutes: duplicateFrom.duration_minutes || 60,
           meeting_link: duplicateFrom.meeting_link || '',
-          color: duplicateFrom.color || '#00E5FF',
+          color: '#00E5FF',
           team_id: duplicateFrom.team_id || '',
         });
       } else {
