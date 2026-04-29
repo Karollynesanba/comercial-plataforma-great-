@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { getCommercialSetting, savePipelineClientToCloud, setCommercialSetting } from '@/lib/commercialCloudStore';
+import { COMMERCIAL_DATA_RESET_VERSION, getCommercialSetting, savePipelineClientToCloud, setCommercialSetting } from '@/lib/commercialCloudStore';
 import { normalizeImportedMoneyValue } from '@/lib/utils';
 
 const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-04-13-v3';
@@ -54,7 +54,6 @@ const VENDEDOR_BY_VALUE: Record<string, string | undefined> = {
 };
 
 const AGENDADOR_BY_VALUE: Record<string, string | undefined> = {
-  MIGUEL: 'MIGUEL',
   PEDRO: 'PEDRO',
   HEBERT: 'HEBERT',
   HERBERT: 'HEBERT',
@@ -277,6 +276,10 @@ function isSameClient(left: any, right: any) {
 
 export async function importBundledPipelineCsvIfNeeded() {
   if (!isSupabaseConfigured) {
+    return { imported: false, count: 0 };
+  }
+
+  if (await getCommercialSetting('commercial_data_reset_version') === COMMERCIAL_DATA_RESET_VERSION) {
     return { imported: false, count: 0 };
   }
 

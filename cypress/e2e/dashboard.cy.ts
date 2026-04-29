@@ -1,0 +1,21 @@
+import { visitCommercial } from '../support/commercial-test-helpers';
+
+describe('Dashboard', () => {
+  it('carrega a visao geral com os principais blocos', () => {
+    visitCommercial(cy, '/comercial/dashboards');
+
+    cy.contains('h1', /Dashboards Visuais/i).should('be.visible');
+    cy.contains('h2', /Dashboard Comercial/i).should('be.visible');
+    cy.contains('h2', /Evolu/i).should('be.visible');
+    cy.contains('h2', 'Onde Investir').should('be.visible');
+    cy.contains(/Ranking completo dos criativos/i).should('be.visible');
+  });
+
+  it('permite trocar o periodo selecionado', () => {
+    visitCommercial(cy, '/comercial/dashboards');
+
+    cy.contains('button', /Todo o per/i).click({ force: true });
+    cy.contains('[role="option"]', /M[eé]s espec/i).click({ force: true });
+    cy.contains('h2', /Dashboard do M[eé]s Atual/i).should('be.visible');
+  });
+});

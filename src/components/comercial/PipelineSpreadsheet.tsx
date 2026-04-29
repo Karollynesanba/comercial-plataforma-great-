@@ -237,6 +237,7 @@ export function PipelineSpreadsheet({
       result = result.filter(c => 
         c.clientName.toLowerCase().includes(query) ||
         c.clinicName.toLowerCase().includes(query) ||
+        (c.funil || '').toLowerCase().includes(query) ||
         c.criativo.toLowerCase().includes(query) ||
         (normalizedQuery.length > 0 && c.telefone && c.telefone.replace(/\D/g, '').includes(normalizedQuery))
       );
@@ -410,11 +411,12 @@ export function PipelineSpreadsheet({
   };
 
   const exportToCSV = () => {
-    const headers = ['ATIVO', 'CLIENTE', 'VENDEDOR', 'CRIATIVO', 'EQUIPE', 'FATURAMENTO', 'PACOTE', 'PERÍODO', 'INDICAÇÃO', 'ENTRADA', 'DATA', 'DIAS', 'STATUS', 'MOTIVO PERDA'];
+    const headers = ['ATIVO', 'CLIENTE', 'VENDEDOR', 'FUNIL', 'CRIATIVO', 'EQUIPE', 'FATURAMENTO', 'PACOTE', 'PERÍODO', 'INDICAÇÃO', 'ENTRADA', 'DATA', 'DIAS', 'STATUS', 'MOTIVO PERDA'];
     const rows = filteredClients.map(c => [
       c.ativo ? 'ATIVO' : 'INATIVO',
       c.clientName,
       VENDEDOR_OPTIONS.find(v => v.value === c.vendedor)?.label || c.vendedor,
+      c.funil || '-',
       c.criativo,
       EQUIPE_OPTIONS.find(e => e.value === c.equipe)?.label || c.equipe,
       c.faturamento === 'PERSONALIZADO' && c.faturamentoPersonalizado

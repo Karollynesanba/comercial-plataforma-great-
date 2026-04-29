@@ -25,6 +25,7 @@ import { LogoLoader } from "./components/brand/Logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
 import { importBundledPipelineCsvIfNeeded } from "@/lib/pipelineCsvImport";
+import { resetCommercialCloudDataIfNeeded } from "@/lib/commercialCloudStore";
 import { resetGreatPlatformStorageIfNeeded } from "@/lib/safeStorage";
 import { AlertTriangle } from "lucide-react";
 
@@ -103,6 +104,7 @@ function PlatformBootstrap() {
       }
 
       try {
+        await resetCommercialCloudDataIfNeeded();
         const result = await importBundledPipelineCsvIfNeeded();
 
         if (isMounted && result.imported) {

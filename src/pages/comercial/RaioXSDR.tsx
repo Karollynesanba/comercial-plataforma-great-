@@ -31,7 +31,6 @@ type WeekGroup = {
 };
 
 const SDRS = [
-  { value: 'MIGUEL' as Agendador, label: 'Miguel' },
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
 ];
 

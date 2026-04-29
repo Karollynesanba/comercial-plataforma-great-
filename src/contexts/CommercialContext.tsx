@@ -3,7 +3,8 @@ import { SalesGoal } from '@/types';
 import { useAuthSafe } from './AuthContext';
 import { buildDashboardMetrics, endOfMonth, getClientRevenue, getCloseDate, isDateInRange, isRealContract, startOfMonth } from '@/lib/commercialMetrics';
 import { type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
-import { addCriativoToCloud, archiveCriativoInCloud, deletePipelineClientFromCloud, dismissPaymentReminderInCloud, fetchCommercialCloudState, renameCriativoInCloud, saveCloserDailyLogToCloud, savePipelineClientToCloud, savePreSalesDailyLogToCloud, saveSalesGoalToCloud, saveSdrGoalToCloud, setCommercialSetting, type CommercialCloudState } from '@/lib/commercialCloudStore';
+import { addCriativoToCloud, archiveCriativoInCloud, deletePipelineClientFromCloud, dismissPaymentReminderInCloud, fetchCommercialCloudState, renameCriativoInCloud, resetCommercialCloudData, saveCloserDailyLogToCloud, savePipelineClientToCloud, savePreSalesDailyLogToCloud, saveSalesGoalToCloud, saveSdrGoalToCloud, setCommercialSetting, type CommercialCloudState } from '@/lib/commercialCloudStore';
+import { resetGreatPlatformStorageNow } from '@/lib/safeStorage';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -36,8 +37,21 @@ export type TemSocio = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
 export type TemMkt = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
 export type TemSecretaria = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
 export type SalaoOuClinica = string;
-export type Agendador = 'MIGUEL' | 'PEDRO' | 'HEBERT' | 'CLED' | 'CAETANO';
+export type Agendador = 'PEDRO' | 'HEBERT' | 'CLED' | 'CAETANO';
 export type PodeInvestir = 'SIM' | 'NAO';
+export type Funil = string;
+
+export const FUNIL_OPTIONS = [
+  'INSTAGRAM',
+  'CAIXA DE PERGUNTAS',
+  'IA',
+  'PROMOCAO',
+  'ATENCAO DONA',
+  'JALECO',
+  'NAO IDENTIFICADO',
+  'INDICACAO',
+  'FORMULARIO',
+] as const;
 
 export const TEAM_IDS = {
   EQUIPE_7: 'team-equipe-7',
@@ -45,15 +59,13 @@ export const TEAM_IDS = {
 } as const;
 
 export const AGENDADOR_OPTIONS = [
-  { value: 'MIGUEL' as Agendador, label: 'Miguel' },
   { value: 'PEDRO' as Agendador, label: 'Pedro' },
   { value: 'HEBERT' as Agendador, label: 'Hebert' },
   { value: 'CLED' as Agendador, label: 'Cled' },
-  { value: 'CAETANO' as Agendador, label: 'Caetano' },
+  { value: 'CAETANO' as Agendador, label: 'Bruno' },
 ];
 
 export const OFFICIAL_SDR_OPTIONS = [
-  { value: 'MIGUEL' as Agendador, label: 'Miguel' },
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
 ];
 
@@ -123,6 +135,7 @@ export interface PipelineClient {
   temMkt?: TemMkt;
   temSecretaria?: TemSecretaria;
   salaoOuClinica?: SalaoOuClinica;
+  funil?: Funil;
   createdByUserId: string | null;
   dealValue?: number;
   plan?: 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'TAXA_INTERESSE';
@@ -173,7 +186,7 @@ export const VENDEDOR_OPTIONS = [
   { value: 'CLED' as Vendedor, label: 'Cled' },
   { value: 'PEDRO_H' as Vendedor, label: 'Pedro H' },
   { value: 'PEDRO_JUAN' as Vendedor, label: 'Pedro Juan' },
-  { value: 'CAETANO' as Vendedor, label: 'Caetano' },
+  { value: 'CAETANO' as Vendedor, label: 'Bruno' },
 ];
 
 export const EQUIPE_OPTIONS = [
@@ -235,6 +248,7 @@ interface CommercialContextType {
   currentGoal: SalesGoal | null;
   paymentReminders: PaymentReminder[];
   criativos: string[];
+  funis: string[];
   nextTeamInQueue: Equipe;
   sdrGoals: SDRGoal[];
   preSalesDailyLogs: PreSalesDailyLog[];
@@ -252,6 +266,10 @@ interface CommercialContextType {
   addCriativo: (criativo: string) => void;
   updateCriativo: (oldCriativo: string, newCriativo: string) => void;
   deleteCriativo: (criativo: string) => void;
+  addFunil: (funil: string) => void;
+  updateFunil: (oldFunil: string, newFunil: string) => void;
+  deleteFunil: (funil: string) => void;
+  resetCommercialData: () => Promise<void>;
   getGoalStats: () => {
     totalSold: number;
     remaining: number;
@@ -295,6 +313,7 @@ const EMPTY_COMMERCIAL_STATE: CommercialCloudState = {
   closerDailyLogs: [],
   paymentReminders: [],
   criativos: [],
+  funis: [],
   teamPointer: TEAM_IDS.EQUIPE_7,
 };
 
@@ -401,6 +420,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const closerDailyLogs = cloudState.closerDailyLogs;
   const paymentReminders = useMemo(() => cloudState.paymentReminders.map(reviveReminder), [cloudState.paymentReminders]);
   const criativos = cloudState.criativos;
+  const funis = cloudState.funis?.length ? cloudState.funis : [...FUNIL_OPTIONS];
   const lastTeamPointer = cloudState.teamPointer || TEAM_IDS.EQUIPE_7;
 
   const nextTeamInQueue: string = lastTeamPointer === TEAM_IDS.TROPA_DE_ELITE
@@ -611,6 +631,63 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     void archiveCriativoInCloud(criativo).then(refreshCommercialState);
   }, [refreshCommercialState]);
 
+  const syncFunisToCloud = useCallback((nextFunis: string[]) => {
+    setCloudState((current) => ({
+      ...current,
+      funis: nextFunis,
+    }));
+    void setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id)
+      .then(refreshCommercialState)
+      .catch(() => void refreshCommercialState());
+  }, [refreshCommercialState, user?.id]);
+
+  const addFunil = useCallback((funil: string) => {
+    const normalized = funil.trim().toUpperCase();
+    if (!normalized) return;
+
+    const nextFunis = Array.from(new Set([...(funis || []), normalized])).sort();
+    syncFunisToCloud(nextFunis);
+  }, [funis, syncFunisToCloud]);
+
+  const updateFunil = useCallback((oldFunil: string, newFunil: string) => {
+    const normalized = newFunil.trim().toUpperCase();
+    if (!normalized) return;
+
+    const nextFunis = (funis || []).map((item) => (item === oldFunil ? normalized : item));
+    setCloudState((current) => ({
+      ...current,
+      funis: nextFunis,
+      pipelineClients: current.pipelineClients.map((client) => (client.funil === oldFunil ? { ...client, funil: normalized } : client)),
+    }));
+    void setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id)
+      .then(() => {
+        void Promise.all([
+          ...pipelineClients.filter((client) => client.funil === oldFunil).map((client) => savePipelineClientToCloud({ ...client, funil: normalized }, user?.id)),
+        ]).then(refreshCommercialState);
+      })
+      .catch(() => void refreshCommercialState());
+  }, [funis, pipelineClients, refreshCommercialState, user?.id]);
+
+  const deleteFunil = useCallback((funil: string) => {
+    const usage = pipelineClients.filter((client) => client.funil === funil).length;
+    if (usage > 0) return;
+
+    const nextFunis = (funis || []).filter((item) => item !== funil);
+    syncFunisToCloud(nextFunis);
+  }, [funis, pipelineClients, syncFunisToCloud]);
+
+  const resetCommercialData = useCallback(async () => {
+    setCloudState(EMPTY_COMMERCIAL_STATE);
+    queryClient.clear();
+    resetGreatPlatformStorageNow();
+
+    if (isSupabaseConfigured) {
+      await resetCommercialCloudData(user?.id);
+    }
+
+    await refreshCommercialState();
+  }, [queryClient, refreshCommercialState, user?.id]);
+
   const getGoalStats = useCallback(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -712,6 +789,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     currentGoal,
     paymentReminders,
     criativos,
+    funis,
     nextTeamInQueue,
       sdrGoals,
       preSalesDailyLogs,
@@ -729,6 +807,10 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     addCriativo,
     updateCriativo,
     deleteCriativo,
+    addFunil,
+    updateFunil,
+    deleteFunil,
+    resetCommercialData,
     getGoalStats,
     getPipelineStats,
     getStatsByVendedor,
@@ -737,8 +819,13 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     addCriativo,
     addPipelineClient,
     criativos,
+    funis,
     currentGoal,
     deleteCriativo,
+    addFunil,
+    updateFunil,
+    deleteFunil,
+    resetCommercialData,
     deletePipelineClient,
     dismissReminder,
     getGoalStats,

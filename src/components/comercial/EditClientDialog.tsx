@@ -31,6 +31,7 @@ import { formatBRL } from '@/lib/utils';
 import { 
   useCommercial, 
   PipelineClient,
+  FUNIL_OPTIONS,
   VENDEDOR_OPTIONS,
   EQUIPE_OPTIONS,
   FATURAMENTO_OPTIONS,
@@ -100,7 +101,8 @@ const formSchema = z.object({
   clinicName: z.string().min(2, 'Nome da clínica deve ter pelo menos 2 caracteres'),
   telefone: z.string().optional(),
   vendedor: z.enum(['HERBERT', 'CLED', 'PEDRO_H', 'PEDRO_JUAN', 'CAETANO'] as const).optional().nullable(),
-  criativo: z.string().min(1, 'Criativo é obrigatório'),
+  funil: z.string().min(1, 'Funil Ã© obrigatÃ³rio'),
+  criativo: z.string().optional(),
   equipe: z.string(),
   faturamento: z.enum(['0_A_10K', '10K_A_20K', '20K_A_30K', '30K_A_50K', '50K_A_80K', '80K_A_100K', '100K_A_150K', '150K_A_250K', '250K_A_400K', '400K_A_600K', '600K_A_1M', '1M_PLUS', 'NAO_INFORMADO', 'PERSONALIZADO'] as const),
   faturamentoPersonalizado: z.string().optional(),
@@ -117,6 +119,12 @@ const formSchema = z.object({
     const num = parseFloat(val.replace(/[^\d,]/g, '').replace(',', '.'));
     return isNaN(num) ? 0 : num;
   }),
+}).refine((data) => {
+  if (data.funil === 'INSTAGRAM') return true;
+  return Boolean(data.criativo?.trim());
+}, {
+  message: 'Informe o criativo quando o funil nao for Instagram',
+  path: ['criativo'],
 });
 
 type FormValues = z.input<typeof formSchema>;
@@ -128,7 +136,7 @@ interface EditClientDialogProps {
 }
 
 export function EditClientDialog({ open, onOpenChange, client }: EditClientDialogProps) {
-  const { updatePipelineClient, criativos } = useCommercial();
+  const { updatePipelineClient, criativos, funis } = useCommercial();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isNovoLead = client?.stage === 'NOVO';
 
@@ -139,6 +147,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
       clinicName: '',
       telefone: '',
       vendedor: undefined,
+      funil: 'INSTAGRAM',
       criativo: '',
       equipe: TEAM_IDS.TROPA_DE_ELITE,
       faturamento: 'NAO_INFORMADO',
@@ -155,6 +164,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
   });
 
   const watchFaturamento = form.watch('faturamento');
+  const watchFunil = form.watch('funil');
   const watchIsMrr = form.watch('isMrr');
   const watchEntrada = form.watch('entrada');
   const watchMrrRemaining = form.watch('mrrRemaining');
@@ -171,6 +181,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         clinicName: client.clinicName,
         telefone: client.telefone || '',
         vendedor: client.stage === 'NOVO' ? undefined : client.vendedor,
+        funil: client.funil || 'INSTAGRAM',
         criativo: client.criativo,
         equipe: client.equipe,
         faturamento: normalizeFaturamentoBucket(client.faturamento),
@@ -199,6 +210,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
       console.log('Updating client:', client.id, {
         clientName: data.clientName,
         criativo: data.criativo,
+        funil: data.funil,
         entrada: entradaValue,
       });
       
@@ -208,6 +220,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         telefone: data.telefone,
         vendedor: client.stage === 'NOVO' ? undefined : data.vendedor as Vendedor | undefined,
         criativo: data.criativo,
+        funil: data.funil,
         equipe: data.equipe as Equipe,
         faturamento: normalizeFaturamentoBucket(data.faturamento) as Faturamento,
         faturamentoPersonalizado: data.faturamento === 'PERSONALIZADO' ? data.faturamentoPersonalizado : undefined,
@@ -348,30 +361,69 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
               />
             </div>
 
-            {/* Row 3: Criativo e Faturamento */}
+            {/* Row 3: Funil, Criativo e Faturamento */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="criativo"
+                name="funil"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Criativo</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <FormLabel>Funil *</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        if (value === 'INSTAGRAM') {
+                          form.setValue('criativo', '');
+                        }
+                      }}
+                      value={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione o criativo" />
+                          <SelectValue placeholder="Selecione o funil" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-popover">
-                        {criativos.map(criativo => (
-                          <SelectItem key={criativo} value={criativo}>
-                            {criativo}
+                        {(funis.length > 0 ? funis : [...FUNIL_OPTIONS]).map(funil => (
+                          <SelectItem key={funil} value={funil}>
+                            {funil}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="criativo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Criativo {watchFunil === 'INSTAGRAM' ? '(opcional)' : '*'}</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o criativo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-popover">
+                        {criativos.length === 0 ? (
+                          <SelectItem value="_empty" disabled>
+                            Nenhum criativo cadastrado. Use o botão Criativos.
+                          </SelectItem>
+                        ) : (
+                          criativos.map(criativo => (
+                            <SelectItem key={criativo} value={criativo}>
+                              {criativo}
+                            </SelectItem>
+                          ))
+                        )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
                 )}
               />
 

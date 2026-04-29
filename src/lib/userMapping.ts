@@ -4,7 +4,7 @@ export interface UserMapping {
   email: string;
   role: 'ADMIN' | 'COORDENADOR_COMERCIAL' | 'CLOSER' | 'SDR';
   vendedorKey?: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDRO_JUAN' | 'CAETANO';
-  agendadorKey?: 'MIGUEL' | 'FELIPE' | 'HERBERT';
+  agendadorKey?: 'FELIPE' | 'HERBERT';
 }
 
 export const TEAM_USERS: Record<string, UserMapping> = {
@@ -30,12 +30,6 @@ export const TEAM_USERS: Record<string, UserMapping> = {
     agendadorKey: 'HERBERT',
   },
   // SDRs
-  MIGUEL: {
-    name: 'Miguel',
-    email: 'miguelfrancisco232490@gmail.com',
-    role: 'SDR',
-    agendadorKey: 'MIGUEL',
-  },
   FELIPE: {
     name: 'Felipe',
     email: 'feliperangel.rego03@gmail.com',
@@ -50,7 +44,7 @@ export const TEAM_USERS: Record<string, UserMapping> = {
     vendedorKey: 'PEDRO_JUAN',
   },
   CAETANO: {
-    name: 'Caetano',
+    name: 'Bruno',
     email: 'cadulucena6@gmail.com',
     role: 'CLOSER',
     vendedorKey: 'CAETANO',
@@ -78,7 +72,7 @@ export function getUserByVendedorKey(key: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDR
 }
 
 // Get user mapping by agendador key
-export function getUserByAgendadorKey(key: 'MIGUEL' | 'FELIPE' | 'HERBERT'): UserMapping | undefined {
+export function getUserByAgendadorKey(key: 'FELIPE' | 'HERBERT'): UserMapping | undefined {
   return Object.values(TEAM_USERS).find(u => u.agendadorKey === key);
 }
 
@@ -133,7 +127,7 @@ export function getVendedorDisplayName(key: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PE
 }
 
 // Get display name for agendador key
-export function getAgendadorDisplayName(key: 'MIGUEL' | 'FELIPE' | 'HERBERT'): string {
+export function getAgendadorDisplayName(key: 'FELIPE' | 'HERBERT'): string {
   const user = getUserByAgendadorKey(key);
   return user?.name || key;
 }

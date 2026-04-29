@@ -98,8 +98,9 @@ export function summarizePreVenda(
   const noShow = clients.filter((client) => client.stage === 'NO_SHOW').length;
   const closedClients = clients.filter((client) => client.stage === 'FECHADO');
   const operationalClients = clients.filter((client) => client.stage !== 'NOVO');
-  const operationalTotal = operationalClients.length;
-  const attended = operationalClients.filter((client) => client.stage !== 'NO_SHOW').length;
+  const noShowBaseClients = operationalClients.filter((client) => client.stage !== 'FECHADO');
+  const noShowBaseTotal = noShowBaseClients.length;
+  const attended = noShowBaseClients.filter((client) => client.stage !== 'NO_SHOW').length;
   const revenueStages = options.revenueStages || ['FECHADO'];
   const revenueClients = clients.filter((client) => revenueStages.includes(client.stage));
 
@@ -114,9 +115,9 @@ export function summarizePreVenda(
     lost: clients.filter((client) => client.stage === 'PERDIDO').length,
     closed: closedClients.length,
     revenue: revenueClients.reduce((sum, client) => sum + getClientRevenue(client), 0),
-    attendanceRate: rate(attended, operationalTotal),
-    noShowRate: rate(noShow, operationalTotal),
-    conversionRate: rate(closedClients.length, operationalTotal),
+    attendanceRate: rate(attended, noShowBaseTotal),
+    noShowRate: rate(noShow, noShowBaseTotal),
+    conversionRate: rate(closedClients.length, operationalClients.length),
   };
 }
 

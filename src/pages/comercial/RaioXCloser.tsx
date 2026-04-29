@@ -37,7 +37,7 @@ const COLORS = ['#e10600', '#111827', '#f97316', '#0ea5e9', '#8b5cf6'];
 const COMMISSION_RATE = 0.03;
 
 const CLOSER_OPTIONS: { value: Vendedor; label: string }[] = [
-  { value: 'CAETANO', label: 'Caetano' },
+  { value: 'CAETANO', label: 'Bruno' },
   { value: 'PEDRO_H', label: 'Pedro H' },
   { value: 'PEDRO_JUAN', label: 'Pedro J' },
   { value: 'CLED', label: 'Cled' },
@@ -103,7 +103,7 @@ const CLOSER_LABELS: Record<CloserName, string> = {
   CLED: 'Cled',
   'PEDRO H': 'Pedro H',
   HERBERT: 'Herbert',
-  CAETANO: 'Caetano',
+  CAETANO: 'Bruno',
   'PEDRO J': 'Pedro J',
 };
 

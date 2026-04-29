@@ -14,6 +14,10 @@ import { getClientRevenue, isRealContract } from '@/lib/commercialMetrics';
 
 const COLORS = ['#e10600', '#fb7185', '#f97316', '#f59e0b', '#10b981', '#0ea5e9', '#6366f1', '#8b5cf6'];
 const CLOSER_ORDER = new Map<CloserName, number>(CLOSERS_FROM_CALLS_SHEET.map((closer, index) => [closer, index]));
+const SPECIALIST_LABELS: Record<string, string> = {
+  CAETANO: 'Bruno',
+  HEBERT: 'Hebert',
+};
 export default function InteligenciaOperacional() {
   const { pipelineClients, closerDailyLogs } = useCommercial();
   const [filter, setFilter] = useState<RaioXFilterState>(() => ({ ...getDefaultRaioXFilter(), mode: 'all' }));
@@ -297,7 +301,7 @@ const hourChart = hourStats.map((item) => ({
                     ? 'rounded-full bg-slate-950 px-4 py-2 text-xs font-bold text-white'
                     : 'rounded-full border border-slate-100 bg-white px-4 py-2 text-xs font-semibold text-slate-500 transition hover:text-slate-950'}
                 >
-                  {option}
+                  {SPECIALIST_LABELS[option] || option}
                 </button>
               ))}
             </div>
@@ -627,6 +631,7 @@ function buildPerfectCloserScenarios(clients: PipelineClient[]): PerfectCloserSc
         const [area, faturamento, hour] = key.split('__');
         const closedRows = rows.filter((client) => client.stage === 'FECHADO');
         const noShowRows = rows.filter((client) => client.stage === 'NO_SHOW');
+        const noShowBaseRows = rows.filter((client) => client.stage !== 'FECHADO');
         const revenue = closedRows.reduce((total, client) => total + getClientRevenue(client), 0);
 
         return {
@@ -639,7 +644,7 @@ function buildPerfectCloserScenarios(clients: PipelineClient[]): PerfectCloserSc
           revenue,
           conversionRate: safeRate(closedRows.length, rows.length) * 100,
           noShow: noShowRows.length,
-          noShowRate: safeRate(noShowRows.length, rows.length) * 100,
+          noShowRate: safeRate(noShowRows.length, noShowBaseRows.length) * 100,
         };
       });
 
@@ -693,6 +698,7 @@ function buildCloserDeepDiveSummary(clients: PipelineClient[], closer: CloserNam
   if (closerClients.length === 0) return null;
 
   const closedClients = closerClients.filter((client) => client.stage === 'FECHADO');
+  const noShowBaseClients = closerClients.filter((client) => client.stage !== 'FECHADO');
   const revenue = closedClients.reduce((sum, client) => sum + getClientRevenue(client), 0);
 
   const grouped = new Map<string, PipelineClient[]>();
@@ -743,7 +749,7 @@ function buildCloserDeepDiveSummary(clients: PipelineClient[], closer: CloserNam
   return {
     closer,
     total: closerClients.length,
-    attended: closerClients.filter((client) => client.stage !== 'NO_SHOW').length,
+    attended: noShowBaseClients.filter((client) => client.stage !== 'NO_SHOW').length,
     noShow: closerClients.filter((client) => client.stage === 'NO_SHOW').length,
     closed: closedClients.length,
     revenue,

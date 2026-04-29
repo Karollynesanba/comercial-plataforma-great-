@@ -142,7 +142,7 @@ export default function RankingPage() {
 
   // SDR Goal Dialog State
   const [sdrGoalDialogOpen, setSDRGoalDialogOpen] = useState(false);
-  const [selectedSDR, setSelectedSDR] = useState<Agendador>('MIGUEL');
+  const [selectedSDR, setSelectedSDR] = useState<Agendador>('HEBERT');
 
   // Permission check using centralized user mapping
   const userEmail = user?.email || '';
@@ -394,8 +394,8 @@ export default function RankingPage() {
   }, [commissionConfigs]);
 
   // SDR Stats - count closed deals by agendador + commission calculation
-  // Only Felipe and Miguel are shown in the SDR ranking (others can schedule but don't participate)
-  const SDR_RANKING_ELIGIBLE: Agendador[] = ['MIGUEL', 'HEBERT'];
+  // Only Hebert is shown in the SDR ranking.
+  const SDR_RANKING_ELIGIBLE: Agendador[] = ['HEBERT'];
   
   const sdrRankingData = useMemo(() => {
     return AGENDADOR_OPTIONS

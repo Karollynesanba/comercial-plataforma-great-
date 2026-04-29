@@ -19,7 +19,6 @@ import { getScheduleDate, parseCalendarDate } from '@/lib/preVendaAnalytics';
 
 const DAILY_GOAL = 8;
 const SDR_NAMES: Record<string, string> = {
-  MIGUEL: 'Miguel',
   HEBERT: 'Hebert',
 };
 
@@ -94,7 +93,7 @@ export default function MetaAgendamentos() {
   }, [customEnd, customStart, filterByPeriod, period, pipelineClients]);
 
   useEffect(() => {
-    ['MIGUEL', 'HEBERT'].forEach((name) => {
+    ['HEBERT'].forEach((name) => {
       if ((sdrStats as any)[name]?.todayCount >= DAILY_GOAL && !celebrated.has(name)) {
         confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 } });
         toast.success(`${SDR_NAMES[name]} bateu a meta diaria!`);

@@ -10,6 +10,7 @@ export interface CommercialLocalData {
   closerDailyLogs: CloserDailyLog[];
   paymentReminders: any[];
   criativos: string[];
+  funis: string[];
   teamPointer: string;
   agendaEvents: any[];
   agendamentoLeads: any[];
@@ -60,6 +61,24 @@ export interface CEOFinanceSettings {
   customCosts: CEOFinanceCustomCost[];
 }
 
+export const DEFAULT_COMERCIAL_CRIATIVOS = [
+  '1 PROCEDIMENTO',
+  '15K HARMONIZAÇÃO',
+  'ATENÇÃO DONA',
+  'BLACK FRIDAY',
+  'BOTOX',
+  'CAIXA DE PERGUNTAS',
+  'CAIXINHA 02',
+  'EVENTO ESTETICA',
+  'TOP 1 BOTOX',
+  'TRS',
+  '15K E 30K',
+  'INDICAÇÃO',
+  'LANÇAMENTO',
+  'RECUPERAÇÃO',
+  'REELS',
+];
+
 export const DEFAULT_COMMERCIAL_LOCAL_DATA: CommercialLocalData = {
   pipelineClients: [],
   salesGoals: [],
@@ -67,7 +86,8 @@ export const DEFAULT_COMMERCIAL_LOCAL_DATA: CommercialLocalData = {
   preSalesDailyLogs: [],
   closerDailyLogs: [],
   paymentReminders: [],
-  criativos: [],
+  criativos: [...DEFAULT_COMERCIAL_CRIATIVOS],
+  funis: [],
   teamPointer: '',
   agendaEvents: [],
   agendamentoLeads: [],

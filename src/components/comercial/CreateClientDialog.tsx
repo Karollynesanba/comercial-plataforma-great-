@@ -15,6 +15,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormDescription,
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import {
   AGENDADOR_OPTIONS,
+  FUNIL_OPTIONS,
   FATURAMENTO_OPTIONS,
   SALAO_OU_CLINICA_OPTIONS,
   type Agendador,
@@ -44,7 +46,8 @@ import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 const formSchema = z.object({
   clientName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   telefone: z.string().min(1, 'Telefone e obrigatorio'),
-  criativo: z.string().min(1, 'Criativo e obrigatorio'),
+  funil: z.string().min(1, 'Funil e obrigatorio'),
+  criativo: z.string().optional(),
   faturamento: z.enum(['0_A_10K', '10K_A_20K', '20K_A_30K', '30K_A_50K', '50K_A_80K', '80K_A_100K', '100K_A_150K', '150K_A_250K', '250K_A_400K', '400K_A_600K', '600K_A_1M', '1M_PLUS'] as const, {
     required_error: 'Faturamento e obrigatorio',
   }),
@@ -59,6 +62,12 @@ const formSchema = z.object({
   areaAtuacao: z.string().trim().min(1, 'Area de atuacao e obrigatoria'),
   meetingDate: z.string().min(1, 'Data da reuniao e obrigatoria'),
   meetingTime: z.string().min(1, 'Horario da reuniao e obrigatorio'),
+}).refine((data) => {
+  if (data.funil === 'INSTAGRAM') return true;
+  return Boolean(data.criativo?.trim());
+}, {
+  message: 'Informe o criativo quando o funil nao for Instagram',
+  path: ['criativo'],
 }).refine((data) => data.faturamento !== '0_A_10K' || Boolean(data.podeInvestir), {
   message: 'Informe se o lead pode investir',
   path: ['podeInvestir'],
@@ -72,7 +81,7 @@ interface CreateClientDialogProps {
 }
 
 export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogProps) {
-  const { addPipelineClient, criativos } = useCommercial();
+  const { addPipelineClient, criativos, funis } = useCommercial();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -80,6 +89,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     defaultValues: {
       clientName: '',
       telefone: '',
+      funil: 'INSTAGRAM',
       criativo: '',
       faturamento: undefined,
       podeInvestir: undefined,
@@ -94,7 +104,19 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     },
   });
 
+  const watchFunil = form.watch('funil');
+  const shouldRequireCriativo = watchFunil !== 'INSTAGRAM';
+  const funnelOptions = funis.length > 0 ? funis : [...FUNIL_OPTIONS];
   const showLowRevenueOptions = form.watch('faturamento') === '0_A_10K';
+
+  const handleFunilChange = (value: string) => {
+    form.setValue('funil', value, { shouldDirty: true, shouldTouch: true });
+
+    if (value === 'INSTAGRAM') {
+      form.setValue('criativo', '', { shouldDirty: true, shouldTouch: true });
+      form.clearErrors('criativo');
+    }
+  };
 
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
@@ -107,7 +129,8 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         clinicName: data.clientName,
         telefone: formattedPhone,
         vendedor: undefined,
-        criativo: data.criativo,
+        funil: data.funil,
+        criativo: data.funil === 'INSTAGRAM' ? 'NAO IDENTIFICADO' : (data.criativo || 'NAO IDENTIFICADO'),
         equipe: undefined,
         faturamento: data.faturamento as Faturamento,
         faturamentoPersonalizado: undefined,
@@ -182,10 +205,38 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
 
             <FormField
               control={form.control}
+              name="funil"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Funil *</FormLabel>
+                  <Select
+                    onValueChange={handleFunilChange}
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o funil" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-popover z-[9999]">
+                      {funnelOptions.map((funil) => (
+                        <SelectItem key={funil} value={funil}>
+                          {funil}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="criativo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Criativo</FormLabel>
+                  <FormLabel>Criativo {shouldRequireCriativo ? '*' : '(opcional com Instagram)'}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -194,8 +245,8 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     </FormControl>
                     <SelectContent className="bg-popover z-[9999]">
                       {criativos.length === 0 ? (
-                        <SelectItem value="_loading" disabled>
-                          Carregando criativos...
+                        <SelectItem value="_empty" disabled>
+                          Nenhum criativo cadastrado. Use o botão Criativos.
                         </SelectItem>
                       ) : (
                         criativos.map((criativo) => (
@@ -206,6 +257,11 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                       )}
                     </SelectContent>
                   </Select>
+                  <FormDescription>
+                    {shouldRequireCriativo
+                      ? 'Obrigatório para funis diferentes de Instagram.'
+                      : 'Para Instagram, não é necessário informar criativo.'}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
