@@ -5,8 +5,9 @@ describe('Projecao', () => {
     visitCommercial(cy, '/comercial/projecao');
 
     cy.contains('h1', /Projecao Comercial/i).should('be.visible');
-    cy.contains(/Simulador manual do funil/i).should('be.visible');
-    cy.contains(/Resultado da simulacao/i).should('be.visible');
-    cy.contains(/Cenarios necessarios para bater a meta/i).should('be.visible');
+    cy.contains(/Caminho at[eé] a meta/i).should('be.visible');
+    cy.contains(/Simulador de meta/i).should('be.visible');
+    cy.contains(/Resultado da simul[aã]cao/i).should('be.visible');
+    cy.contains(/Meta planejada/i).should('be.visible');
   });
 });

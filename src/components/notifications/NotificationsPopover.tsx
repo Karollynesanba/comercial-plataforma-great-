@@ -114,7 +114,12 @@ export function NotificationsPopover() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative text-white/75 hover:text-white hover:bg-white/10">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Notificacoes"
+          className="relative text-white/75 hover:text-white hover:bg-white/10"
+        >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 h-5 w-5 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-primary-foreground">

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AgendaEvent, useAgendaData } from '@/hooks/useAgendaData';
-import { EQUIPE_OPTIONS } from '@/contexts/CommercialContext';
+import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 
 export default function AgendaGreat() {
   const { events, isLoading } = useAgendaData();
@@ -25,7 +25,10 @@ export default function AgendaGreat() {
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicatingEvent, setDuplicatingEvent] = useState<AgendaEvent | null>(null);
 
-  const teams = EQUIPE_OPTIONS.map((team) => ({ id: team.value, name: team.label }));
+  const teams = [
+    { id: AGENDA_TEAM_IDS.TROPA_DE_ELITE, name: 'Tropa de Elite' },
+    { id: AGENDA_TEAM_IDS.EQUIPE_7, name: 'Equipe 7' },
+  ];
 
   const filteredEvents = useMemo(() => {
     let result = events;

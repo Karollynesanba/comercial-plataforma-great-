@@ -36,6 +36,7 @@ export function Topbar({ title, breadcrumb }: TopbarProps) {
         <Button
           variant="ghost"
           onClick={open}
+          aria-label="Buscar acoes comerciais"
           className={cn(
             'hidden md:flex min-w-[210px] items-center justify-start gap-2 h-10 rounded-full px-4',
             'text-white/80 hover:text-white bg-white/8 hover:bg-white/14 border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.18)]'
@@ -53,6 +54,7 @@ export function Topbar({ title, breadcrumb }: TopbarProps) {
           variant="ghost"
           size="icon-sm"
           onClick={open}
+          aria-label="Buscar acoes comerciais"
           className="md:hidden text-white/75 hover:text-white hover:bg-white/10"
         >
           <Search className="h-4 w-4" />

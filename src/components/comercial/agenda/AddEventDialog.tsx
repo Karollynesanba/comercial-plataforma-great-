@@ -40,6 +40,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
   const { createEvent, updateEvent, deleteEvent } = useAgendaData();
   const commercial = useCommercialSafe();
   const { leads: agendamentoLeads } = useAgendamentoData();
+  const defaultColor = EVENT_COLORS[0]?.value || '#3B82F6';
   
   const [leadSearchOpen, setLeadSearchOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadOption | null>(null);
@@ -59,7 +60,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
     event_time: selectedTime || '09:00',
     duration_minutes: 60,
     meeting_link: '',
-    color: '#00E5FF',
+    color: defaultColor,
     team_id: '' as string,
   });
 
@@ -113,7 +114,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
       event_time: selectedTime || '09:00',
       duration_minutes: 60,
       meeting_link: '',
-      color: '#00E5FF',
+      color: defaultColor,
       team_id: '',
     });
     setSelectedLead(null);
@@ -133,7 +134,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
           event_time: editingEvent.event_time.slice(0, 5),
           duration_minutes: editingEvent.duration_minutes || 60,
           meeting_link: editingEvent.meeting_link || '',
-          color: editingEvent.color || '#00E5FF',
+          color: editingEvent.color || defaultColor,
           team_id: editingEvent.team_id || '',
         });
       } else if (duplicateFrom) {
@@ -148,7 +149,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
           event_time: selectedTime || duplicateFrom.event_time.slice(0, 5),
           duration_minutes: duplicateFrom.duration_minutes || 60,
           meeting_link: duplicateFrom.meeting_link || '',
-          color: '#00E5FF',
+          color: defaultColor,
           team_id: duplicateFrom.team_id || '',
         });
       } else {
@@ -398,29 +399,33 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
               </Select>
             </div>
             
-            <div>
-              <Label htmlFor="color">Cor</Label>
-              <Select
-                value={formData.color}
-                onValueChange={(value) => setFormData({ ...formData, color: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_COLORS.map((color) => (
-                    <SelectItem key={color.value} value={color.value}>
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-4 h-4 rounded-full" 
-                          style={{ backgroundColor: color.value }}
-                        />
-                        {color.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="col-span-2">
+              <Label>Cor</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {EVENT_COLORS.map((color) => {
+                  const active = formData.color === color.value;
+
+                  return (
+                    <Button
+                      key={color.value}
+                      type="button"
+                      variant="outline"
+                      onClick={() => setFormData({ ...formData, color: color.value })}
+                      className={cn(
+                        'h-8 rounded-full border-slate-200 bg-white px-3 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+                        active && 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-500/15'
+                      )}
+                    >
+                      <span
+                        className="mr-2 h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: color.value }}
+                        aria-hidden="true"
+                      />
+                      <span className="max-w-[110px] truncate">{color.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>

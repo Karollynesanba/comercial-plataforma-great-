@@ -14,7 +14,7 @@ describe('Metas', () => {
 
     cy.contains('Vendas por Dia').should('be.visible');
     cy.contains('Vendas por Criativo').should('be.visible');
-    cy.contains('Distribuicao por Plano').should('be.visible');
-    cy.contains('Projecao do Mes').should('be.visible');
+    cy.contains('Distribuição por Plano').should('be.visible');
+    cy.contains('Projeção do Mês').should('be.visible');
   });
 });

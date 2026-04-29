@@ -46,8 +46,6 @@ export const EVENT_COLORS = [
   { label: 'Recontato', value: '#B000FF', emoji: 'roxo' },
   { label: 'Ficou de Confirmar', value: '#FFA500', emoji: 'laranja' },
   { label: 'Reunioes - Great', value: '#808080', emoji: 'cinza' },
-  { label: 'Amarelo Sol', value: '#FACC15', emoji: 'amarelo' },
-  { label: 'Lilas Lavanda', value: '#C4B5FD', emoji: 'lilas' },
 ];
 
 const LOCAL_TEAMS = [

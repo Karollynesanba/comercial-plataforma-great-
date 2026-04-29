@@ -8,7 +8,7 @@ describe('Agendamentos', () => {
     cy.contains('Todas as Equipes').should('be.visible');
     cy.contains('button', 'Dia').should('be.visible');
     cy.contains('button', 'Semana').should('be.visible');
-    cy.contains('button', /M[eé]s/i).should('be.visible');
+    cy.contains('button', /M[ée]s/i).should('be.visible');
   });
 
   it('abre Meta de Agendamentos com cards por pessoa', () => {

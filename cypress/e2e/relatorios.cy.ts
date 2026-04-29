@@ -4,7 +4,7 @@ describe('Relatorios', () => {
   it('carrega o relatorio de clientes perdidos', () => {
     visitCommercial(cy, '/comercial/relatorios');
 
-    cy.contains('h1', /Relat.*Clientes Perdidos/i).should('be.visible');
+    cy.contains('h1', /Relat[oó]rio de Clientes Perdidos/i).should('be.visible');
     cy.contains('button', 'Exportar CSV').should('be.visible');
     cy.contains(/Hist[oó]rico Detalhado/i).should('be.visible');
   });

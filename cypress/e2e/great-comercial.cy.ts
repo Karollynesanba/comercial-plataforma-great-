@@ -6,13 +6,15 @@ describe('Testes Great-Comercial', () => {
 
     cy.contains('button', 'Buscar...').should('be.visible').click();
     cy.contains('input[placeholder="Buscar acoes comerciais..."]').should('be.visible');
+    cy.get('body').type('{esc}');
 
-    cy.get('header').find('button').eq(1).click({ force: true });
+    cy.get('button[aria-label="Alternar tema"]').click({ force: true });
     cy.contains('Claro').should('be.visible');
     cy.contains('Escuro').should('be.visible');
     cy.contains('Sistema').should('be.visible');
+    cy.get('body').type('{esc}');
 
-    cy.get('header').find('button').eq(2).click({ force: true });
+    cy.get('button[aria-label="Notificacoes"]').click({ force: true });
     cy.contains('h3', 'Notificacoes').should('be.visible');
   });
 
