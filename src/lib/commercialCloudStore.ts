@@ -15,7 +15,7 @@ export interface CommercialCloudState {
   teamPointer: string;
 }
 
-export const COMMERCIAL_DATA_RESET_VERSION = 'commercial-data-reset-2026-04-29-v2';
+export const COMMERCIAL_DATA_RESET_VERSION = 'commercial-data-reset-2026-04-29-v3';
 const COMMERCIAL_DATA_RESET_SETTING_KEY = 'commercial_data_reset_version';
 
 const DEFAULT_CLOUD_STATE: CommercialCloudState = {
@@ -25,7 +25,7 @@ const DEFAULT_CLOUD_STATE: CommercialCloudState = {
   preSalesDailyLogs: [],
   closerDailyLogs: [],
   paymentReminders: [],
-  criativos: [...DEFAULT_COMERCIAL_CRIATIVOS],
+  criativos: [],
   funis: [],
   teamPointer: '',
 };
@@ -361,7 +361,7 @@ function settingsToCriativos(rows: any[], cloudCriativos: string[]) {
     .map((row) => String(row.setting_value || '').trim().toUpperCase())
     .filter(Boolean);
 
-  const next = persisted.length > 0 ? persisted : [...DEFAULT_COMERCIAL_CRIATIVOS];
+  const next = persisted.length > 0 ? persisted : [];
   return Array.from(new Set(next)).sort();
 }
 

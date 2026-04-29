@@ -61,23 +61,7 @@ export interface CEOFinanceSettings {
   customCosts: CEOFinanceCustomCost[];
 }
 
-export const DEFAULT_COMERCIAL_CRIATIVOS = [
-  '1 PROCEDIMENTO',
-  '15K HARMONIZAÇÃO',
-  'ATENÇÃO DONA',
-  'BLACK FRIDAY',
-  'BOTOX',
-  'CAIXA DE PERGUNTAS',
-  'CAIXINHA 02',
-  'EVENTO ESTETICA',
-  'TOP 1 BOTOX',
-  'TRS',
-  '15K E 30K',
-  'INDICAÇÃO',
-  'LANÇAMENTO',
-  'RECUPERAÇÃO',
-  'REELS',
-];
+export const DEFAULT_COMERCIAL_CRIATIVOS: string[] = [];
 
 export const DEFAULT_COMMERCIAL_LOCAL_DATA: CommercialLocalData = {
   pipelineClients: [],
@@ -412,3 +396,4 @@ export function updateCommercialLocalData(
   writeCommercialLocalData(next);
   return next;
 }
+

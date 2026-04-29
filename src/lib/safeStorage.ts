@@ -5,7 +5,7 @@ type StorageKey = string;
 
 type StorageValue = string;
 
-export const PLATFORM_STORAGE_RESET_VERSION = '2026-04-29-commercial-reset-v4';
+export const PLATFORM_STORAGE_RESET_VERSION = '2026-04-29-commercial-reset-v5';
 
 export function safeGetItem(key: StorageKey): StorageValue | null {
   try {
