@@ -5,7 +5,7 @@ describe('Testes Great-Comercial', () => {
     visitCommercial(cy, '/comercial/dashboards');
 
     cy.contains('button', 'Buscar...').should('be.visible').click();
-    cy.contains('input[placeholder="Buscar acoes comerciais..."]').should('be.visible');
+    cy.get('input[placeholder="Buscar acoes comerciais..."]').should('be.visible');
     cy.get('body').type('{esc}');
 
     cy.get('button[aria-label="Alternar tema"]').click({ force: true });
@@ -22,7 +22,7 @@ describe('Testes Great-Comercial', () => {
     visitCommercial(cy, '/comercial/dashboards');
 
     cy.get('body').type('{ctrl}k');
-    cy.contains('Buscar acoes comerciais...').should('be.visible');
+    cy.get('input[placeholder="Buscar acoes comerciais..."]').should('be.visible');
     cy.contains('Ir para Dashboard Comercial').should('be.visible');
   });
 

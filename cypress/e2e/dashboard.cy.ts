@@ -15,7 +15,7 @@ describe('Dashboard', () => {
     visitCommercial(cy, '/comercial/dashboards');
 
     cy.contains('button', 'Todo o período').click({ force: true });
-    cy.contains('[role="option"]', /M[ée]s espec/i).click({ force: true });
-    cy.contains('h2', /Dashboard do M[ée]s Atual/i).should('be.visible');
+    cy.contains('Mês específico').click({ force: true });
+    cy.contains('h2', /Dashboard do M[eê]s Atual/i).should('be.visible');
   });
 });

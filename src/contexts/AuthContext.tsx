@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { User, UserRole, Module, ActivityLog, Team } from '@/types';
-import { canEditPlatform } from '@/lib/userMapping';
+import { canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
 import { supabase } from '@/integrations/supabase/client';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
@@ -102,16 +102,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const email = supabaseUserData.email?.toLowerCase();
     const foundUser = users.find(u => u.email.toLowerCase() === email && u.active);
+    const mappedUser = email ? getUserByEmail(email) : undefined;
 
     // IMPORTANT: Never block the UI waiting for remote role/profile queries.
     // Set a baseline internal user immediately so routing can proceed.
     // (We refine roles below when/if backend queries succeed.)
     if (email) {
-      const baselineRole: UserRole = (foundUser?.role as UserRole) || 'SETOR_COMERCIAL';
+      const baselineRole: UserRole =
+        (mappedUser?.role as UserRole) ||
+        (foundUser?.role as UserRole) ||
+        'SETOR_COMERCIAL';
       const baselineUser: User = {
         id: supabaseUserData.id,
         email: supabaseUserData.email || '',
         name:
+          (mappedUser?.name as string) ||
           (foundUser?.name as string) ||
           supabaseUserData.user_metadata?.full_name ||
           supabaseUserData.email ||
@@ -173,6 +178,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Determine primary role
       let finalRole = userWithoutPassword.role;
+      if (mappedUser?.role) {
+        finalRole = mappedUser.role as UserRole;
+      }
       if (hasAdminRole) {
         finalRole = 'ADMIN';
       } else if (dbCommercialRole === 'COORDENADOR_COMERCIAL') {
@@ -191,13 +199,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       safeSetItem('great_user', JSON.stringify(userWithCorrectId));
     } else {
       // User exists in Supabase but not in internal users list - fetch from database
-      let role: UserRole = 'SETOR_COMERCIAL';
+      let role: UserRole = (mappedUser?.role as UserRole) || 'SETOR_COMERCIAL';
       if (hasAdminRole) {
         role = 'ADMIN';
       } else if (dbCommercialRole === 'COORDENADOR_COMERCIAL') {
         role = 'COORDENADOR_COMERCIAL';
       } else if (dbCommercialRole) {
         role = dbCommercialRole as UserRole;
+      } else if (mappedUser?.role) {
+        role = mappedUser.role as UserRole;
       }
 
       let profileName: string | null = null;
@@ -219,7 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const newUser: User = {
         id: supabaseUserData.id,
         email: supabaseUserData.email || '',
-        name: profileName || supabaseUserData.user_metadata?.full_name || supabaseUserData.email || '',
+        name: profileName || mappedUser?.name || supabaseUserData.user_metadata?.full_name || supabaseUserData.email || '',
         role,
         active: true,
         createdAt: new Date(),
@@ -568,7 +578,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!session && !!supabaseUser;
   const isAdmin = user?.role === 'ADMIN';
-  const canEdit = canEditPlatform(user?.email || '', user?.role || '');
+  const canEdit =
+    canEditPlatform(user?.email || '', user?.role || '') ||
+    commercialRole === 'COORDENADOR_COMERCIAL' ||
+    isCoordinator(user?.email || '', user?.role || '') ||
+    !!getUserByName(user?.name || '')?.role && getUserByName(user?.name || '')?.role === 'COORDENADOR_COMERCIAL';
   const hasDualAccess = false;
 
   return (

@@ -22,7 +22,8 @@ interface ManageCriativosDialogProps {
 
 export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDialogProps) {
   const { criativos, addCriativo, updateCriativo, deleteCriativo, pipelineClients } = useCommercial();
-  const { canEdit } = useAuth();
+  const { canEdit, isAuthenticated } = useAuth();
+  const canManageCriativos = canEdit || isAuthenticated;
   const visibleCriativos = criativos;
 
   const [newCriativo, setNewCriativo] = useState('');
@@ -44,10 +45,6 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
   const getCriativoUsage = (criativo: string) => criativoUsage.get(criativo) || 0;
 
   const handleAdd = () => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para editar criativos');
-      return;
-    }
     if (!newCriativo.trim()) {
       toast.error('Digite o nome do criativo');
       return;
@@ -62,16 +59,12 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
   };
 
   const handleStartEdit = (criativo: string) => {
-    if (!canEdit) return;
+    if (!canManageCriativos) return;
     setEditingCriativo(criativo);
     setEditValue(criativo);
   };
 
   const handleSaveEdit = () => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para editar criativos');
-      return;
-    }
     if (!editValue.trim()) {
       toast.error('Nome não pode ser vazio');
       return;
@@ -94,10 +87,6 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
   };
 
   const handleDelete = (criativo: string) => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para editar criativos');
-      return;
-    }
     const usage = getCriativoUsage(criativo);
     if (usage > 0) {
       toast.error(`Não é possível excluir: ${usage} lead(s) usam este criativo`);
@@ -126,18 +115,12 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
             value={newCriativo}
             onChange={(e) => setNewCriativo(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            disabled={!canEdit}
+            disabled={!canManageCriativos}
           />
-          <Button onClick={handleAdd} size="icon" disabled={!canEdit}>
+          <Button onClick={handleAdd} size="icon" disabled={!canManageCriativos}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-
-        {!canEdit && (
-          <p className="text-xs text-muted-foreground">
-            Você pode visualizar os criativos, mas não tem permissão para editar.
-          </p>
-        )}
 
         <ScrollArea className="h-[300px] pr-4">
           <div className="space-y-2">
@@ -169,7 +152,7 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
                         className="flex-1"
                         autoFocus
                       />
-                      <Button size="icon" variant="ghost" onClick={handleSaveEdit} disabled={!canEdit}>
+                      <Button size="icon" variant="ghost" onClick={handleSaveEdit} disabled={!canManageCriativos}>
                         <Save className="h-4 w-4 text-success" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
@@ -187,7 +170,7 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
                         variant="ghost"
                         onClick={() => handleStartEdit(criativo)}
                         className="h-8 w-8"
-                        disabled={!canEdit}
+                        disabled={!canManageCriativos}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -196,7 +179,7 @@ export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDia
                         variant="ghost"
                         onClick={() => handleDelete(criativo)}
                         className="h-8 w-8 text-destructive hover:text-destructive"
-                        disabled={usage > 0 || !canEdit}
+                        disabled={usage > 0 || !canManageCriativos}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

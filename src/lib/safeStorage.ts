@@ -45,6 +45,7 @@ export function canUseLocalStorage(): boolean {
 export function resetGreatPlatformStorageIfNeeded(
   resetVersion = PLATFORM_STORAGE_RESET_VERSION
 ): boolean {
+  if (safeGetItem('great_test_session_bypass') === 'true') return false;
   if (!canUseLocalStorage()) return false;
 
   try {
@@ -55,6 +56,7 @@ export function resetGreatPlatformStorageIfNeeded(
 }
 
 export function resetGreatPlatformStorageNow(resetVersion = PLATFORM_STORAGE_RESET_VERSION): boolean {
+  if (safeGetItem('great_test_session_bypass') === 'true') return false;
   if (!canUseLocalStorage()) return false;
 
   const markerKey = 'great_storage_reset_version';

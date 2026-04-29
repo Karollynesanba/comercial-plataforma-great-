@@ -4,11 +4,11 @@ describe('Agendamentos', () => {
   it('abre Agenda Great com busca, equipe e visao dia/semana/mes', () => {
     visitCommercial(cy, '/comercial/agenda-great');
 
-    cy.contains('Buscar cliente, telefone...').should('be.visible');
-    cy.contains('Todas as Equipes').should('be.visible');
+    cy.get('input[placeholder="Buscar cliente, telefone..."]').should('be.visible');
+    cy.contains('button', 'Todas as Equipes').should('be.visible');
     cy.contains('button', 'Dia').should('be.visible');
     cy.contains('button', 'Semana').should('be.visible');
-    cy.contains('button', /M[ée]s/i).should('be.visible');
+    cy.contains('button', 'Mês').should('be.visible');
   });
 
   it('abre Meta de Agendamentos com cards por pessoa', () => {

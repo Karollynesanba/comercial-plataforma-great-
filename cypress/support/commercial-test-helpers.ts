@@ -33,6 +33,10 @@ export function buildCommercialSession(options: CommercialSessionOptions = {}) {
 
 export function seedCommercialAuth(win: Window, options: CommercialSessionOptions = {}) {
   buildCommercialSession(options);
+  Object.keys(win.localStorage)
+    .filter((key) => key === 'supabase.auth.token' || key.startsWith('sb-'))
+    .forEach((key) => win.localStorage.removeItem(key));
+
   const user = {
     id: options.userId || 'test-user-id',
     email: options.email || 'cledinhosport10@gmail.com',
@@ -52,10 +56,26 @@ export function visitCommercial(
   path: string,
   options: CommercialSessionOptions = {}
 ) {
-  cy.intercept('GET', /^https:\/\/bwucqiqnxwdqapunbwip\.supabase\.co\/rest\/v1\/.*/, {
-    statusCode: 200,
-    body: [],
-  });
+  cy.intercept(
+    {
+      method: /GET|POST|PATCH|PUT|DELETE|HEAD/,
+      url: /^https:\/\/bwucqiqnxwdqapunbwip\.supabase\.co\/rest\/v1\/.*/,
+    },
+    (req) => {
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        req.reply({
+          statusCode: 200,
+          body: [],
+        });
+        return;
+      }
+
+      req.reply({
+        statusCode: 200,
+        body: [],
+      });
+    }
+  );
 
   cy.visit(path, {
     onBeforeLoad(win) {

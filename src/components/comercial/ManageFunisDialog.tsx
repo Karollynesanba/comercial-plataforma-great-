@@ -22,7 +22,8 @@ interface ManageFunisDialogProps {
 
 export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps) {
   const { funis, addFunil, updateFunil, deleteFunil, pipelineClients } = useCommercial();
-  const { canEdit } = useAuth();
+  const { canEdit, isAuthenticated } = useAuth();
+  const canManageFunis = canEdit || isAuthenticated;
 
   const [newFunil, setNewFunil] = useState('');
   const [editingFunil, setEditingFunil] = useState<string | null>(null);
@@ -43,10 +44,6 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
   const getFunilUsage = (funil: string) => funilUsage.get(funil) || 0;
 
   const handleAdd = () => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para editar funis');
-      return;
-    }
     if (!newFunil.trim()) {
       toast.error('Digite o nome do funil');
       return;
@@ -61,16 +58,12 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
   };
 
   const handleStartEdit = (funil: string) => {
-    if (!canEdit) return;
+    if (!canManageFunis) return;
     setEditingFunil(funil);
     setEditValue(funil);
   };
 
   const handleSaveEdit = () => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para editar funis');
-      return;
-    }
     if (!editValue.trim()) {
       toast.error('Nome não pode ser vazio');
       return;
@@ -93,10 +86,6 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
   };
 
   const handleDelete = (funil: string) => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para editar funis');
-      return;
-    }
     const usage = getFunilUsage(funil);
     if (usage > 0) {
       toast.error(`Não é possível excluir: ${usage} lead(s) usam este funil`);
@@ -125,18 +114,12 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
             value={newFunil}
             onChange={(e) => setNewFunil(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            disabled={!canEdit}
+            disabled={!canManageFunis}
           />
-          <Button onClick={handleAdd} size="icon" disabled={!canEdit}>
+          <Button onClick={handleAdd} size="icon" disabled={!canManageFunis}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-
-        {!canEdit && (
-          <p className="text-xs text-muted-foreground">
-            Você pode visualizar os funis, mas não tem permissão para editar.
-          </p>
-        )}
 
         <ScrollArea className="h-[300px] pr-4">
           <div className="space-y-2">
@@ -168,7 +151,7 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
                         className="flex-1"
                         autoFocus
                       />
-                      <Button size="icon" variant="ghost" onClick={handleSaveEdit}>
+                      <Button size="icon" variant="ghost" onClick={handleSaveEdit} disabled={!canManageFunis}>
                         <Save className="h-4 w-4 text-success" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
@@ -186,7 +169,7 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
                         variant="ghost"
                         onClick={() => handleStartEdit(funil)}
                         className="h-8 w-8"
-                        disabled={!canEdit}
+                        disabled={!canManageFunis}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -195,7 +178,7 @@ export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps
                         variant="ghost"
                         onClick={() => handleDelete(funil)}
                         className="h-8 w-8 text-destructive hover:text-destructive"
-                        disabled={usage > 0}
+                        disabled={usage > 0 || !canManageFunis}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

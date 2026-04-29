@@ -12,7 +12,7 @@ describe('Relatorios', () => {
   it('mantem os filtros de busca e vendedor acessiveis', () => {
     visitCommercial(cy, '/comercial/relatorios');
 
-    cy.contains('input[placeholder="Buscar cliente ou motivo..."]').should('be.visible');
+    cy.get('input[placeholder="Buscar cliente ou motivo..."]').should('be.visible');
     cy.contains('Todos vendedores').should('be.visible');
     cy.contains('Filtros').should('be.visible');
   });
