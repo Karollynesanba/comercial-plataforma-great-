@@ -7,6 +7,8 @@ export interface UserMapping {
   agendadorKey?: 'FELIPE' | 'HERBERT';
 }
 
+export const COMMERCIAL_LOGIN_PASSWORD = 'Great2026!';
+
 export const TEAM_USERS: Record<string, UserMapping> = {
   // Closer
   BRUNO: {

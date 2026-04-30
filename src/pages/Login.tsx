@@ -36,12 +36,6 @@ export default function Login() {
     setError('');
     setIsSubmitting(true);
 
-    if (!isSupabaseConfigured) {
-      setError('Supabase ainda não está configurado neste ambiente.');
-      setIsSubmitting(false);
-      return;
-    }
-
     if (mode === 'login') {
       const result = await login(email, password);
       if (!result.success) {
@@ -287,7 +281,7 @@ export default function Login() {
                 </motion.div>
               )}
 
-              {!isSupabaseConfigured && (
+              {!isSupabaseConfigured && mode === 'signup' && (
                 <motion.div
                   className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm"
                   initial={{ opacity: 0, x: -10 }}
@@ -296,9 +290,9 @@ export default function Login() {
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div className="space-y-1">
-                    <p className="font-medium">Supabase pendente neste ambiente.</p>
+                    <p className="font-medium">Cadastro indispon�vel neste ambiente.</p>
                     <p className="text-xs text-muted-foreground">
-                      O login só funciona depois que o `.env` for carregado com a URL e a chave pública do projeto.
+                      O login interno j� funciona com os acessos cadastrados, mas para criar conta o Supabase precisa estar configurado.
                     </p>
                   </div>
                 </motion.div>
@@ -402,7 +396,7 @@ export default function Login() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.6 }}
               >
-                <Button type="submit" size="xl" className="w-full" disabled={isSubmitting || !isSupabaseConfigured}>
+                <Button type="submit" size="xl" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <LogoLoader className="h-5 w-5" />

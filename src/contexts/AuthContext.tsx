@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { User, UserRole, Module, ActivityLog, Team } from '@/types';
-import { canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
-import { supabase } from '@/integrations/supabase/client';
+import { COMMERCIAL_LOGIN_PASSWORD, canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
 interface AuthContextType {
@@ -81,6 +81,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [selectedModule, setSelectedModule] = useState<Module | null>('COMERCIAL');
+
+  function createLocalAuthState(authUser: User) {
+    const now = new Date().toISOString();
+    const fakeSupabaseUser = {
+      id: authUser.id,
+      aud: 'authenticated',
+      app_metadata: {},
+      user_metadata: { full_name: authUser.name },
+      role: 'authenticated',
+      email: authUser.email,
+      created_at: now,
+      confirmed_at: now,
+      last_sign_in_at: now,
+      factors: [],
+    } as SupabaseUser;
+
+    const fakeSession = {
+      access_token: 'great-local-session',
+      refresh_token: 'great-local-session',
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+      token_type: 'bearer',
+      user: fakeSupabaseUser,
+    } as Session;
+
+    setUser(authUser);
+    setSupabaseUser(fakeSupabaseUser);
+    setSession(fakeSession);
+    safeSetItem('great_user', JSON.stringify(authUser));
+    safeSetItem('great_selected_module', 'COMERCIAL');
+    safeSetItem('great_local_auth_bypass', 'true');
+    safeSetItem('great_local_auth_user', JSON.stringify(authUser));
+    safeRemoveItem('great_test_session_bypass');
+  }
 
   function withTimeout<T>(thenable: PromiseLike<T>, ms: number, label: string): Promise<T> {
     return Promise.race([
@@ -291,6 +324,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return () => {};
     }
+
+    const localAuthBypass = safeGetItem('great_local_auth_bypass') === 'true';
+    if (localAuthBypass) {
+      const storedUser = safeGetItem('great_local_auth_user') || safeGetItem('great_user');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser) as User;
+          createLocalAuthState(parsedUser);
+        } catch (error) {
+          console.error('Failed to parse local auth user:', error);
+        }
+      }
+      setIsLoading(false);
+      return () => {};
+    }
     
     // Safety timeout - prevent infinite loading state
     const safetyTimeout = setTimeout(() => {
@@ -397,6 +445,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const mappedUser = getUserByEmail(normalizedEmail);
+    const localPasswordOk = password === COMMERCIAL_LOGIN_PASSWORD;
+    if (mappedUser && localPasswordOk) {
+      const authUser: User = {
+        id: mappedUser.email,
+        email: mappedUser.email,
+        name: mappedUser.name,
+        role: mappedUser.role as UserRole,
+        active: true,
+        createdAt: new Date(),
+      };
+
+      createLocalAuthState(authUser);
+      setIsLoading(false);
+      return { success: true };
+    }
+
+    if (mappedUser && !localPasswordOk) {
+      setIsLoading(false);
+      return { success: false, error: 'Senha incorreta. Use Great2026! para esses acessos.' };
+    }
+
+    if (!isSupabaseConfigured) {
+      setIsLoading(false);
+      return { success: false, error: 'Login local indisponível para este email. Use um dos acessos cadastrados.' };
+    }
+
     // Try to sign in with Supabase directly
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -436,6 +512,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
+
+    if (!supabase) {
+      setIsLoading(false);
+      return { success: false, error: 'Cadastro indisponível neste ambiente. Use o login com os acessos internos.' };
+    }
 
     const redirectUrl = `${window.location.origin}/`;
 
@@ -501,6 +582,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSelectedModule('COMERCIAL');
     safeRemoveItem('great_user');
     safeRemoveItem('great_selected_module');
+    safeRemoveItem('great_local_auth_bypass');
+    safeRemoveItem('great_local_auth_user');
   }, [user]);
 
   const selectModule = useCallback((module: Module) => {
