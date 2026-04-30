@@ -9,6 +9,11 @@ export interface UserMapping {
 
 export const COMMERCIAL_LOGIN_PASSWORD = 'Great2026!';
 
+export function isCommercialLoginEmail(email: string): boolean {
+  const normalizedEmail = email.toLowerCase().trim();
+  return Object.values(TEAM_USERS).some(user => user.email.toLowerCase() === normalizedEmail);
+}
+
 export const TEAM_USERS: Record<string, UserMapping> = {
   // Closer
   BRUNO: {

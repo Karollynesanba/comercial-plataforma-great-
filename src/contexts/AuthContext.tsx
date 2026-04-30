@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { User, UserRole, Module, ActivityLog, Team } from '@/types';
-import { COMMERCIAL_LOGIN_PASSWORD, canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
+import { COMMERCIAL_LOGIN_PASSWORD, canEditPlatform, getUserByEmail, getUserByName, isCommercialLoginEmail, isCoordinator } from '@/lib/userMapping';
 import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
@@ -448,7 +448,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const normalizedEmail = email.trim().toLowerCase();
     const mappedUser = getUserByEmail(normalizedEmail);
     const localPasswordOk = password === COMMERCIAL_LOGIN_PASSWORD;
-    if (mappedUser && localPasswordOk) {
+    const localEmailOk = isCommercialLoginEmail(normalizedEmail);
+    if (mappedUser && localPasswordOk && localEmailOk) {
       const authUser: User = {
         id: mappedUser.email,
         email: mappedUser.email,
@@ -463,7 +464,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: true };
     }
 
-    if (mappedUser && !localPasswordOk) {
+    if (mappedUser && localEmailOk && !localPasswordOk) {
       setIsLoading(false);
       return { success: false, error: 'Senha incorreta. Use Great2026! para esses acessos.' };
     }
