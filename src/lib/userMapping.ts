@@ -9,9 +9,19 @@ export interface UserMapping {
 
 export const COMMERCIAL_LOGIN_PASSWORD = 'Great2026!';
 
+export const COMMERCIAL_LOGIN_EMAILS = [
+  'pedro.henrique.56789@gmail.com',
+  'joseherbert103@gmail.com',
+  'pedroojuann1@gmail.com',
+  'brunogomrdtjf@gmail.com',
+  'cledinhosport10@gmail.com',
+  'feliperangel.rego03@gmail.com',
+  'cadulucena6@gmail.com',
+] as const;
+
 export function isCommercialLoginEmail(email: string): boolean {
   const normalizedEmail = email.toLowerCase().trim();
-  return Object.values(TEAM_USERS).some(user => user.email.toLowerCase() === normalizedEmail);
+  return COMMERCIAL_LOGIN_EMAILS.some(allowedEmail => allowedEmail.toLowerCase() === normalizedEmail);
 }
 
 export const TEAM_USERS: Record<string, UserMapping> = {

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { User, UserRole, Module, ActivityLog, Team } from '@/types';
-import { COMMERCIAL_LOGIN_PASSWORD, canEditPlatform, getUserByEmail, getUserByName, isCommercialLoginEmail, isCoordinator } from '@/lib/userMapping';
+import { COMMERCIAL_LOGIN_EMAILS, COMMERCIAL_LOGIN_PASSWORD, canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
 import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
@@ -448,13 +448,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const normalizedEmail = email.trim().toLowerCase();
     const mappedUser = getUserByEmail(normalizedEmail);
     const localPasswordOk = password === COMMERCIAL_LOGIN_PASSWORD;
-    const localEmailOk = isCommercialLoginEmail(normalizedEmail);
-    if (mappedUser && localPasswordOk && localEmailOk) {
+    const localEmailOk = COMMERCIAL_LOGIN_EMAILS.some(allowedEmail => allowedEmail.toLowerCase() === normalizedEmail);
+    const localEmailMatch = mappedUser || localEmailOk;
+    if (localEmailMatch && localPasswordOk) {
+      const localUser = mappedUser ?? getUserByEmail(normalizedEmail);
+      if (!localUser) {
+        setIsLoading(false);
+        return { success: false, error: 'Email não autorizado para login interno.' };
+      }
       const authUser: User = {
-        id: mappedUser.email,
-        email: mappedUser.email,
-        name: mappedUser.name,
-        role: mappedUser.role as UserRole,
+        id: localUser.email,
+        email: localUser.email,
+        name: localUser.name,
+        role: localUser.role as UserRole,
         active: true,
         createdAt: new Date(),
       };
@@ -464,7 +470,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: true };
     }
 
-    if (mappedUser && localEmailOk && !localPasswordOk) {
+    if (localEmailMatch && !localPasswordOk) {
       setIsLoading(false);
       return { success: false, error: 'Senha incorreta. Use Great2026! para esses acessos.' };
     }
