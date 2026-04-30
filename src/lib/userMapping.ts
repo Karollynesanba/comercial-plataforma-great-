@@ -26,7 +26,7 @@ export const TEAM_USERS: Record<string, UserMapping> = {
   // SDR
   HERBERT: {
     name: 'Herbert',
-    email: 'Joseherbert103@gmail.com',
+    email: 'joseherbert103@gmail.com',
     agendadorKey: 'HERBERT',
     role: 'SDR',
   },
