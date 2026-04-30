@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const VENDEDORES = [
-  { value: 'HERBERT', label: 'Hebert' },
+{ value: 'HERBERT', label: 'Herbert' },
   { value: 'CLED', label: 'Cled' },
   { value: 'PEDRO_H', label: 'Pedro H' },
   { value: 'PEDRO_JUAN', label: 'Pedro Juan' },

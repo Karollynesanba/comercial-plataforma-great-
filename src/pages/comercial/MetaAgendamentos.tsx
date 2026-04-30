@@ -19,7 +19,7 @@ import { getScheduleDate, parseCalendarDate } from '@/lib/preVendaAnalytics';
 
 const DAILY_GOAL = 8;
 const SDR_NAMES: Record<string, string> = {
-  HEBERT: 'Hebert',
+HEBERT: 'Herbert',
 };
 
 export default function MetaAgendamentos() {

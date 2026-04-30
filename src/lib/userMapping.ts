@@ -8,26 +8,32 @@ export interface UserMapping {
 }
 
 export const TEAM_USERS: Record<string, UserMapping> = {
-  // Admin universal
+  // Closer
   BRUNO: {
-    name: 'Bruno Gomes',
-    email: 'brunogomestjf@gmail.com',
-    role: 'ADMIN',
+    name: 'Bruno',
+    email: 'brunogomrdtjf@gmail.com',
+    role: 'CLOSER',
   },
-  // Coordenador Comercial
+  // Closer
   CLED: {
     name: 'Cled',
     email: 'cledinhosport10@gmail.com',
-    role: 'COORDENADOR_COMERCIAL',
+    role: 'CLOSER',
     vendedorKey: 'CLED',
   },
-  // Closer
+  // SDR
   HERBERT: {
-    name: 'Hebert',
+    name: 'Herbert',
     email: 'josehebert103@gmail.com',
-    role: 'CLOSER',
-    vendedorKey: 'HERBERT',
     agendadorKey: 'HERBERT',
+    role: 'SDR',
+  },
+  // Closer
+  PEDRO_H: {
+    name: 'Pedro Henrique',
+    email: 'pedro.henrique.56789@gmail.com',
+    role: 'CLOSER',
+    vendedorKey: 'PEDRO_H',
   },
   // SDRs
   FELIPE: {
@@ -44,7 +50,7 @@ export const TEAM_USERS: Record<string, UserMapping> = {
     vendedorKey: 'PEDRO_JUAN',
   },
   CAETANO: {
-    name: 'Bruno',
+    name: 'Caetano',
     email: 'cadulucena6@gmail.com',
     role: 'CLOSER',
     vendedorKey: 'CAETANO',
@@ -95,11 +101,10 @@ export function isAdminOrCoordinator(email: string, role?: string): boolean {
 
 // Check if user can edit all platform components
 export function canEditPlatform(userEmail: string, userRole: string): boolean {
-  // Admin has universal access
-  if (isAdmin(userEmail, userRole)) return true;
-  // Coordenador Comercial can edit everything in commercial module
-  if (userRole === 'COORDENADOR_COMERCIAL' || isCoordinator(userEmail, userRole)) return true;
-  return false;
+  // Everyone who is authenticated in the commercial team can edit.
+  void userEmail;
+  void userRole;
+  return true;
 }
 
 // Check if user can see specific vendedor's commission

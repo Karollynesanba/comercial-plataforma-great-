@@ -16,7 +16,7 @@ const COLORS = ['#e10600', '#fb7185', '#f97316', '#f59e0b', '#10b981', '#0ea5e9'
 const CLOSER_ORDER = new Map<CloserName, number>(CLOSERS_FROM_CALLS_SHEET.map((closer, index) => [closer, index]));
 const SPECIALIST_LABELS: Record<string, string> = {
   CAETANO: 'Bruno',
-  HEBERT: 'Hebert',
+HEBERT: 'Herbert',
 };
 export default function InteligenciaOperacional() {
   const { pipelineClients, closerDailyLogs } = useCommercial();

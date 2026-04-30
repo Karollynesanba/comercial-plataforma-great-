@@ -60,7 +60,7 @@ export const TEAM_IDS = {
 
 export const AGENDADOR_OPTIONS = [
   { value: 'PEDRO' as Agendador, label: 'Pedro' },
-  { value: 'HEBERT' as Agendador, label: 'Hebert' },
+  { value: 'HEBERT' as Agendador, label: 'Herbert' },
   { value: 'CLED' as Agendador, label: 'Cled' },
   { value: 'CAETANO' as Agendador, label: 'Bruno' },
 ];
