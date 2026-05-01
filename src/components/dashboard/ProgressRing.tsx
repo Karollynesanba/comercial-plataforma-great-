@@ -35,7 +35,7 @@ export function ProgressRing({
   const { size: svgSize, strokeWidth, fontSize } = sizeConfig[size];
   const radius = (svgSize - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
-  const percentage = Math.min((value / max) * 100, 100);
+  const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   const offset = circumference - (percentage / 100) * circumference;
 
   return (

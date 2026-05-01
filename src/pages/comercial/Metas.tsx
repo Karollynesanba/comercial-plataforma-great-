@@ -38,14 +38,12 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { isAdminOrCoordinator } from '@/lib/userMapping';
-
 export default function MetasPage() {
   const { currentGoal, getGoalStats, pipelineClients, getPipelineStats, getSDRStats, sdrGoals } = useCommercial();
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   
-  // Permission: only admin and coordenador can edit goals
-  const canEditGoals = isAdminOrCoordinator(user?.email || '', user?.role || '');
+  // Permitir que qualquer usuário autenticado da operação comercial registre metas
+  const canEditGoals = canEdit || !!user;
   const [editGoalOpen, setEditGoalOpen] = useState(false);
   const [editSDRGoalOpen, setEditSDRGoalOpen] = useState(false);
   
@@ -216,7 +214,7 @@ export default function MetasPage() {
           {canEditGoals && (
             <Button variant="outline" onClick={() => setEditGoalOpen(true)} className="gap-2">
               <Edit className="h-4 w-4" />
-              Editar Meta
+              Adicionar Meta
             </Button>
           )}
         </div>
@@ -542,7 +540,7 @@ export default function MetasPage() {
           {canEditGoals && (
             <Button variant="outline" size="sm" onClick={() => setEditSDRGoalOpen(true)} className="gap-2">
               <Edit className="h-4 w-4" />
-              Editar Metas
+              Adicionar Metas
             </Button>
           )}
         </CardHeader>
