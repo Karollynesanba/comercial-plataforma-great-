@@ -318,6 +318,11 @@ const EMPTY_COMMERCIAL_STATE: CommercialCloudState = {
   teamPointer: TEAM_IDS.EQUIPE_7,
 };
 
+function shouldPreferLocalCommercialData() {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('great_test_session_bypass') === 'true';
+}
+
 function revivePipelineClient(client: any): PipelineClient {
   return {
     ...client,
@@ -373,7 +378,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const [cloudState, setCloudState] = useState<CommercialCloudState>(EMPTY_COMMERCIAL_STATE);
 
   const refreshCommercialState = useCallback(async () => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || shouldPreferLocalCommercialData()) {
       const local = readCommercialLocalData();
       setCloudState({
         ...EMPTY_COMMERCIAL_STATE,
@@ -382,11 +387,21 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    const next = await fetchCommercialCloudState(user?.id);
-    setCloudState({
-      ...next,
-      teamPointer: next.teamPointer || TEAM_IDS.EQUIPE_7,
-    });
+    try {
+      const next = await fetchCommercialCloudState(user?.id);
+      setCloudState({
+        ...next,
+        teamPointer: next.teamPointer || TEAM_IDS.EQUIPE_7,
+      });
+    } catch (error) {
+      console.warn('Cloud commercial state read failed, falling back to local cache.', error);
+      const local = readCommercialLocalData();
+      setCloudState({
+        ...EMPTY_COMMERCIAL_STATE,
+        ...local,
+      });
+    }
+
     queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
     queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
     queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
@@ -394,6 +409,17 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     void refreshCommercialState();
+  }, [refreshCommercialState]);
+
+  useEffect(() => {
+    const handleLocalUpdate = () => {
+      void refreshCommercialState();
+    };
+
+    window.addEventListener('great-commercial-local-data-updated', handleLocalUpdate);
+    return () => {
+      window.removeEventListener('great-commercial-local-data-updated', handleLocalUpdate);
+    };
   }, [refreshCommercialState]);
 
   useEffect(() => {

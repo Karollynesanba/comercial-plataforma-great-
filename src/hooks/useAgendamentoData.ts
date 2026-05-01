@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCommercialSafe } from '@/contexts/CommercialContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
+import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { savePipelineClientToCloud } from '@/lib/commercialCloudStore';
 import { agendamentoToPipeline } from './usePipelineAgendamentoSync';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
@@ -189,7 +190,9 @@ export function useAgendamentoData() {
   const { data: leads = [], isLoading, error } = useQuery({
     queryKey: ['agendamento-leads'],
     queryFn: async () => {
-      if (!isSupabaseConfigured) return [];
+      if (!isSupabaseConfigured) {
+        return (readCommercialLocalData().agendamentoLeads || []) as AgendamentoLead[];
+      }
       const [{ data: agendamentoLeads, error: leadsError }, { data: agendaEvents, error: agendaError }] = await Promise.all([
         supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
         supabase.from('agenda_events').select('*').order('event_date', { ascending: true }),
@@ -208,7 +211,42 @@ export function useAgendamentoData() {
 
   const createLead = useMutation({
     mutationFn: async (lead: AgendamentoLeadInsert) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        const formattedPhone = formatPhoneForWhatsApp(lead.telefone);
+        const newLead = {
+          id: `agendamento-${crypto.randomUUID()}`,
+          ...lead,
+          telefone: formattedPhone,
+          created_by_user_id: user?.id || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as AgendamentoLead;
+
+        updateCommercialLocalData((current) => {
+          const exists = current.agendamentoLeads.some((item: any) =>
+            String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '')
+          );
+          const nextLeads = exists
+            ? current.agendamentoLeads.map((item: any) =>
+                String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '')
+                  ? newLead
+                  : item
+              )
+            : [newLead, ...current.agendamentoLeads];
+          const pipelineData = agendamentoToPipeline(newLead as any, user?.id || 'cloud-user', commercial?.nextTeamInQueue || 'team-equipe-7');
+          const nextPipelineClients = exists
+            ? current.pipelineClients
+            : [{ ...pipelineData, id: `pipeline-${crypto.randomUUID()}`, createdByUserId: user?.id || 'cloud-user', createdAt: new Date(), dataEntrada: new Date() }, ...current.pipelineClients];
+          return {
+            ...current,
+            agendamentoLeads: nextLeads,
+            pipelineClients: nextPipelineClients,
+          };
+        });
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+
+        return newLead;
+      }
 
       const formattedPhone = formatPhoneForWhatsApp(lead.telefone);
       const { data: existingLeads } = await supabase.from('agendamento_leads').select('id, telefone').limit(1000);
@@ -255,7 +293,24 @@ export function useAgendamentoData() {
 
   const updateLead = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & AgendamentoLeadUpdate) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        const formattedPhone = updates.telefone ? formatPhoneForWhatsApp(updates.telefone) : undefined;
+        updateCommercialLocalData((current) => ({
+          ...current,
+          agendamentoLeads: current.agendamentoLeads.map((item: any) =>
+            item.id === id
+              ? {
+                  ...item,
+                  ...updates,
+                  ...(formattedPhone ? { telefone: formattedPhone } : {}),
+                  updated_at: new Date().toISOString(),
+                }
+              : item
+          ),
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return { id, ...updates } as AgendamentoLead;
+      }
       const payload = {
         ...updates,
         telefone: updates.telefone ? formatPhoneForWhatsApp(updates.telefone) : undefined,
@@ -278,7 +333,15 @@ export function useAgendamentoData() {
 
   const deleteLead = useMutation({
     mutationFn: async (id: string) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        updateCommercialLocalData((current) => ({
+          ...current,
+          agendamentoLeads: current.agendamentoLeads.filter((item: any) => item.id !== id),
+          pipelineClients: current.pipelineClients.filter((client: any) => client.id !== id),
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return;
+      }
       const { data: lead } = await supabase.from('agendamento_leads').select('*').eq('id', id).maybeSingle();
       const leadDigits = String(lead?.telefone || '').replace(/\D/g, '');
 
@@ -312,7 +375,24 @@ export function useAgendamentoData() {
 
   const duplicateLead = useMutation({
     mutationFn: async (lead: AgendamentoLead) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        const { id, created_at, updated_at, created_by_user_id, ...leadData } = lead;
+        const duplicated: AgendamentoLead = {
+          ...leadData,
+          id: `agendamento-${crypto.randomUUID()}`,
+          created_by_user_id: user?.id || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        updateCommercialLocalData((current) => ({
+          ...current,
+          agendamentoLeads: [duplicated, ...current.agendamentoLeads],
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+
+        return duplicated;
+      }
       const { id, created_at, updated_at, created_by_user_id, ...leadData } = lead;
       const payload = {
         ...leadData,

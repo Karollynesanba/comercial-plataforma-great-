@@ -3,6 +3,13 @@ type CommercialSessionOptions = {
   name?: string;
   role?: string;
   userId?: string;
+  localData?: CommercialLocalDataSeed;
+};
+
+type CommercialLocalDataSeed = {
+  pipelineClients?: Array<Record<string, unknown>>;
+  agendaEvents?: Array<Record<string, unknown>>;
+  agendamentoLeads?: Array<Record<string, unknown>>;
 };
 
 export function buildCommercialSession(options: CommercialSessionOptions = {}) {
@@ -51,6 +58,41 @@ export function seedCommercialAuth(win: Window, options: CommercialSessionOption
   win.localStorage.setItem('great_test_session_bypass', 'true');
 }
 
+export function seedCommercialLocalData(win: Window, seed: CommercialLocalDataSeed) {
+  const current = win.localStorage.getItem('great_commercial_local_data_v1');
+  const base = current ? JSON.parse(current) : {};
+  const next = {
+    pipelineClients: [],
+    salesGoals: [],
+    sdrGoals: [],
+    preSalesDailyLogs: [],
+    closerDailyLogs: [],
+    paymentReminders: [],
+    criativos: [],
+    funis: [],
+    teamPointer: '',
+    agendaEvents: [],
+    agendamentoLeads: [],
+    schedulingGeneralGoals: {},
+    whatsappReminderLogs: [],
+    ceoFinance: {
+      trafficInvestment: 0,
+      payroll: 0,
+      fixedCosts: 0,
+      commissions: 0,
+      renewalsRevenue: 0,
+      mrr: 0,
+      taxes: 0,
+      tools: 0,
+      customCosts: [],
+    },
+    ...base,
+    ...seed,
+  };
+
+  win.localStorage.setItem('great_commercial_local_data_v1', JSON.stringify(next));
+}
+
 export function visitCommercial(
   cy: Cypress.cy,
   path: string,
@@ -80,6 +122,9 @@ export function visitCommercial(
   cy.visit(path, {
     onBeforeLoad(win) {
       seedCommercialAuth(win, options);
+      if (options.localData) {
+        seedCommercialLocalData(win, options.localData);
+      }
     },
   });
 }

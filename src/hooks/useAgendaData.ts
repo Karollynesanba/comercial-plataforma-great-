@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { mapAgendaTeamToPipeline } from '@/lib/teamMapping';
+import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 
 export interface AgendaEvent {
   id: string;
@@ -158,7 +159,9 @@ export function useAgendaData() {
   const { data: events = [], isLoading, error } = useQuery({
     queryKey: ['agenda-events'],
     queryFn: async () => {
-      if (!isSupabaseConfigured) return [];
+      if (!isSupabaseConfigured) {
+        return (readCommercialLocalData().agendaEvents || []).map(enrichEvent);
+      }
       const { data, error } = await supabase
         .from('agenda_events')
         .select('*')
@@ -171,7 +174,24 @@ export function useAgendaData() {
 
   const createEvent = useMutation({
     mutationFn: async (event: AgendaEventInsert) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        const payload = {
+          ...event,
+          id: `agenda-${crypto.randomUUID()}`,
+          client_phone: formatPhoneForWhatsApp(event.client_phone),
+          reminder_2h_sent: false,
+          reminder_30min_sent: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as AgendaEvent;
+
+        updateCommercialLocalData((current) => ({
+          ...current,
+          agendaEvents: [payload, ...current.agendaEvents],
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return enrichEvent(payload);
+      }
 
       const payload = {
         ...event,
@@ -200,7 +220,25 @@ export function useAgendaData() {
 
   const updateEvent = useMutation({
     mutationFn: async ({ id, ...updates }: AgendaEventUpdate & { id: string }) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        let updated: AgendaEvent | null = null;
+        updateCommercialLocalData((current) => {
+          const nextEvents = current.agendaEvents.map((item: any) => {
+            if (item.id !== id) return item;
+            updated = enrichEvent({
+              ...item,
+              ...updates,
+              client_phone: updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : item.client_phone,
+              updated_at: new Date().toISOString(),
+            });
+            return updated;
+          });
+          return { ...current, agendaEvents: nextEvents };
+        });
+        if (!updated) throw new Error('Evento nao encontrado');
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return updated;
+      }
 
       const { data: previous, error: previousError } = await supabase.from('agenda_events').select('*').eq('id', id).single();
       if (previousError) throw previousError;
@@ -234,7 +272,14 @@ export function useAgendaData() {
 
   const deleteEvent = useMutation({
     mutationFn: async (id: string) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        updateCommercialLocalData((current) => ({
+          ...current,
+          agendaEvents: current.agendaEvents.filter((item: any) => item.id !== id),
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return;
+      }
       const { error } = await supabase.from('agenda_events').delete().eq('id', id);
       if (error) throw error;
     },

@@ -665,58 +665,63 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
 export async function fetchCommercialCloudState(userId?: string | null): Promise<CommercialCloudState> {
   if (!isSupabaseConfigured) return DEFAULT_CLOUD_STATE;
 
-  await resetCommercialCloudDataIfNeeded(userId);
-  await migrateLocalDataIfNeeded(userId);
+  try {
+    await resetCommercialCloudDataIfNeeded(userId);
+    await migrateLocalDataIfNeeded(userId);
 
-  const [
-    pipeline,
-    goals,
-    sdrGoals,
-    preSalesLogs,
-    closerLogs,
-    reminders,
-    criativos,
-    settings,
-    teamPointer,
-  ] = await Promise.all([
-    supabase.from('pipeline_clients').select('*').order('created_at', { ascending: false }),
-    supabase.from('commercial_goals').select('*').order('month', { ascending: false }),
-    supabase.from('sdr_goals').select('*').order('month', { ascending: false }),
-    (supabase as any).from('pre_sales_daily_logs').select('*').order('date', { ascending: false }),
-    (supabase as any).from('closer_daily_logs').select('*').order('date', { ascending: false }),
-    supabase.from('payment_reminders').select('*').order('payment_deadline', { ascending: true }),
-    supabase.from('criativos').select('*').eq('is_active', true).order('name', { ascending: true }),
-    supabase.from('commercial_settings').select('setting_key, setting_value, updated_at, updated_by_user_id'),
-    getSetting('last_team_pointer'),
-  ]);
+    const [
+      pipeline,
+      goals,
+      sdrGoals,
+      preSalesLogs,
+      closerLogs,
+      reminders,
+      criativos,
+      settings,
+      teamPointer,
+    ] = await Promise.all([
+      supabase.from('pipeline_clients').select('*').order('created_at', { ascending: false }),
+      supabase.from('commercial_goals').select('*').order('month', { ascending: false }),
+      supabase.from('sdr_goals').select('*').order('month', { ascending: false }),
+      (supabase as any).from('pre_sales_daily_logs').select('*').order('date', { ascending: false }),
+      (supabase as any).from('closer_daily_logs').select('*').order('date', { ascending: false }),
+      supabase.from('payment_reminders').select('*').order('payment_deadline', { ascending: true }),
+      supabase.from('criativos').select('*').eq('is_active', true).order('name', { ascending: true }),
+      supabase.from('commercial_settings').select('setting_key, setting_value, updated_at, updated_by_user_id'),
+      getSetting('last_team_pointer'),
+    ]);
 
-  if (pipeline.error) throw pipeline.error;
-  if (goals.error) throw goals.error;
-  if (sdrGoals.error) throw sdrGoals.error;
-  if (preSalesLogs.error) throw preSalesLogs.error;
-  if (closerLogs.error) throw closerLogs.error;
-  if (reminders.error) throw reminders.error;
-  if (criativos.error) throw criativos.error;
-  if (settings.error) throw settings.error;
+    if (pipeline.error) throw pipeline.error;
+    if (goals.error) throw goals.error;
+    if (sdrGoals.error) throw sdrGoals.error;
+    if (preSalesLogs.error) throw preSalesLogs.error;
+    if (closerLogs.error) throw closerLogs.error;
+    if (reminders.error) throw reminders.error;
+    if (criativos.error) throw criativos.error;
+    if (settings.error) throw settings.error;
 
-  const settingsRows = settings.data || [];
-  const tableSalesGoals = (goals.data || []).map(dbGoalToLocal);
-  const tableSdrGoals = (sdrGoals.data || []).map(dbSdrGoalToLocal);
-  const pipelineClients = (pipeline.data || []).map(dbPipelineToLocal);
+    const settingsRows = settings.data || [];
+    const tableSalesGoals = (goals.data || []).map(dbGoalToLocal);
+    const tableSdrGoals = (sdrGoals.data || []).map(dbSdrGoalToLocal);
+    const pipelineClients = (pipeline.data || []).map(dbPipelineToLocal);
 
-  await ensureSeedAgendaEventsFromPipeline(pipelineClients, userId);
+    await ensureSeedAgendaEventsFromPipeline(pipelineClients, userId);
 
-  return {
-    pipelineClients,
-    salesGoals: mergeSalesGoals(tableSalesGoals, settingsToSalesGoals(settingsRows)),
-    sdrGoals: mergeSdrGoals(tableSdrGoals, settingsToSdrGoals(settingsRows)),
-    preSalesDailyLogs: (preSalesLogs.data || []).map(dbPreSalesLogToLocal),
-    closerDailyLogs: (closerLogs.data || []).map(dbCloserLogToLocal),
-    paymentReminders: (reminders.data || []).map(dbReminderToLocal),
-    criativos: settingsToCriativos(settingsRows, (criativos.data || []).map((item) => item.name.toUpperCase())),
-    funis: settingsToFunis(settingsRows),
-    teamPointer: teamPointer || DEFAULT_COMMERCIAL_LOCAL_DATA.teamPointer,
-  };
+    return {
+      pipelineClients,
+      salesGoals: mergeSalesGoals(tableSalesGoals, settingsToSalesGoals(settingsRows)),
+      sdrGoals: mergeSdrGoals(tableSdrGoals, settingsToSdrGoals(settingsRows)),
+      preSalesDailyLogs: (preSalesLogs.data || []).map(dbPreSalesLogToLocal),
+      closerDailyLogs: (closerLogs.data || []).map(dbCloserLogToLocal),
+      paymentReminders: (reminders.data || []).map(dbReminderToLocal),
+      criativos: settingsToCriativos(settingsRows, (criativos.data || []).map((item) => item.name.toUpperCase())),
+      funis: settingsToFunis(settingsRows),
+      teamPointer: teamPointer || DEFAULT_COMMERCIAL_LOCAL_DATA.teamPointer,
+    };
+  } catch (error) {
+    console.warn('Commercial cloud read failed, using local cache.', error);
+    return readCommercialLocalData();
+  }
 }
 
 export async function savePipelineClientToCloud(client: Partial<PipelineClient>, userId?: string | null) {

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useAuthSafe } from '@/contexts/AuthContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { savePipelineClientToCloud, syncPipelineAutomationsToCloud } from '@/lib/commercialCloudStore';
+import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 
 export interface PipelineClientDB {
   id: string;
@@ -112,19 +113,28 @@ export function usePipelineData() {
   const user = authContext?.user;
 
   const { data: clients = [], isLoading, error } = useQuery({
-    queryKey: ['pipeline-clients'],
+    queryKey: ['pipeline-clients-db'],
     queryFn: async () => {
-      if (!isSupabaseConfigured) return [];
-      const { data, error } = await supabase
-        .from('pipeline_clients')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as PipelineClientDB[];
+      if (!isSupabaseConfigured) {
+        return (readCommercialLocalData().pipelineClients || []).map((client: any) => localToDb(client, user?.id));
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('pipeline_clients')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []) as PipelineClientDB[];
+      } catch (fetchError) {
+        console.warn('Pipeline cloud read failed, using local cache.', fetchError);
+        return (readCommercialLocalData().pipelineClients || []).map((client: any) => localToDb(client, user?.id));
+      }
     },
   });
 
   const refreshCommercialQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
     queryClient.invalidateQueries({ queryKey: ['pipeline-clients'] });
     queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
     queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
@@ -132,7 +142,21 @@ export function usePipelineData() {
 
   const createClient = useMutation({
     mutationFn: async (client: PipelineClientInsert) => {
-      const saved = await savePipelineClientToCloud(dbToLocal(client, user?.id) as any, user?.id);
+      const localClient = dbToLocal(client, user?.id) as any;
+
+      if (!isSupabaseConfigured) {
+        const savedLocal = updateCommercialLocalData((current) => {
+          const nextClient = localToDb({ ...client, id: `pipeline-${crypto.randomUUID()}`, createdByUserId: user?.id || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as any, user?.id);
+          return {
+            ...current,
+            pipelineClients: [nextClient, ...current.pipelineClients],
+          };
+        });
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return localToDb(savedLocal.pipelineClients[0], user?.id);
+      }
+
+      const saved = await savePipelineClientToCloud(localClient, user?.id);
       if (!saved) throw new Error('Supabase nao configurado');
       return localToDb(saved);
     },
@@ -147,7 +171,16 @@ export function usePipelineData() {
 
   const updateClient = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: PipelineClientUpdate }) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        updateCommercialLocalData((current) => ({
+          ...current,
+          pipelineClients: current.pipelineClients.map((item: any) =>
+            item.id === id ? { ...item, ...data, updatedAt: new Date().toISOString() } : item
+          ),
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return localToDb({ id, ...data } as any, user?.id);
+      }
       const { data: updatedClient, error } = await supabase
         .from('pipeline_clients')
         .update({ ...data, updated_at: new Date().toISOString() } as any)
@@ -166,7 +199,14 @@ export function usePipelineData() {
 
   const deleteClient = useMutation({
     mutationFn: async (id: string) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        updateCommercialLocalData((current) => ({
+          ...current,
+          pipelineClients: current.pipelineClients.filter((item: any) => item.id !== id),
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return;
+      }
       const { data: removed } = await supabase.from('pipeline_clients').select('*').eq('id', id).maybeSingle();
       await supabase.from('pipeline_clients').delete().eq('id', id);
 
@@ -209,7 +249,27 @@ export function usePipelineData() {
       noShowReason?: string;
       extraData?: PipelineClientUpdate;
     }) => {
-      if (!isSupabaseConfigured) throw new Error('Supabase nao configurado');
+      if (!isSupabaseConfigured) {
+        updateCommercialLocalData((current) => ({
+          ...current,
+          pipelineClients: current.pipelineClients.map((item: any) =>
+            item.id === id
+              ? {
+                  ...item,
+                  ...extraData,
+                  stage: newStage,
+                  ativo: newStage !== 'PERDIDO',
+                  lostReason: newStage === 'PERDIDO' ? lostReason || item.lostReason : item.lostReason,
+                  noShowReason: newStage === 'NO_SHOW' ? noShowReason || item.noShowReason : item.noShowReason,
+                  lastStageChange: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }
+              : item
+          ),
+        }));
+        window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+        return localToDb({ id, ...(extraData || {}), stage: newStage } as any, user?.id);
+      }
       const payload = {
         ...(extraData || {}),
         stage: newStage,
@@ -247,5 +307,5 @@ export function usePipelineData() {
 }
 
 export function usePipelineRealtime() {
-  return () => {};
+  return undefined;
 }
