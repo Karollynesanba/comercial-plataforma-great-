@@ -10,6 +10,7 @@ import { AGENDADOR_OPTIONS, OFFICIAL_SDR_OPTIONS, OFFICIAL_SDR_VALUES, useCommer
 import { RaioXFilters, filterClientByRaioX, getDefaultRaioXFilter, type RaioXFilterState } from '@/components/comercial/RaioXFilters';
 import { formatBRL } from '@/lib/utils';
 import { getScheduleDate, parseCalendarDate, summarizePreVenda } from '@/lib/preVendaAnalytics';
+import { toast } from 'sonner';
 
 type DailyDraft = {
   contacts: string;
@@ -249,22 +250,37 @@ export default function RaioXSDR() {
     }));
   };
 
-  const saveDailyLog = (date: string, sdr: Agendador) => {
+  const saveDailyLog = async (date: string, sdr: Agendador) => {
     const draft = drafts[`${date}:${sdr}`] || emptyDraft();
-    upsertPreSalesDailyLog({
-      date,
-      sdr,
-      contacts: parseNumber(draft.contacts),
-      qualified: parseNumber(draft.qualified),
-      scheduled: parseNumber(draft.scheduled),
-      noShowCalls: parseNumber(draft.noShowCalls),
-    });
+    try {
+      await Promise.resolve(upsertPreSalesDailyLog({
+        date,
+        sdr,
+        contacts: parseNumber(draft.contacts),
+        qualified: parseNumber(draft.qualified),
+        scheduled: parseNumber(draft.scheduled),
+        noShowCalls: parseNumber(draft.noShowCalls),
+      }));
+    } catch (error) {
+      console.error('Failed to save pre-sales row:', error);
+      toast.error('Não foi possível salvar esta linha.');
+      return;
+    }
+    toast.success(`Linha de ${sdr} salva em ${formatDateBR(date)}.`);
   };
 
-  const saveAllVisibleRows = () => {
-    visibleDates.forEach((date) => {
-      SDRS.forEach((sdr) => saveDailyLog(date, sdr.value));
-    });
+  const saveAllVisibleRows = async () => {
+    try {
+      await Promise.all(
+        visibleDates.flatMap((date) =>
+          SDRS.map((sdr) => saveDailyLog(date, sdr.value))
+        )
+      );
+      toast.success('Planilha visível salva.');
+    } catch (error) {
+      console.error('Failed to save visible rows:', error);
+      toast.error('Falha ao salvar a planilha visível.');
+    }
   };
 
   return (
@@ -304,7 +320,7 @@ export default function RaioXSDR() {
                 Grade separada por semana e dia: Miguel à esquerda, Herbert ao lado e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
               </CardDescription>
             </div>
-            <Button className="gap-2" onClick={saveAllVisibleRows}>
+            <Button className="gap-2" onClick={() => void saveAllVisibleRows()}>
               <Save className="h-4 w-4" />
               Salvar planilha visível
             </Button>

@@ -3,6 +3,7 @@ import { SalesGoal } from '@/types';
 import { useAuthSafe } from './AuthContext';
 import { buildDashboardMetrics, endOfMonth, getClientRevenue, getCloseDate, isDateInRange, isRealContract, startOfMonth } from '@/lib/commercialMetrics';
 import { type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
+import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { addCriativoToCloud, archiveCriativoInCloud, deletePipelineClientFromCloud, dismissPaymentReminderInCloud, fetchCommercialCloudState, renameCriativoInCloud, resetCommercialCloudData, saveCloserDailyLogToCloud, savePipelineClientToCloud, savePreSalesDailyLogToCloud, saveSalesGoalToCloud, saveSdrGoalToCloud, setCommercialSetting, type CommercialCloudState } from '@/lib/commercialCloudStore';
 import { resetGreatPlatformStorageNow } from '@/lib/safeStorage';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
@@ -373,7 +374,11 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
 
   const refreshCommercialState = useCallback(async () => {
     if (!isSupabaseConfigured) {
-      setCloudState(EMPTY_COMMERCIAL_STATE);
+      const local = readCommercialLocalData();
+      setCloudState({
+        ...EMPTY_COMMERCIAL_STATE,
+        ...local,
+      });
       return;
     }
 
@@ -567,7 +572,18 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
         : [{ id: `pre-sales-log-${crypto.randomUUID()}`, ...normalized }, ...current.preSalesDailyLogs];
       return { ...current, preSalesDailyLogs };
     });
-    void savePreSalesDailyLogToCloud(log, user?.id).then(refreshCommercialState);
+    updateCommercialLocalData((current) => {
+      const existing = current.preSalesDailyLogs.find((item) => item.date === log.date && item.sdr === log.sdr);
+      const preSalesDailyLogs = existing
+        ? current.preSalesDailyLogs.map((item) => item.id === existing.id ? { ...item, ...normalized } : item)
+        : [{ id: `pre-sales-log-${crypto.randomUUID()}`, ...normalized }, ...current.preSalesDailyLogs];
+      return { ...current, preSalesDailyLogs };
+    });
+    void savePreSalesDailyLogToCloud(log, user?.id)
+      .catch((error) => {
+        console.warn('Pre-sales log not saved to cloud, keeping local backup.', error);
+      })
+      .finally(() => refreshCommercialState());
   }, [refreshCommercialState, user?.id]);
 
   const upsertCloserDailyLog = useCallback((log: Omit<CloserDailyLog, 'id' | 'updatedAt'>) => {
