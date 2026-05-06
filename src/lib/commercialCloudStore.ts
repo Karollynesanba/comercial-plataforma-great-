@@ -1,7 +1,8 @@
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { DEFAULT_COMERCIAL_CRIATIVOS, DEFAULT_COMMERCIAL_LOCAL_DATA, readCommercialLocalData, type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
+import { DEFAULT_COMERCIAL_CRIATIVOS, DEFAULT_COMERCIAL_FUNIS, DEFAULT_COMMERCIAL_LOCAL_DATA, readCommercialLocalData, type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
 import type { Agendador, Equipe, Faturamento, Pacote, PagadorAnuncio, PaymentReminder, Periodo, PipelineClient, PipelineStage, PodeInvestir, SalaoOuClinica, SDRGoal, TemMkt, TemSecretaria, TemSocio, Vendedor } from '@/contexts/CommercialContext';
 import type { SalesGoal } from '@/types';
+import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
 
 export interface CommercialCloudState {
   pipelineClients: PipelineClient[];
@@ -12,7 +13,10 @@ export interface CommercialCloudState {
   paymentReminders: PaymentReminder[];
   criativos: string[];
   funis: string[];
+  catalogVersion: number;
   teamPointer: string;
+  agendaEvents?: any[];
+  agendamentoLeads?: any[];
 }
 
 export const COMMERCIAL_DATA_RESET_VERSION = 'commercial-data-reset-2026-04-29-v3';
@@ -27,13 +31,24 @@ const DEFAULT_CLOUD_STATE: CommercialCloudState = {
   paymentReminders: [],
   criativos: [],
   funis: [],
+  catalogVersion: 0,
   teamPointer: '',
 };
 
 const COMMERCIAL_GOAL_SETTING_PREFIX = 'commercial_goal:';
 const SDR_GOAL_SETTING_PREFIX = 'sdr_goal:';
 const COMMERCIAL_FUNIS_SETTING_KEY = 'commercial_funis_v1';
+const COMMERCIAL_CATALOG_VERSION_SETTING_KEY = 'commercial_catalog_version_v1';
+const COMMERCIAL_CATALOG_SEED_SETTING_KEY = 'commercial_catalog_seed_v1';
 const TEST_PIPELINE_SEED_MARKER = 'SEED_TESTE_METRICAS_20260416';
+
+function toDbUserId(userId?: string | null) {
+  const normalized = String(userId || '').trim();
+  if (!normalized) return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+    ? normalized
+    : null;
+}
 
 const STAGE_TO_AGENDAMENTO_STATUS: Record<string, string> = {
   NOVO: 'NOVO_LEAD',
@@ -221,9 +236,9 @@ function dbPipelineToLocal(row: any): PipelineClient {
     agendadoPor: row.agendado_por as Agendador | undefined,
     agendadoVia: row.agendado_via || undefined,
     pagadorAnuncio: row.pagador_anuncio as PagadorAnuncio | undefined,
-    temSocio: row.tem_socio as TemSocio | undefined,
-    temMkt: row.tem_mkt as TemMkt | undefined,
-    temSecretaria: row.tem_secretaria as TemSecretaria | undefined,
+    temSocio: coerceCommercialAnswer(row.tem_socio) as TemSocio | undefined,
+    temMkt: coerceCommercialAnswer(row.tem_mkt) as TemMkt | undefined,
+    temSecretaria: coerceCommercialAnswer(row.tem_secretaria) as TemSecretaria | undefined,
     salaoOuClinica: row.salao_ou_clinica as SalaoOuClinica | undefined,
     createdByUserId: row.created_by_user_id || 'cloud-user',
     dealValue: Number(row.entrada || 0),
@@ -268,14 +283,14 @@ function localPipelineToDb(client: Partial<PipelineClient>, userId?: string | nu
     agendado_por: client.agendadoPor || client.assignedSDR || null,
     agendado_via: client.agendadoVia || null,
     pagador_anuncio: client.pagadorAnuncio || null,
-    tem_socio: client.temSocio || null,
-    tem_mkt: client.temMkt || null,
-    tem_secretaria: client.temSecretaria || null,
+    tem_socio: coerceCommercialAnswer(client.temSocio) || null,
+    tem_mkt: coerceCommercialAnswer(client.temMkt) || null,
+    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || null,
     salao_ou_clinica: client.salaoOuClinica || null,
     meeting_date: client.meetingDate || null,
     meeting_time: client.meetingTime ? toTime(client.meetingTime) : null,
     followup_done: client.followupDone ?? false,
-    created_by_user_id: userId || client.createdByUserId || null,
+    created_by_user_id: toDbUserId(userId) || toDbUserId(client.createdByUserId) || null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -365,6 +380,45 @@ function settingsToCriativos(rows: any[], cloudCriativos: string[]) {
   return Array.from(new Set(next)).sort();
 }
 
+function settingsToCatalogVersion(rows: any[]) {
+  const raw = rows.find((row) => row.setting_key === COMMERCIAL_CATALOG_VERSION_SETTING_KEY)?.setting_value;
+  const parsed = Number(raw || 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+async function ensureCommercialCatalogSeed(userId?: string | null) {
+  if (!isSupabaseConfigured) return;
+  if (await getSetting(COMMERCIAL_CATALOG_SEED_SETTING_KEY) === 'done') return;
+
+  const [{ data: criativosRows, error: criativosError }, currentFunis] = await Promise.all([
+    supabase.from('criativos').select('name, is_active').order('name', { ascending: true }),
+    getSetting(COMMERCIAL_FUNIS_SETTING_KEY),
+  ]);
+
+  if (criativosError) throw criativosError;
+
+  const existingCriativos = new Set((criativosRows || []).map((item) => String(item.name || '').trim().toUpperCase()).filter(Boolean));
+  const criativosToSeed = DEFAULT_COMERCIAL_CRIATIVOS.filter((item) => !existingCriativos.has(item));
+
+  if (criativosToSeed.length > 0) {
+    await supabase.from('criativos').upsert(
+      criativosToSeed.map((name) => ({
+        name,
+        is_active: true,
+        created_by_user_id: toDbUserId(userId),
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'name' }
+    );
+  }
+
+  const parsedFunis = currentFunis ? settingsToFunis([{ setting_key: COMMERCIAL_FUNIS_SETTING_KEY, setting_value: currentFunis }]) : [];
+  const mergedFunis = Array.from(new Set([...(parsedFunis.length ? parsedFunis : []), ...DEFAULT_COMERCIAL_FUNIS])).sort();
+    await setCommercialSetting(COMMERCIAL_FUNIS_SETTING_KEY, JSON.stringify(mergedFunis), userId);
+  await setCommercialSetting(COMMERCIAL_CATALOG_VERSION_SETTING_KEY, '1', userId);
+  await setCommercialSetting(COMMERCIAL_CATALOG_SEED_SETTING_KEY, 'done', userId);
+}
+
 function chunk<T>(items: T[], size: number) {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -396,23 +450,9 @@ export async function resetCommercialCloudDataIfNeeded(userId?: string | null) {
     return false;
   }
 
-  const tablesToClear: Array<[string, string]> = [
-    ['pipeline_clients', 'id'],
-    ['commercial_goals', 'id'],
-    ['sdr_goals', 'id'],
-    ['pre_sales_daily_logs', 'id'],
-    ['closer_daily_logs', 'id'],
-    ['payment_reminders', 'id'],
-    ['criativos', 'id'],
-    ['agenda_events', 'id'],
-    ['agendamento_leads', 'id'],
-    ['commercial_settings', 'setting_key'],
-  ];
-
-  for (const [table, column] of tablesToClear) {
-    await deleteAllRows(table, column);
-  }
-
+  // Never clear production data automatically during startup.
+  // The explicit resetCommercialCloudData() helper is still available for
+  // manual admin-triggered resets.
   await setCommercialSetting(COMMERCIAL_DATA_RESET_SETTING_KEY, COMMERCIAL_DATA_RESET_VERSION, userId);
   return true;
 }
@@ -443,15 +483,15 @@ export async function resetCommercialCloudData(userId?: string | null) {
 
 function mergeSalesGoals(primary: SalesGoal[], fallback: SalesGoal[]) {
   const merged = new Map<string, SalesGoal>();
-  primary.forEach((goal) => merged.set(goal.month, goal));
   fallback.forEach((goal) => merged.set(goal.month, goal));
+  primary.forEach((goal) => merged.set(goal.month, goal));
   return Array.from(merged.values());
 }
 
 function mergeSdrGoals(primary: SDRGoal[], fallback: SDRGoal[]) {
   const merged = new Map<string, SDRGoal>();
-  primary.forEach((goal) => merged.set(`${goal.agendador}:${goal.month}`, goal));
   fallback.forEach((goal) => merged.set(`${goal.agendador}:${goal.month}`, goal));
+  primary.forEach((goal) => merged.set(`${goal.agendador}:${goal.month}`, goal));
   return Array.from(merged.values());
 }
 
@@ -540,7 +580,7 @@ export async function setCommercialSetting(key: string, value: string, userId?: 
     setting_key: key,
     setting_value: value,
     updated_at: new Date().toISOString(),
-    updated_by_user_id: userId ?? null,
+    updated_by_user_id: toDbUserId(userId),
   }, { onConflict: 'setting_key' });
 
   if (error) throw error;
@@ -560,7 +600,8 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
     local.sdrGoals.length > 0 ||
     local.preSalesDailyLogs.length > 0 ||
     local.closerDailyLogs.length > 0 ||
-    local.criativos.length > 0;
+    local.criativos.length > 0 ||
+    local.funis.length > 0;
 
   if (!hasLocalData) {
     try {
@@ -587,7 +628,7 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
         local.salesGoals.map((goal: any) => ({
           month: goal.month,
           goal_value: Number(goal.goalValue || 0),
-          created_by_user_id: userId || null,
+          created_by_user_id: toDbUserId(userId),
         }))
       );
     }
@@ -598,7 +639,7 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
           agendador: goal.agendador,
           month: goal.month,
           goal_count: Number(goal.goalCount || 0),
-          created_by_user_id: userId || null,
+          created_by_user_id: toDbUserId(userId),
         }))
       );
     }
@@ -612,7 +653,7 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
           qualified: Number(log.qualified || 0),
           scheduled: Number(log.scheduled || 0),
           no_show_calls: Number(log.noShowCalls || 0),
-          updated_by_user_id: userId || null,
+          updated_by_user_id: toDbUserId(userId),
         })),
         { onConflict: 'date,sdr' }
       );
@@ -629,7 +670,7 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
           vendas: Number(log.vendas || 0),
           valor: Number(log.valor || 0),
           primeira_parcela: Number(log.primeiraParcela || 0),
-          updated_by_user_id: userId || null,
+          updated_by_user_id: toDbUserId(userId),
         })),
         { onConflict: 'date,closer' }
       );
@@ -640,10 +681,18 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
         local.criativos.map((name) => ({
           name,
           is_active: true,
-          created_by_user_id: userId || null,
+          created_by_user_id: toDbUserId(userId),
         })),
         { onConflict: 'name' }
       );
+    }
+
+    if (local.funis.length) {
+      try {
+        await setCommercialSetting(COMMERCIAL_FUNIS_SETTING_KEY, JSON.stringify([...new Set(local.funis)].sort()), userId);
+      } catch (settingError) {
+        console.warn('Could not persist local funis during migration.', settingError);
+      }
     }
 
     if (local.teamPointer) {
@@ -668,6 +717,7 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
   try {
     await resetCommercialCloudDataIfNeeded(userId);
     await migrateLocalDataIfNeeded(userId);
+    await ensureCommercialCatalogSeed(userId);
 
     const [
       pipeline,
@@ -677,6 +727,8 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       closerLogs,
       reminders,
       criativos,
+      agendaEvents,
+      agendamentoLeads,
       settings,
       teamPointer,
     ] = await Promise.all([
@@ -687,6 +739,8 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       (supabase as any).from('closer_daily_logs').select('*').order('date', { ascending: false }),
       supabase.from('payment_reminders').select('*').order('payment_deadline', { ascending: true }),
       supabase.from('criativos').select('*').eq('is_active', true).order('name', { ascending: true }),
+      supabase.from('agenda_events').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }),
+      supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
       supabase.from('commercial_settings').select('setting_key, setting_value, updated_at, updated_by_user_id'),
       getSetting('last_team_pointer'),
     ]);
@@ -698,12 +752,17 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
     if (closerLogs.error) throw closerLogs.error;
     if (reminders.error) throw reminders.error;
     if (criativos.error) throw criativos.error;
+    if (agendaEvents.error) throw agendaEvents.error;
+    if (agendamentoLeads.error) throw agendamentoLeads.error;
     if (settings.error) throw settings.error;
 
     const settingsRows = settings.data || [];
     const tableSalesGoals = (goals.data || []).map(dbGoalToLocal);
     const tableSdrGoals = (sdrGoals.data || []).map(dbSdrGoalToLocal);
     const pipelineClients = (pipeline.data || []).map(dbPipelineToLocal);
+    const cloudCriativos = (criativos.data || []).map((item) => item.name.toUpperCase());
+    const cloudFunis = settingsToFunis(settingsRows);
+    const catalogVersion = settingsToCatalogVersion(settingsRows) || (cloudCriativos.length > 0 || cloudFunis.length > 0 ? 1 : 0);
 
     await ensureSeedAgendaEventsFromPipeline(pipelineClients, userId);
 
@@ -714,9 +773,12 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       preSalesDailyLogs: (preSalesLogs.data || []).map(dbPreSalesLogToLocal),
       closerDailyLogs: (closerLogs.data || []).map(dbCloserLogToLocal),
       paymentReminders: (reminders.data || []).map(dbReminderToLocal),
-      criativos: settingsToCriativos(settingsRows, (criativos.data || []).map((item) => item.name.toUpperCase())),
-      funis: settingsToFunis(settingsRows),
+      criativos: settingsToCriativos(settingsRows, cloudCriativos),
+      funis: cloudFunis,
+      catalogVersion,
       teamPointer: teamPointer || DEFAULT_COMMERCIAL_LOCAL_DATA.teamPointer,
+      agendaEvents: (agendaEvents.data || []),
+      agendamentoLeads: (agendamentoLeads.data || []),
     };
   } catch (error) {
     console.warn('Commercial cloud read failed, using local cache.', error);
@@ -761,21 +823,26 @@ export async function saveSalesGoalToCloud(month: string, goalValue: number, use
   if (!isSupabaseConfigured) return;
 
   const normalizedGoal = Number(goalValue || 0);
+  let settingsError: unknown = null;
   try {
     await setCommercialSetting(`${COMMERCIAL_GOAL_SETTING_PREFIX}${month}`, String(normalizedGoal), userId);
   } catch (settingError) {
+    settingsError = settingError;
     console.warn('Commercial goal settings fallback failed, continuing with official table save.', settingError);
   }
 
   const { error } = await supabase.from('commercial_goals').upsert({
     month,
     goal_value: normalizedGoal,
-    created_by_user_id: userId || null,
+    created_by_user_id: toDbUserId(userId),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'month' });
 
   if (error) {
     console.warn('Commercial goal saved in settings fallback, but commercial_goals upsert failed.', error);
+    if (settingsError) {
+      throw error;
+    }
   }
 }
 
@@ -783,9 +850,11 @@ export async function saveSdrGoalToCloud(agendador: string, month: string, goalC
   if (!isSupabaseConfigured) return;
 
   const normalizedGoal = Number(goalCount || 0);
+  let settingsError: unknown = null;
   try {
     await setCommercialSetting(`${SDR_GOAL_SETTING_PREFIX}${agendador}:${month}`, String(normalizedGoal), userId);
   } catch (settingError) {
+    settingsError = settingError;
     console.warn('SDR goal settings fallback failed, continuing with official table save.', settingError);
   }
 
@@ -793,12 +862,15 @@ export async function saveSdrGoalToCloud(agendador: string, month: string, goalC
     agendador,
     month,
     goal_count: normalizedGoal,
-    created_by_user_id: userId || null,
+    created_by_user_id: toDbUserId(userId),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'agendador,month' });
 
   if (error) {
     console.warn('SDR goal saved in settings fallback, but sdr_goals upsert failed.', error);
+    if (settingsError) {
+      throw error;
+    }
   }
 }
 
@@ -811,7 +883,7 @@ export async function savePreSalesDailyLogToCloud(log: Omit<PreSalesDailyLog, 'i
     qualified: Math.max(0, Number(log.qualified) || 0),
     scheduled: Math.max(0, Number(log.scheduled) || 0),
     no_show_calls: Math.max(0, Number(log.noShowCalls) || 0),
-    updated_by_user_id: userId || null,
+    updated_by_user_id: toDbUserId(userId),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'date,sdr' });
 }
@@ -827,7 +899,7 @@ export async function saveCloserDailyLogToCloud(log: Omit<CloserDailyLog, 'id' |
     vendas: Math.max(0, Number(log.vendas) || 0),
     valor: Math.max(0, Number(log.valor) || 0),
     primeira_parcela: Math.max(0, Number(log.primeiraParcela) || 0),
-    updated_by_user_id: userId || null,
+    updated_by_user_id: toDbUserId(userId),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'date,closer' });
 }
@@ -836,7 +908,7 @@ export async function dismissPaymentReminderInCloud(id: string, userId?: string 
   if (!isSupabaseConfigured) return;
   await supabase.from('payment_reminders').update({
     dismissed: true,
-    dismissed_by_user_id: userId || null,
+    dismissed_by_user_id: toDbUserId(userId),
     updated_at: new Date().toISOString(),
   }).eq('id', id);
 }
@@ -846,7 +918,7 @@ export async function addCriativoToCloud(name: string, userId?: string | null) {
   await supabase.from('criativos').upsert({
     name,
     is_active: true,
-    created_by_user_id: userId || null,
+    created_by_user_id: toDbUserId(userId),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'name' });
 }
@@ -905,16 +977,16 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
     nome: client.clientName,
     telefone: phone,
     horario: timeToPeriod(meetingTime),
-    tem_socio: client.temSocio === 'SIM' ? 'SIM' : 'NAO',
-    tem_mkt: client.temMkt === 'SIM' ? 'SIM' : 'NAO',
-    tem_secretaria: client.temSecretaria === 'SIM' ? 'SIM' : 'NAO',
+    tem_socio: coerceCommercialAnswer(client.temSocio) || 'NAO_SEI',
+    tem_mkt: coerceCommercialAnswer(client.temMkt) || 'NAO_SEI',
+    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
     salao_ou_clinica: client.salaoOuClinica || 'NAO_INFORMADO',
     faturamento: normalizePipelineFaturamento(client.faturamento),
     pode_investir: client.podeInvestir || null,
     agendado_via: client.agendadoVia || null,
     funil: client.funil || client.criativo || 'NAO IDENTIFICADO',
     status: STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
-    created_by_user_id: client.createdByUserId || userId || null,
+    created_by_user_id: toDbUserId(client.createdByUserId) || toDbUserId(userId) || null,
     updated_at: new Date().toISOString(),
   };
 

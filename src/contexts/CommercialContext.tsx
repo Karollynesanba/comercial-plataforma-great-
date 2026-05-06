@@ -3,11 +3,13 @@ import { SalesGoal } from '@/types';
 import { useAuthSafe } from './AuthContext';
 import { buildDashboardMetrics, endOfMonth, getClientRevenue, getCloseDate, isDateInRange, isRealContract, startOfMonth } from '@/lib/commercialMetrics';
 import { type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
-import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
+import { readCommercialLocalData, syncAllCommercialAutomations, updateCommercialLocalData, writeCommercialLocalData } from '@/lib/commercialLocalStore';
 import { addCriativoToCloud, archiveCriativoInCloud, deletePipelineClientFromCloud, dismissPaymentReminderInCloud, fetchCommercialCloudState, renameCriativoInCloud, resetCommercialCloudData, saveCloserDailyLogToCloud, savePipelineClientToCloud, savePreSalesDailyLogToCloud, saveSalesGoalToCloud, saveSdrGoalToCloud, setCommercialSetting, type CommercialCloudState } from '@/lib/commercialCloudStore';
 import { resetGreatPlatformStorageNow } from '@/lib/safeStorage';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
+import { safeGetItem } from '@/lib/safeStorage';
 import { useQueryClient } from '@tanstack/react-query';
+import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
 
 export type PipelineStage = 'NOVO' | 'NO_SHOW' | 'TAXA_INTERESSE' | 'NEGOCIACAO' | 'PERDIDO' | 'FECHADO';
 export type Vendedor = 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDRO_JUAN' | 'CAETANO';
@@ -34,11 +36,11 @@ export type Faturamento =
 export type Pacote = 'COMPLETO' | 'TRAFEGO_E_CRIATIVOS' | 'ATENDIMENTO' | 'TRAFEGO' | 'COMPLETO_NOVA_ERA' | 'TRAFEGO_ARTES_IA' | 'TRAFEGO_CONSULTORIA' | 'IA' | 'TRAFEGO_ROTEIRO' | 'TRAFEGO_IA';
 export type Periodo = 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'TAXA_INTERESSE';
 export type PagadorAnuncio = 'CLIENTE' | 'GREAT';
-export type TemSocio = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
-export type TemMkt = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
-export type TemSecretaria = 'SIM' | 'NAO' | 'NAO_PERGUNTADO';
+export type TemSocio = CommercialYesNoMaybe;
+export type TemMkt = CommercialYesNoMaybe;
+export type TemSecretaria = CommercialYesNoMaybe;
 export type SalaoOuClinica = string;
-export type Agendador = 'PEDRO' | 'HEBERT' | 'CLED' | 'CAETANO';
+export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'CLED' | 'CAETANO';
 export type PodeInvestir = 'SIM' | 'NAO';
 export type Funil = string;
 
@@ -61,6 +63,8 @@ export const TEAM_IDS = {
 
 export const AGENDADOR_OPTIONS = [
   { value: 'PEDRO' as Agendador, label: 'Pedro' },
+  { value: 'PEDRO_H' as Agendador, label: 'Pedro Henrique' },
+  { value: 'PEDRO_JUAN' as Agendador, label: 'Pedro Juan' },
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
   { value: 'CLED' as Agendador, label: 'Cled' },
   { value: 'CAETANO' as Agendador, label: 'Bruno' },
@@ -72,23 +76,20 @@ export const OFFICIAL_SDR_OPTIONS = [
 
 export const OFFICIAL_SDR_VALUES = OFFICIAL_SDR_OPTIONS.map((option) => option.value);
 
-export const TEM_SOCIO_OPTIONS = [
-  { value: 'SIM' as TemSocio, label: 'Sim' },
-  { value: 'NAO' as TemSocio, label: 'Nao' },
-  { value: 'NAO_PERGUNTADO' as TemSocio, label: 'Nao Perguntado' },
-];
+export const TEM_SOCIO_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS.map((option) => ({
+  value: option.value as TemSocio,
+  label: option.label,
+}));
 
-export const TEM_MKT_OPTIONS = [
-  { value: 'SIM' as TemMkt, label: 'Sim' },
-  { value: 'NAO' as TemMkt, label: 'Nao' },
-  { value: 'NAO_PERGUNTADO' as TemMkt, label: 'Nao Perguntado' },
-];
+export const TEM_MKT_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS.map((option) => ({
+  value: option.value as TemMkt,
+  label: option.label,
+}));
 
-export const TEM_SECRETARIA_OPTIONS = [
-  { value: 'SIM' as TemSecretaria, label: 'Sim' },
-  { value: 'NAO' as TemSecretaria, label: 'Nao' },
-  { value: 'NAO_PERGUNTADO' as TemSecretaria, label: 'Nao Perguntado' },
-];
+export const TEM_SECRETARIA_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS.map((option) => ({
+  value: option.value as TemSecretaria,
+  label: option.label,
+}));
 
 export const SALAO_OU_CLINICA_OPTIONS = [
   { value: 'ESTETICA_BELEZA' as SalaoOuClinica, label: 'Estética e beleza' },
@@ -247,6 +248,7 @@ interface CommercialContextType {
   pipelineClients: PipelineClient[];
   salesGoals: SalesGoal[];
   currentGoal: SalesGoal | null;
+  isHydrating: boolean;
   paymentReminders: PaymentReminder[];
   criativos: string[];
   funis: string[];
@@ -319,8 +321,57 @@ const EMPTY_COMMERCIAL_STATE: CommercialCloudState = {
 };
 
 function shouldPreferLocalCommercialData() {
-  if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem('great_test_session_bypass') === 'true';
+  return safeGetItem('great_test_session_bypass') === 'true';
+}
+
+function normalizePipelineClientKey(client: any) {
+  const phone = String(client.telefone || '').replace(/\D/g, '');
+  const name = String(client.clientName || '').trim().toLowerCase();
+  return `${phone}::${name}`;
+}
+
+function mergeCommercialSnapshots(remote: CommercialCloudState, local: ReturnType<typeof readCommercialLocalData>): CommercialCloudState {
+  const mergedPipelineClients = new Map<string, any>();
+  for (const client of remote.pipelineClients) {
+    mergedPipelineClients.set(normalizePipelineClientKey(client), client);
+  }
+  for (const client of local.pipelineClients) {
+    mergedPipelineClients.set(normalizePipelineClientKey(client), client);
+  }
+
+  const mergedAgendaEvents = new Map<string, any>();
+  for (const event of remote.agendaEvents || []) {
+    const key = `${String(event.client_phone || '').replace(/\D/g, '')}::${String(event.client_name || '').trim().toLowerCase()}`;
+    mergedAgendaEvents.set(key, event);
+  }
+  for (const event of local.agendaEvents) {
+    const key = `${String(event.client_phone || '').replace(/\D/g, '')}::${String(event.client_name || '').trim().toLowerCase()}`;
+    mergedAgendaEvents.set(key, event);
+  }
+
+  const mergedAgendamentoLeads = new Map<string, any>();
+  for (const lead of remote.agendamentoLeads || []) {
+    const key = `${String(lead.telefone || '').replace(/\D/g, '')}::${String(lead.nome || '').trim().toLowerCase()}`;
+    mergedAgendamentoLeads.set(key, lead);
+  }
+  for (const lead of local.agendamentoLeads) {
+    const key = `${String(lead.telefone || '').replace(/\D/g, '')}::${String(lead.nome || '').trim().toLowerCase()}`;
+    mergedAgendamentoLeads.set(key, lead);
+  }
+
+  const useLocalCatalog = (local.catalogVersion || 0) > (remote.catalogVersion || 0);
+
+  return {
+    ...remote,
+    pipelineClients: Array.from(mergedPipelineClients.values()),
+    salesGoals: mergeSalesGoals(remote.salesGoals || [], local.salesGoals || []),
+    sdrGoals: mergeSdrGoals(remote.sdrGoals || [], local.sdrGoals || []),
+    criativos: useLocalCatalog ? [...local.criativos].sort() : [...remote.criativos].sort(),
+    funis: useLocalCatalog ? [...local.funis].sort() : [...remote.funis].sort(),
+    catalogVersion: useLocalCatalog ? (local.catalogVersion || 0) : (remote.catalogVersion || 0),
+    agendaEvents: Array.from(mergedAgendaEvents.values()),
+    agendamentoLeads: Array.from(mergedAgendamentoLeads.values()),
+  } as CommercialCloudState & { agendaEvents: any[]; agendamentoLeads: any[] };
 }
 
 function revivePipelineClient(client: any): PipelineClient {
@@ -332,6 +383,15 @@ function revivePipelineClient(client: any): PipelineClient {
     paymentDeadline: client.paymentDeadline ? new Date(client.paymentDeadline) : undefined,
     expectedCloseDate: client.expectedCloseDate ? new Date(client.expectedCloseDate) : undefined,
     createdAt: client.createdAt ? new Date(client.createdAt) : undefined,
+  };
+}
+
+function normalizePipelineClientAnswers(client: any) {
+  return {
+    ...client,
+    temSocio: coerceCommercialAnswer(client.temSocio, 'NAO_SEI'),
+    temMkt: coerceCommercialAnswer(client.temMkt, 'NAO_SEI'),
+    temSecretaria: coerceCommercialAnswer(client.temSecretaria, 'NAO_SEI'),
   };
 }
 
@@ -376,29 +436,45 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const user = authContext?.user;
   const logActivity = authContext?.logActivity ?? (() => {});
   const [cloudState, setCloudState] = useState<CommercialCloudState>(EMPTY_COMMERCIAL_STATE);
+  const [isHydrating, setIsHydrating] = useState(true);
 
   const refreshCommercialState = useCallback(async () => {
     if (!isSupabaseConfigured || shouldPreferLocalCommercialData()) {
       const local = readCommercialLocalData();
+      const hydratedLocal = syncAllCommercialAutomations(local);
+      if (hydratedLocal.agendaEvents.length !== local.agendaEvents.length || hydratedLocal.agendamentoLeads.length !== local.agendamentoLeads.length) {
+        writeCommercialLocalData(hydratedLocal);
+      }
       setCloudState({
         ...EMPTY_COMMERCIAL_STATE,
-        ...local,
+        ...hydratedLocal,
       });
       return;
     }
 
     try {
       const next = await fetchCommercialCloudState(user?.id);
+      const local = readCommercialLocalData();
+      const hydratedLocal = syncAllCommercialAutomations(local);
+      if (hydratedLocal.agendaEvents.length !== local.agendaEvents.length || hydratedLocal.agendamentoLeads.length !== local.agendamentoLeads.length) {
+        writeCommercialLocalData(hydratedLocal);
+      }
       setCloudState({
-        ...next,
-        teamPointer: next.teamPointer || TEAM_IDS.EQUIPE_7,
+        ...syncAllCommercialAutomations(mergeCommercialSnapshots({
+          ...next,
+          teamPointer: next.teamPointer || TEAM_IDS.EQUIPE_7,
+        }, hydratedLocal)),
       });
     } catch (error) {
       console.warn('Cloud commercial state read failed, falling back to local cache.', error);
       const local = readCommercialLocalData();
+      const hydratedLocal = syncAllCommercialAutomations(local);
+      if (hydratedLocal.agendaEvents.length !== local.agendaEvents.length || hydratedLocal.agendamentoLeads.length !== local.agendamentoLeads.length) {
+        writeCommercialLocalData(hydratedLocal);
+      }
       setCloudState({
         ...EMPTY_COMMERCIAL_STATE,
-        ...local,
+        ...hydratedLocal,
       });
     }
 
@@ -408,7 +484,20 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   }, [queryClient, user?.id]);
 
   useEffect(() => {
-    void refreshCommercialState();
+    let cancelled = false;
+
+    const initialize = async () => {
+      await refreshCommercialState();
+      if (!cancelled) {
+        setIsHydrating(false);
+      }
+    };
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+    };
   }, [refreshCommercialState]);
 
   useEffect(() => {
@@ -444,7 +533,10 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     };
   }, [refreshCommercialState]);
 
-  const pipelineClients = useMemo(() => cloudState.pipelineClients.map(revivePipelineClient), [cloudState.pipelineClients]);
+  const pipelineClients = useMemo(
+    () => cloudState.pipelineClients.map((client) => revivePipelineClient(normalizePipelineClientAnswers(client))),
+    [cloudState.pipelineClients]
+  );
   const salesGoals = useMemo(() => cloudState.salesGoals.map(reviveSalesGoal), [cloudState.salesGoals]);
   const sdrGoals = useMemo(() => cloudState.sdrGoals.map(reviveSdrGoal), [cloudState.sdrGoals]);
   const preSalesDailyLogs = cloudState.preSalesDailyLogs;
@@ -465,6 +557,19 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
 
   const currentGoal = salesGoals.find((goal) => goal.month === currentMonth) || null;
 
+  const savePipelineClientLocally = useCallback((client: PipelineClient) => {
+    updateCommercialLocalData((current) => {
+      const pipelineClients = current.pipelineClients.some((item) => item.id === client.id)
+        ? current.pipelineClients.map((item) => (item.id === client.id ? client : item))
+        : [client, ...current.pipelineClients];
+
+      return syncAllCommercialAutomations({
+        ...current,
+        pipelineClients,
+      });
+    });
+  }, []);
+
   const addPipelineClient = useCallback(async (client: Omit<PipelineClient, 'id' | 'createdByUserId'>) => {
     const newClient: PipelineClient = {
       ...client,
@@ -474,22 +579,30 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       dataEntrada: client.dataEntrada || new Date(),
     };
 
+    savePipelineClientLocally(newClient);
+    setCloudState((current) => ({
+      ...current,
+      pipelineClients: current.pipelineClients.some((item) => item.id === newClient.id)
+        ? current.pipelineClients.map((item) => (item.id === newClient.id ? newClient : item))
+        : [newClient, ...current.pipelineClients],
+    }));
+
     try {
-      const savedClient = await savePipelineClientToCloud(newClient, user?.id);
+      const savedClient = await Promise.race([
+        savePipelineClientToCloud(newClient, user?.id),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:save_pipeline_client')), 8000)),
+      ]) as PipelineClient | null;
       if (savedClient) {
-        setCloudState((current) => {
-          const exists = current.pipelineClients.some((item) => item.id === savedClient.id);
-          return {
-            ...current,
-            pipelineClients: exists
-              ? current.pipelineClients.map((item) => (item.id === savedClient.id ? savedClient : item))
-              : [savedClient, ...current.pipelineClients],
-          };
-        });
+        savePipelineClientLocally(savedClient);
+        setCloudState((current) => ({
+          ...current,
+          pipelineClients: current.pipelineClients.some((item) => item.id === savedClient.id)
+            ? current.pipelineClients.map((item) => (item.id === savedClient.id ? savedClient : item))
+            : [savedClient, ...current.pipelineClients],
+        }));
       }
     } catch (error) {
-      await refreshCommercialState();
-      throw error;
+      console.warn('Lead saved locally, but cloud sync failed or timed out.', error);
     }
 
     refreshCommercialState().catch((refreshError) => {
@@ -508,9 +621,15 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
-    void savePipelineClientToCloud(updatedClient, user?.id)
+    savePipelineClientLocally(updatedClient);
+    void Promise.race([
+      savePipelineClientToCloud(updatedClient, user?.id),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:update_pipeline_client')), 8000)),
+    ])
       .then(refreshCommercialState)
-      .catch(() => void refreshCommercialState());
+      .catch((error) => {
+        console.warn('Pipeline client update persisted locally but cloud sync failed or timed out.', error);
+      });
   }, [pipelineClients, refreshCommercialState, user?.id]);
 
   const movePipelineClient = useCallback((id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
@@ -529,9 +648,15 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
-    void savePipelineClientToCloud(updatedClient, user?.id)
+    savePipelineClientLocally(updatedClient);
+    void Promise.race([
+      savePipelineClientToCloud(updatedClient, user?.id),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:move_pipeline_client')), 8000)),
+    ])
       .then(refreshCommercialState)
-      .catch(() => void refreshCommercialState());
+      .catch((error) => {
+        console.warn('Pipeline client move persisted locally but cloud sync failed or timed out.', error);
+      });
   }, [pipelineClients, refreshCommercialState, user?.id]);
 
   const deletePipelineClient = useCallback((id: string) => {
@@ -540,21 +665,50 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.filter((client) => client.id !== id),
     }));
+    updateCommercialLocalData((current) => {
+      const pipelineClients = current.pipelineClients.filter((client) => client.id !== id);
+      const phone = removed?.telefone ? String(removed.telefone).replace(/\D/g, '') : '';
+      return {
+        ...current,
+        pipelineClients,
+        agendaEvents: current.agendaEvents.filter((event: any) => {
+          if (!removed) return true;
+          const eventPhone = String(event.client_phone || '').replace(/\D/g, '');
+          return event.client_name !== removed.clientName && (phone ? eventPhone !== phone : true);
+        }),
+        agendamentoLeads: current.agendamentoLeads.filter((lead: any) => {
+          if (!removed) return true;
+          const leadPhone = String(lead.telefone || '').replace(/\D/g, '');
+          return lead.nome !== removed.clientName && (phone ? leadPhone !== phone : true);
+        }),
+      };
+    });
     if (removed) {
       void deletePipelineClientFromCloud(removed)
         .then(refreshCommercialState)
-        .catch(() => void refreshCommercialState());
+        .catch((error) => {
+          console.warn('Pipeline client deleted locally but cloud sync failed or timed out.', error);
+        });
     }
   }, [pipelineClients, refreshCommercialState]);
 
   const setSalesGoal = useCallback(async (month: string, goalValue: number) => {
-    setCloudState((current) => {
-      const existing = current.salesGoals.find((goal) => goal.month === month);
-      const nextGoal = existing
-        ? current.salesGoals.map((goal) => goal.month === month ? { ...goal, goalValue } : goal)
-        : [...current.salesGoals, { id: `goal-${crypto.randomUUID()}`, month, goalValue, currentValue: 0, createdByUserId: user?.id || 'cloud-user', createdAt: new Date() }];
-      return { ...current, salesGoals: nextGoal };
-    });
+    const nextGoal = (() => {
+      const currentGoals = cloudState.salesGoals;
+      const existing = currentGoals.find((goal) => goal.month === month);
+      return existing
+        ? currentGoals.map((goal) => goal.month === month ? { ...goal, goalValue } : goal)
+        : [...currentGoals, { id: `goal-${crypto.randomUUID()}`, month, goalValue, currentValue: 0, createdByUserId: user?.id || 'cloud-user', createdAt: new Date() }];
+    })();
+
+    setCloudState((current) => ({
+      ...current,
+      salesGoals: nextGoal,
+    }));
+    updateCommercialLocalData((current) => ({
+      ...current,
+      salesGoals: nextGoal,
+    }));
     try {
       await saveSalesGoalToCloud(month, goalValue, user?.id);
       await refreshCommercialState();
@@ -562,16 +716,25 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       await refreshCommercialState();
       throw error;
     }
-  }, [refreshCommercialState, user?.id]);
+  }, [cloudState.salesGoals, refreshCommercialState, user?.id]);
 
   const setSDRGoal = useCallback(async (agendador: Agendador, month: string, goalCount: number) => {
-    setCloudState((current) => {
-      const existing = current.sdrGoals.find((goal) => goal.agendador === agendador && goal.month === month);
-      const nextGoals = existing
-        ? current.sdrGoals.map((goal) => goal.agendador === agendador && goal.month === month ? { ...goal, goalCount } : goal)
-        : [...current.sdrGoals, { id: `sdr-goal-${crypto.randomUUID()}`, agendador, month, goalCount, createdAt: new Date() }];
-      return { ...current, sdrGoals: nextGoals };
-    });
+    const nextGoals = (() => {
+      const currentGoals = cloudState.sdrGoals;
+      const existing = currentGoals.find((goal) => goal.agendador === agendador && goal.month === month);
+      return existing
+        ? currentGoals.map((goal) => goal.agendador === agendador && goal.month === month ? { ...goal, goalCount } : goal)
+        : [...currentGoals, { id: `sdr-goal-${crypto.randomUUID()}`, agendador, month, goalCount, createdAt: new Date() }];
+    })();
+
+    setCloudState((current) => ({
+      ...current,
+      sdrGoals: nextGoals,
+    }));
+    updateCommercialLocalData((current) => ({
+      ...current,
+      sdrGoals: nextGoals,
+    }));
     try {
       await saveSdrGoalToCloud(agendador, month, goalCount, user?.id);
       await refreshCommercialState();
@@ -640,7 +803,11 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       paymentReminders: current.paymentReminders.map((reminder) => reminder.id === id ? { ...reminder, dismissed: true } : reminder),
     }));
     void dismissPaymentReminderInCloud(id, user?.id).then(refreshCommercialState);
-  }, [refreshCommercialState, user?.id]);
+  }, [cloudState.sdrGoals, refreshCommercialState, user?.id]);
+
+  const syncCatalogVersionToCloud = useCallback((version: number) => {
+    return setCommercialSetting('commercial_catalog_version_v1', String(version || 0), user?.id);
+  }, [user?.id]);
 
   const addCriativo = useCallback((criativo: string) => {
     const normalized = criativo.trim().toUpperCase();
@@ -650,8 +817,21 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       criativos: current.criativos.includes(normalized) ? current.criativos : [...current.criativos, normalized].sort(),
     }));
-    void addCriativoToCloud(normalized, user?.id).then(refreshCommercialState);
-  }, [refreshCommercialState, user?.id]);
+    const nextLocal = updateCommercialLocalData((current) => ({
+      ...current,
+      catalogVersion: (current.catalogVersion || 0) + 1,
+      criativos: current.criativos.includes(normalized) ? current.criativos : [...current.criativos, normalized].sort(),
+    }));
+    void Promise.race([
+      addCriativoToCloud(normalized, user?.id),
+      syncCatalogVersionToCloud(nextLocal.catalogVersion || 1),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:add_criativo')), 8000)),
+    ])
+      .then(refreshCommercialState)
+      .catch((error) => {
+        console.warn('Criativo saved locally but cloud sync failed or timed out.', error);
+      });
+  }, [cloudState.sdrGoals, refreshCommercialState, user?.id]);
 
   const updateCriativo = useCallback((oldCriativo: string, newCriativo: string) => {
     const normalized = newCriativo.trim().toUpperCase();
@@ -662,7 +842,21 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       criativos: current.criativos.map((criativo) => criativo === oldCriativo ? normalized : criativo),
       pipelineClients: current.pipelineClients.map((client) => client.criativo === oldCriativo ? { ...client, criativo: normalized } : client),
     }));
-    void renameCriativoInCloud(oldCriativo, normalized).then(refreshCommercialState);
+    const nextLocal = updateCommercialLocalData((current) => ({
+      ...current,
+      catalogVersion: (current.catalogVersion || 0) + 1,
+      criativos: current.criativos.map((criativo) => criativo === oldCriativo ? normalized : criativo),
+      pipelineClients: current.pipelineClients.map((client: any) => client.criativo === oldCriativo ? { ...client, criativo: normalized } : client),
+    }));
+    void Promise.race([
+      renameCriativoInCloud(oldCriativo, normalized),
+      syncCatalogVersionToCloud(nextLocal.catalogVersion || 1),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:rename_criativo')), 8000)),
+    ])
+      .then(refreshCommercialState)
+      .catch((error) => {
+        console.warn('Criativo rename persisted locally but cloud sync failed or timed out.', error);
+      });
   }, [refreshCommercialState]);
 
   const deleteCriativo = useCallback((criativo: string) => {
@@ -670,7 +864,20 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       criativos: current.criativos.filter((item) => item !== criativo),
     }));
-    void archiveCriativoInCloud(criativo).then(refreshCommercialState);
+    const nextLocal = updateCommercialLocalData((current) => ({
+      ...current,
+      catalogVersion: (current.catalogVersion || 0) + 1,
+      criativos: current.criativos.filter((item) => item !== criativo),
+    }));
+    void Promise.race([
+      archiveCriativoInCloud(criativo),
+      syncCatalogVersionToCloud(nextLocal.catalogVersion || 1),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:archive_criativo')), 8000)),
+    ])
+      .then(refreshCommercialState)
+      .catch((error) => {
+        console.warn('Criativo archive persisted locally but cloud sync failed or timed out.', error);
+      });
   }, [refreshCommercialState]);
 
   const syncFunisToCloud = useCallback((nextFunis: string[]) => {
@@ -678,9 +885,20 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       funis: nextFunis,
     }));
-    void setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id)
+    const nextLocal = updateCommercialLocalData((current) => ({
+      ...current,
+      catalogVersion: (current.catalogVersion || 0) + 1,
+      funis: nextFunis,
+    }));
+    void Promise.race([
+      setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id),
+      syncCatalogVersionToCloud(nextLocal.catalogVersion || 1),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:set_funis')), 8000)),
+    ])
       .then(refreshCommercialState)
-      .catch(() => void refreshCommercialState());
+      .catch((error) => {
+        console.warn('Funis saved locally but cloud sync failed or timed out.', error);
+      });
   }, [refreshCommercialState, user?.id]);
 
   const addFunil = useCallback((funil: string) => {
@@ -701,13 +919,25 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       funis: nextFunis,
       pipelineClients: current.pipelineClients.map((client) => (client.funil === oldFunil ? { ...client, funil: normalized } : client)),
     }));
-    void setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id)
+    const nextLocal = updateCommercialLocalData((current) => ({
+      ...current,
+      catalogVersion: (current.catalogVersion || 0) + 1,
+      funis: nextFunis,
+      pipelineClients: current.pipelineClients.map((client: any) => (client.funil === oldFunil ? { ...client, funil: normalized } : client)),
+    }));
+    void Promise.race([
+      setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id),
+      syncCatalogVersionToCloud(nextLocal.catalogVersion || 1),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:update_funis')), 8000)),
+    ])
       .then(() => {
         void Promise.all([
           ...pipelineClients.filter((client) => client.funil === oldFunil).map((client) => savePipelineClientToCloud({ ...client, funil: normalized }, user?.id)),
         ]).then(refreshCommercialState);
       })
-      .catch(() => void refreshCommercialState());
+      .catch((error) => {
+        console.warn('Funil update persisted locally but cloud sync failed or timed out.', error);
+      });
   }, [funis, pipelineClients, refreshCommercialState, user?.id]);
 
   const deleteFunil = useCallback((funil: string) => {
@@ -715,8 +945,21 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     if (usage > 0) return;
 
     const nextFunis = (funis || []).filter((item) => item !== funil);
-    syncFunisToCloud(nextFunis);
-  }, [funis, pipelineClients, syncFunisToCloud]);
+    const nextLocal = updateCommercialLocalData((current) => ({
+      ...current,
+      catalogVersion: (current.catalogVersion || 0) + 1,
+      funis: nextFunis,
+    }));
+    void Promise.race([
+      setCommercialSetting('commercial_funis_v1', JSON.stringify(nextFunis), user?.id),
+      syncCatalogVersionToCloud(nextLocal.catalogVersion || 1),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:delete_funis')), 8000)),
+    ])
+      .then(refreshCommercialState)
+      .catch((error) => {
+        console.warn('Funil delete persisted locally but cloud sync failed or timed out.', error);
+      });
+  }, [funis, pipelineClients]);
 
   const resetCommercialData = useCallback(async () => {
     setCloudState(EMPTY_COMMERCIAL_STATE);
@@ -829,6 +1072,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     pipelineClients,
     salesGoals,
     currentGoal,
+    isHydrating,
     paymentReminders,
     criativos,
     funis,
@@ -863,6 +1107,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     criativos,
     funis,
     currentGoal,
+    isHydrating,
     deleteCriativo,
     addFunil,
     updateFunil,
