@@ -3,7 +3,7 @@ import { SalesGoal } from '@/types';
 import { useAuthSafe } from './AuthContext';
 import { buildDashboardMetrics, endOfMonth, getClientRevenue, getCloseDate, isDateInRange, isRealContract, startOfMonth } from '@/lib/commercialMetrics';
 import { type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
-import { readCommercialLocalData, syncAllCommercialAutomations, updateCommercialLocalData, writeCommercialLocalData } from '@/lib/commercialLocalStore';
+import { readCommercialLocalData, syncAllCommercialAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { addCriativoToCloud, archiveCriativoInCloud, deletePipelineClientFromCloud, dismissPaymentReminderInCloud, fetchCommercialCloudState, renameCriativoInCloud, resetCommercialCloudData, saveCloserDailyLogToCloud, savePipelineClientToCloud, savePreSalesDailyLogToCloud, saveSalesGoalToCloud, saveSdrGoalToCloud, setCommercialSetting, type CommercialCloudState } from '@/lib/commercialCloudStore';
 import { resetGreatPlatformStorageNow } from '@/lib/safeStorage';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
@@ -542,19 +542,6 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
 
   const currentGoal = salesGoals.find((goal) => goal.month === currentMonth) || null;
 
-  const savePipelineClientLocally = useCallback((client: PipelineClient) => {
-    updateCommercialLocalData((current) => {
-      const pipelineClients = current.pipelineClients.some((item) => item.id === client.id)
-        ? current.pipelineClients.map((item) => (item.id === client.id ? client : item))
-        : [client, ...current.pipelineClients];
-
-      return syncAllCommercialAutomations({
-        ...current,
-        pipelineClients,
-      });
-    });
-  }, []);
-
   const addPipelineClient = useCallback(async (client: Omit<PipelineClient, 'id' | 'createdByUserId'>) => {
     const newClient: PipelineClient = {
       ...client,
@@ -564,7 +551,6 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       dataEntrada: client.dataEntrada || new Date(),
     };
 
-    savePipelineClientLocally(newClient);
     setCloudState((current) => ({
       ...current,
       pipelineClients: current.pipelineClients.some((item) => item.id === newClient.id)
@@ -578,20 +564,19 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
         new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:save_pipeline_client')), 8000)),
       ]) as PipelineClient | null;
       if (savedClient) {
-        savePipelineClientLocally(savedClient);
         setCloudState((current) => ({
           ...current,
           pipelineClients: current.pipelineClients.some((item) => item.id === savedClient.id)
             ? current.pipelineClients.map((item) => (item.id === savedClient.id ? savedClient : item))
             : [savedClient, ...current.pipelineClients],
-        }));
+          }));
       }
     } catch (error) {
-      console.warn('Lead saved locally, but cloud sync failed or timed out.', error);
+      console.warn('Lead save cloud sync failed or timed out.', error);
     }
 
     refreshCommercialState().catch((refreshError) => {
-      console.warn('Lead saved, but the immediate refresh failed. The lead remains in local state and will sync again on the next realtime event.', refreshError);
+      console.warn('Lead saved, but the immediate refresh failed. The lead will refresh again on the next realtime event.', refreshError);
     });
 
     logActivity('CLIENT_CREATED', 'Pipeline', newClient.id, `Cliente ${newClient.clientName} criado`);
@@ -606,14 +591,13 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
-    savePipelineClientLocally(updatedClient);
     void Promise.race([
       savePipelineClientToCloud(updatedClient, user?.id),
       new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:update_pipeline_client')), 8000)),
     ])
       .then(refreshCommercialState)
       .catch((error) => {
-        console.warn('Pipeline client update persisted locally but cloud sync failed or timed out.', error);
+        console.warn('Pipeline client update cloud sync failed or timed out.', error);
       });
   }, [pipelineClients, refreshCommercialState, user?.id]);
 
@@ -633,14 +617,13 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
-    savePipelineClientLocally(updatedClient);
     void Promise.race([
       savePipelineClientToCloud(updatedClient, user?.id),
       new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:move_pipeline_client')), 8000)),
     ])
       .then(refreshCommercialState)
       .catch((error) => {
-        console.warn('Pipeline client move persisted locally but cloud sync failed or timed out.', error);
+        console.warn('Pipeline client move cloud sync failed or timed out.', error);
       });
   }, [pipelineClients, refreshCommercialState, user?.id]);
 
@@ -650,29 +633,11 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.filter((client) => client.id !== id),
     }));
-    updateCommercialLocalData((current) => {
-      const pipelineClients = current.pipelineClients.filter((client) => client.id !== id);
-      const phone = removed?.telefone ? String(removed.telefone).replace(/\D/g, '') : '';
-      return {
-        ...current,
-        pipelineClients,
-        agendaEvents: current.agendaEvents.filter((event: any) => {
-          if (!removed) return true;
-          const eventPhone = String(event.client_phone || '').replace(/\D/g, '');
-          return event.client_name !== removed.clientName && (phone ? eventPhone !== phone : true);
-        }),
-        agendamentoLeads: current.agendamentoLeads.filter((lead: any) => {
-          if (!removed) return true;
-          const leadPhone = String(lead.telefone || '').replace(/\D/g, '');
-          return lead.nome !== removed.clientName && (phone ? leadPhone !== phone : true);
-        }),
-      };
-    });
     if (removed) {
       void deletePipelineClientFromCloud(removed)
         .then(refreshCommercialState)
         .catch((error) => {
-          console.warn('Pipeline client deleted locally but cloud sync failed or timed out.', error);
+          console.warn('Pipeline client delete cloud sync failed or timed out.', error);
         });
     }
   }, [pipelineClients, refreshCommercialState]);

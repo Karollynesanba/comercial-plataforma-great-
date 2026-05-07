@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
-import { mapAgendaTeamToPipeline } from '@/lib/teamMapping';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 
 export interface AgendaEvent {
@@ -12,10 +11,14 @@ export interface AgendaEvent {
   notes: string | null;
   client_name: string;
   client_phone: string;
+  clinic_name: string | null;
   event_date: string;
   event_time: string;
   duration_minutes: number;
   meeting_link: string | null;
+  scheduled_by: string | null;
+  lead_stage: string | null;
+  creative_source: string | null;
   color: string;
   reminder_2h_sent: boolean;
   reminder_30min_sent: boolean;
@@ -36,8 +39,13 @@ export interface AgendaEvent {
 
 export type AgendaEventInsert = Omit<
   AgendaEvent,
-  'id' | 'created_at' | 'updated_at' | 'reminder_2h_sent' | 'reminder_30min_sent' | 'assigned_closer'
->;
+  'id' | 'created_at' | 'updated_at' | 'reminder_2h_sent' | 'reminder_30min_sent' | 'assigned_closer' | 'clinic_name' | 'scheduled_by' | 'lead_stage' | 'creative_source'
+> & {
+  clinic_name?: string | null;
+  scheduled_by?: string | null;
+  lead_stage?: string | null;
+  creative_source?: string | null;
+};
 export type AgendaEventUpdate = Partial<Omit<AgendaEventInsert, 'created_by_user_id'>>;
 
 export const EVENT_COLORS = [
@@ -57,6 +65,10 @@ const LOCAL_TEAMS = [
 function enrichEvent(event: any): AgendaEvent {
   return {
     ...event,
+    clinic_name: event.clinic_name || event.client_name || null,
+    scheduled_by: event.scheduled_by || null,
+    lead_stage: event.lead_stage || null,
+    creative_source: event.creative_source || null,
     assigned_closer: null,
     team: event.team_id ? LOCAL_TEAMS.find((team) => team.id === event.team_id) || null : null,
   };
@@ -66,25 +78,6 @@ function samePersonFilter(name: string, phone: string) {
   const formattedPhone = formatPhoneForWhatsApp(phone);
   const digits = formattedPhone.replace(/\D/g, '');
   return { formattedPhone, digits, name };
-}
-
-function colorToPipelineStage(color?: string | null) {
-  switch (String(color || '').toUpperCase()) {
-    case '#FF0000':
-      return 'NO_SHOW';
-    case '#66FF00':
-      return 'NEGOCIACAO';
-    case '#FFA500':
-      return 'TAXA_INTERESSE';
-    case '#B000FF':
-      return 'NEGOCIACAO';
-    case '#3B82F6':
-      return 'NOVO';
-    case '#808080':
-      return 'NEGOCIACAO';
-    default:
-      return null;
-  }
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -117,20 +110,12 @@ async function syncRelatedRecords(event: AgendaEvent) {
 
   const target = samePersonFilter(event.client_name, event.client_phone);
   const eventPipelineClientId = (event as any).pipeline_client_id || null;
-  const [{ data: clients }, { data: leads }] = await Promise.all([
-    supabase.from('pipeline_clients').select('id, client_name, telefone').limit(1000),
-    supabase.from('agendamento_leads').select('id, nome, telefone').limit(1000),
-  ]);
+  const { data: clients } = await supabase.from('pipeline_clients').select('id, client_name, telefone').limit(1000);
 
   const matchingClients = (clients || []).filter((client) => {
     const clientDigits = String(client.telefone || '').replace(/\D/g, '');
     return client.client_name === target.name || (target.digits && clientDigits === target.digits);
   });
-  const matchingLeads = (leads || []).filter((lead) => {
-    const leadDigits = String(lead.telefone || '').replace(/\D/g, '');
-    return lead.nome === target.name || (target.digits && leadDigits === target.digits);
-  });
-
   const selectedClient =
     (eventPipelineClientId
       ? matchingClients.find((client) => client.id === eventPipelineClientId) || null
@@ -138,13 +123,6 @@ async function syncRelatedRecords(event: AgendaEvent) {
     matchingClients.find((client) => String(client.telefone || '').replace(/\D/g, '') === target.digits) ||
     matchingClients.find((client) => client.client_name === target.name) ||
     null;
-
-  const selectedLead =
-    matchingLeads.find((lead) => String(lead.telefone || '').replace(/\D/g, '') === target.digits) ||
-    matchingLeads.find((lead) => lead.nome === target.name) ||
-    null;
-
-  const pipelineStage = colorToPipelineStage(event.color);
   const linkedPipelineClientId = selectedClient?.id || eventPipelineClientId || null;
 
   if (linkedPipelineClientId) {
@@ -153,29 +131,6 @@ async function syncRelatedRecords(event: AgendaEvent) {
       updated_at: new Date().toISOString(),
     } as any).eq('id', event.id);
   }
-
-  await Promise.all([
-    ...(selectedClient
-      ? [supabase.from('pipeline_clients').update({
-      meeting_date: event.event_date,
-      meeting_time: event.event_time.slice(0, 5),
-      notes: event.notes,
-      equipe: mapAgendaTeamToPipeline(event.team_id) || selectedClient.equipe,
-      ...(pipelineStage ? { stage: pipelineStage } : {}),
-      ...(pipelineStage === 'NO_SHOW'
-        ? { no_show_reason: event.notes || event.description || 'Agendamento marcado como No Show' }
-        : { no_show_reason: null }),
-      updated_at: new Date().toISOString(),
-    }).eq('id', selectedClient.id)]
-      : []),
-    ...(selectedLead
-      ? [supabase.from('agendamento_leads').update({
-      ...(pipelineStage ? { status: pipelineStage } : {}),
-      updated_at: new Date().toISOString(),
-    }).eq('id', selectedLead.id)]
-      : []),
-  ]);
-
 }
 
 export function useAgendaData() {

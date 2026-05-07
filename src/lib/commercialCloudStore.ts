@@ -735,6 +735,10 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
           notes: event.notes || null,
           client_name: event.client_name || 'Lead sem nome',
           client_phone: event.client_phone || '',
+          clinic_name: event.clinic_name || event.client_name || 'Lead sem nome',
+          scheduled_by: event.scheduled_by || null,
+          lead_stage: event.lead_stage || null,
+          creative_source: event.creative_source || null,
           event_date: event.event_date || new Date().toISOString().slice(0, 10),
           event_time: event.event_time || '09:00:00',
           duration_minutes: Number(event.duration_minutes || 60),
@@ -917,12 +921,7 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
 export async function deletePipelineClientFromCloud(client: PipelineClient) {
   if (!isSupabaseConfigured) return;
 
-  const phone = normalizePhone(client.telefone);
-  await Promise.all([
-    supabase.from('pipeline_clients').delete().eq('id', client.id),
-    supabase.from('agenda_events').delete().or(`client_name.eq.${client.clientName},client_phone.eq.${phone}`),
-    supabase.from('agendamento_leads').delete().or(`nome.eq.${client.clientName},telefone.eq.${phone}`),
-  ]);
+  await supabase.from('pipeline_clients').delete().eq('id', client.id);
 }
 
 export async function saveSalesGoalToCloud(month: string, goalValue: number, userId?: string | null) {
@@ -1049,16 +1048,21 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
   const meetingTime = toTime(client.meetingTime) || '09:00';
 
   const phone = normalizePhone(client.telefone);
+  const clinicName = client.clinicName || client.clientName;
   const agendaPayload = {
     title: `Reuniao com ${client.clientName}`,
     description: client.criativo ? `Lead do Pipeline - ${client.criativo}` : 'Lead do Pipeline',
     notes: client.notes || null,
     client_name: client.clientName,
     client_phone: phone,
+    clinic_name: clinicName,
     event_date: meetingDate,
     event_time: toAgendaTime(meetingTime),
     duration_minutes: 60,
     meeting_link: null,
+    scheduled_by: client.agendadoPor || client.assignedSDR || null,
+    lead_stage: client.stage || 'NOVO',
+    creative_source: client.criativo || null,
     color: client.stage === 'NO_SHOW' || client.stage === 'PERDIDO' ? '#FF0000' : client.stage === 'FECHADO' || client.stage === 'NEGOCIACAO' || client.stage === 'TAXA_INTERESSE' ? '#66FF00' : '#3B82F6',
     reminder_2h_sent: false,
     reminder_30min_sent: false,
@@ -1083,6 +1087,7 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
     nome: client.clientName,
     telefone: phone,
     horario: timeToPeriod(meetingTime),
+    horario_especifico: meetingTime,
     tem_socio: coerceCommercialAnswer(client.temSocio) || 'NAO_SEI',
     tem_mkt: coerceCommercialAnswer(client.temMkt) || 'NAO_SEI',
     tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',

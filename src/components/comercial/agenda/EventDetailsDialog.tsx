@@ -71,8 +71,8 @@ interface EventDetailsDialogProps {
 
 export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: EventDetailsDialogProps) {
   const { updateEvent, deleteEvent } = useAgendaData();
-  const { leads, updateLead, createLead } = useAgendamentoData();
-  const { pipelineClients, updatePipelineClient } = useCommercialSafe();
+  const { leads, updateLead } = useAgendamentoData();
+  const { pipelineClients } = useCommercialSafe();
   const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
@@ -161,7 +161,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   if (!event) return null;
 
   const handleSaveEvent = async () => {
-    const savedEvent = await updateEvent.mutateAsync({
+    await updateEvent.mutateAsync({
       id: event.id,
       ...eventForm,
       client_phone: formatPhoneForWhatsApp(eventForm.client_phone),
@@ -169,22 +169,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       description: eventForm.description || null,
       notes: eventForm.notes || null,
     });
-
-    if (isNoShowColor(savedEvent.color)) {
-      if (pipelineClient) {
-        updatePipelineClient(pipelineClient.id, {
-          stage: 'NO_SHOW',
-          notes: savedEvent.notes || pipelineClient.notes,
-        });
-      }
-
-      if (leadData) {
-        await updateLead.mutateAsync({
-          id: leadData.id,
-          status: 'NO_SHOW',
-        });
-      }
-    }
 
     setIsEditingEvent(false);
   };
@@ -205,9 +189,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   };
 
   const handleSaveLead = async () => {
-    const normalizedPhone = formatPhoneForWhatsApp(event.client_phone || '');
-    const normalizedEventTime = event.event_time?.slice(0, 5) || '00:00';
-
     if (leadData) {
       await updateLead.mutateAsync({
         id: leadData.id,
@@ -217,45 +198,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
         tem_secretaria: leadForm.tem_secretaria as any,
         salao_ou_clinica: leadForm.salao_ou_clinica as any,
         status: leadForm.status,
-      });
-    } else {
-      const [year, month, day] = (event.event_date || new Date().toISOString().slice(0, 10)).split('-');
-      await createLead.mutateAsync({
-        data: `${day}/${month}/${year}`,
-        nome: event.client_name,
-        telefone: normalizedPhone,
-        horario: 'MANHA',
-        horario_especifico: normalizedEventTime,
-        tem_socio: leadForm.tem_socio as any,
-        tem_mkt: leadForm.tem_mkt as any,
-        tem_secretaria: leadForm.tem_secretaria as any,
-        salao_ou_clinica: leadForm.salao_ou_clinica as any,
-        faturamento: leadForm.faturamento as any,
-        pode_investir: null,
-        agendado_via: pipelineClient?.agendadoVia || null,
-        funil: pipelineClient?.criativo || 'NAO IDENTIFICADO',
-        status: leadForm.status,
-      });
-    }
-
-    if (pipelineClient) {
-      const statusMap: Record<string, any> = {
-        NOVO_LEAD: 'NOVO',
-        NO_SHOW: 'NO_SHOW',
-        TAXA_INTERESSE: 'TAXA_INTERESSE',
-        NEGOCIACAO: 'NEGOCIACAO',
-        PERDIDO: 'PERDIDO',
-        FECHADO: 'FECHADO',
-      };
-
-      updatePipelineClient(pipelineClient.id, {
-        faturamento: leadForm.faturamento as any,
-        temSocio: leadForm.tem_socio as any,
-        temMkt: leadForm.tem_mkt as any,
-        temSecretaria: leadForm.tem_secretaria as any,
-        salaoOuClinica: leadForm.salao_ou_clinica as any,
-        stage: statusMap[leadForm.status],
-        notes: leadForm.notes,
       });
     }
 
@@ -575,8 +517,8 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                         <Textarea value={leadForm.notes} onChange={(e) => setLeadForm((current) => ({ ...current, notes: e.target.value }))} />
                       </div>
                       <div className="md:col-span-2 flex justify-end">
-                        <Button onClick={handleSaveLead} disabled={updateLead.isPending || createLead.isPending}>
-                          {(updateLead.isPending || createLead.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        <Button onClick={handleSaveLead} disabled={updateLead.isPending}>
+                          {updateLead.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                           Salvar alterações
                         </Button>
                       </div>

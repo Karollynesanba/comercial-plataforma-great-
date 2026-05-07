@@ -32,7 +32,6 @@ import {
   AGENDADOR_OPTIONS,
   FUNIL_OPTIONS,
   FATURAMENTO_OPTIONS,
-  SALAO_OU_CLINICA_OPTIONS,
   TEM_SOCIO_OPTIONS,
   TEM_MKT_OPTIONS,
   TEM_SECRETARIA_OPTIONS,
@@ -52,7 +51,7 @@ const formSchema = z.object({
   telefone: z.string().min(1, 'Telefone e obrigatorio'),
   funil: z.string().min(1, 'Funil e obrigatorio'),
   criativo: z.string().optional(),
-  faturamento: z.enum(['0_A_10K', '10K_A_20K', '20K_A_30K', '30K_A_50K', '50K_A_80K', '80K_A_100K', '100K_A_150K', '150K_A_250K', '250K_A_400K', '400K_A_600K', '600K_A_1M', '1M_PLUS'] as const, {
+  faturamento: z.enum(['0_A_10K', '10K_A_20K', '20K_A_30K', '30K_A_50K', '50K_A_80K', '80K_A_100K', '100K_A_150K', '150K_A_250K', '250K_A_400K', '400K_A_600K', '600K_A_1M', '1M_PLUS', 'NAO_INFORMADO'] as const, {
     required_error: 'Faturamento e obrigatorio',
   }),
   podeInvestir: z.enum(['SIM', 'NAO'] as const).optional(),
@@ -63,7 +62,6 @@ const formSchema = z.object({
   temSocio: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem socio' }),
   temMkt: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem marketing' }),
   temSecretaria: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem secretaria' }),
-  areaAtuacao: z.string().trim().min(1, 'Area de atuacao e obrigatoria'),
   meetingDate: z.string().min(1, 'Data da reuniao e obrigatoria'),
   meetingTime: z.string().min(1, 'Horario da reuniao e obrigatorio'),
 }).refine((data) => {
@@ -102,7 +100,6 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
       temSocio: undefined,
       temMkt: undefined,
       temSecretaria: undefined,
-      areaAtuacao: '',
       meetingDate: '',
       meetingTime: '',
     },
@@ -147,7 +144,6 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         temSocio: data.temSocio as TemSocio,
         temMkt: data.temMkt as TemMkt,
         temSecretaria: data.temSecretaria as TemSecretaria,
-        salaoOuClinica: data.areaAtuacao,
         entrada: 0,
         isMrr: false,
         mrrEntrada: 0,
@@ -381,27 +377,6 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-                name="areaAtuacao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Area de atuacao *</FormLabel>
-                    <FormControl>
-                      <Input list="create-client-area-options" placeholder="Ex: Odontologia" {...field} value={field.value || ''} />
-                    </FormControl>
-                  <datalist id="create-client-area-options">
-                    {SALAO_OU_CLINICA_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </datalist>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

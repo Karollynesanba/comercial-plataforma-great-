@@ -244,6 +244,7 @@ function agendaColorForStage(stage?: string | null) {
 export function syncPipelineClientAutomations(current: CommercialLocalData, client: any): CommercialLocalData {
   const phone = normalizePhone(client.telefone);
   const clientName = client.clientName || client.nome || 'Lead sem nome';
+  const clinicName = client.clinicName || client.clinic_name || clientName;
   const meetingDate = toLocalIsoDate(client.meetingDate);
   const meetingTime = toTime(client.meetingTime);
   const now = new Date().toISOString();
@@ -264,10 +265,14 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
     notes: client.notes || existingEvent?.notes || null,
     client_name: clientName,
     client_phone: phone || existingEvent?.client_phone || '',
+    clinic_name: clinicName,
     event_date: meetingDate,
     event_time: toAgendaTime(meetingTime),
     duration_minutes: existingEvent?.duration_minutes || 60,
     meeting_link: existingEvent?.meeting_link || null,
+    scheduled_by: client.agendadoPor || client.assignedSDR || existingEvent?.scheduled_by || null,
+    lead_stage: client.stage || existingEvent?.lead_stage || 'NOVO',
+    creative_source: client.criativo || existingEvent?.creative_source || null,
     color: agendaColorForStage(client.stage),
     reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
     reminder_30min_sent: existingEvent?.reminder_30min_sent || false,
@@ -319,6 +324,7 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
 export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lead: any, fallbackPipelineClient?: any): CommercialLocalData {
   const phone = normalizePhone(lead.telefone);
   const clientName = lead.nome || fallbackPipelineClient?.clientName || 'Lead sem nome';
+  const clinicName = lead.clinic_name || fallbackPipelineClient?.clinicName || fallbackPipelineClient?.clinic_name || clientName;
   const meetingDate = brazilianToIsoDate(lead.data || lead.agenda_event_date);
   const agendaTime = leadTimeToAgendaTime(lead);
   const meetingTime = agendaTime.slice(0, 5);
@@ -341,10 +347,14 @@ export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lea
     notes: existingEvent?.notes || null,
     client_name: clientName,
     client_phone: phone || existingEvent?.client_phone || '',
+    clinic_name: clinicName,
     event_date: meetingDate,
     event_time: agendaTime,
     duration_minutes: existingEvent?.duration_minutes || 60,
     meeting_link: existingEvent?.meeting_link || null,
+    scheduled_by: lead.agendado_por || fallbackPipelineClient?.agendadoPor || existingEvent?.scheduled_by || null,
+    lead_stage: agendaStage,
+    creative_source: lead.funil || fallbackPipelineClient?.criativo || existingEvent?.creative_source || null,
     color: agendaColorForStage(agendaStage),
     reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
     reminder_30min_sent: existingEvent?.reminder_30min_sent || false,

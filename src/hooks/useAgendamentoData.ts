@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCommercialSafe } from '@/contexts/CommercialContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
+import { readCommercialLocalData, syncAgendamentoLeadAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { savePipelineClientToCloud } from '@/lib/commercialCloudStore';
 import { agendamentoToPipeline } from './usePipelineAgendamentoSync';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
@@ -251,11 +251,12 @@ export function useAgendamentoData() {
           const nextPipelineClients = exists
             ? current.pipelineClients
             : [{ ...pipelineData, id: `pipeline-${crypto.randomUUID()}`, createdByUserId: user?.id || 'cloud-user', createdAt: new Date(), dataEntrada: new Date() }, ...current.pipelineClients];
-          return {
+          const synced = syncAgendamentoLeadAutomations({
             ...current,
             agendamentoLeads: nextLeads,
             pipelineClients: nextPipelineClients,
-          };
+          }, newLead, pipelineData);
+          return synced;
         });
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
 
@@ -309,9 +310,8 @@ export function useAgendamentoData() {
     mutationFn: async ({ id, ...updates }: { id: string } & AgendamentoLeadUpdate) => {
       if (!isSupabaseConfigured) {
         const formattedPhone = updates.telefone ? formatPhoneForWhatsApp(updates.telefone) : undefined;
-        updateCommercialLocalData((current) => ({
-          ...current,
-          agendamentoLeads: current.agendamentoLeads.map((item: any) =>
+        updateCommercialLocalData((current) => {
+          const nextLeads = current.agendamentoLeads.map((item: any) =>
             item.id === id
               ? {
                   ...item,
@@ -320,8 +320,24 @@ export function useAgendamentoData() {
                   updated_at: new Date().toISOString(),
                 }
               : item
-          ),
-        }));
+          );
+          const updatedLead = nextLeads.find((item: any) => item.id === id);
+          const fallbackPipelineClient = current.pipelineClients.find((client: any) =>
+            String(client.telefone || '').replace(/\D/g, '') === String(updatedLead?.telefone || '').replace(/\D/g, '') ||
+            client.clientName === updatedLead?.nome
+          );
+          const synced = updatedLead
+            ? syncAgendamentoLeadAutomations(
+                {
+                  ...current,
+                  agendamentoLeads: nextLeads,
+                },
+                updatedLead,
+                fallbackPipelineClient
+              )
+            : { ...current, agendamentoLeads: nextLeads };
+          return synced;
+        });
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return { id, ...updates } as AgendamentoLead;
       }
@@ -351,31 +367,12 @@ export function useAgendamentoData() {
         updateCommercialLocalData((current) => ({
           ...current,
           agendamentoLeads: current.agendamentoLeads.filter((item: any) => item.id !== id),
-          pipelineClients: current.pipelineClients.filter((client: any) => client.id !== id),
         }));
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return;
       }
-      const { data: lead } = await supabase.from('agendamento_leads').select('*').eq('id', id).maybeSingle();
-      const leadDigits = String(lead?.telefone || '').replace(/\D/g, '');
 
       await supabase.from('agendamento_leads').delete().eq('id', id);
-
-      if (lead) {
-        const [{ data: clients }, { data: events }] = await Promise.all([
-          supabase.from('pipeline_clients').select('id, client_name, telefone').limit(1000),
-          supabase.from('agenda_events').select('id, client_name, client_phone').limit(1000),
-        ]);
-
-        await Promise.all([
-          ...(clients || [])
-            .filter((client) => client.client_name === lead.nome || (leadDigits && String(client.telefone || '').replace(/\D/g, '') === leadDigits))
-            .map((client) => supabase.from('pipeline_clients').delete().eq('id', client.id)),
-          ...(events || [])
-            .filter((event) => event.client_name === lead.nome || (leadDigits && String(event.client_phone || '').replace(/\D/g, '') === leadDigits))
-            .map((event) => supabase.from('agenda_events').delete().eq('id', event.id)),
-        ]);
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
