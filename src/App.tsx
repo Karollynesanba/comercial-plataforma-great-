@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { CommercialProvider } from "@/contexts/CommercialContext";
@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ComercialDashboards from "./pages/comercial/Dashboards";
 import ComercialPipeline from "./pages/comercial/Pipeline";
+import ComercialPipelinePlanilha from "./pages/comercial/PipelinePlanilha";
 import ComercialMetas from "./pages/comercial/Metas";
 import ComercialRelatorios from "./pages/comercial/Relatorios";
 import ComercialAgendaGreat from "./pages/comercial/AgendaGreat";
@@ -21,13 +22,13 @@ import ComercialRaioXCloser from "./pages/comercial/RaioXCloser";
 import ComercialProjecao from "./pages/comercial/Projecao";
 import ComercialInteligenciaOperacional from "./pages/comercial/InteligenciaOperacional";
 import { AppLayout } from "./components/layout/AppLayout";
-import { LogoLoader } from "./components/brand/Logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
-import { importBundledPipelineCsvIfNeeded } from "@/lib/pipelineCsvImport";
+import { importMayBackupCsvIfNeeded } from "@/lib/pipelineCsvImport";
 import { resetCommercialCloudDataIfNeeded } from "@/lib/commercialCloudStore";
-import { resetGreatPlatformStorageIfNeeded } from "@/lib/safeStorage";
+import { resetGreatPlatformStorageIfNeeded, safeRemoveItem } from "@/lib/safeStorage";
 import { AlertTriangle } from "lucide-react";
+import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,15 +42,7 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, user } = useAuth();
-
-  if (isLoading || (isAuthenticated && !user)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <LogoLoader />
-      </div>
-    );
-  }
+  const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -75,6 +68,7 @@ function AppRoutes() {
         <Route path="dashboards" element={<ComercialDashboards />} />
         <Route path="dashboard" element={<Navigate to="/comercial/dashboards" replace />} />
         <Route path="pipeline" element={<ComercialPipeline />} />
+        <Route path="pipeline-planilha" element={<ComercialPipelinePlanilha />} />
         <Route path="metas" element={<ComercialMetas />} />
         <Route path="meta-agendamentos" element={<ComercialMetaAgendamentos />} />
         <Route path="relatorios" element={<ComercialRelatorios />} />
@@ -93,7 +87,13 @@ function AppRoutes() {
 }
 
 function PlatformBootstrap() {
+  const location = useLocation();
+
   useEffect(() => {
+    if (!location.pathname.startsWith('/comercial')) {
+      return;
+    }
+
     let isMounted = true;
 
     async function bootstrapLocalData() {
@@ -103,9 +103,11 @@ function PlatformBootstrap() {
         queryClient.clear();
       }
 
+      safeRemoveItem('great_may_backup_import_version');
+
       try {
         await resetCommercialCloudDataIfNeeded();
-        const result = await importBundledPipelineCsvIfNeeded();
+        const result = await importMayBackupCsvIfNeeded();
 
         if (isMounted && result.imported) {
           queryClient.clear();
@@ -121,7 +123,7 @@ function PlatformBootstrap() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [location.pathname]);
 
   return null;
 }
@@ -137,6 +139,7 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CommercialProvider>
+          <BrowserRouter>
             <TooltipProvider>
               <PlatformBootstrap />
               {!isSupabaseConfigured && (
@@ -152,10 +155,11 @@ const App = () => (
               )}
               <Toaster />
               <Sonner />
-              <BrowserRouter>
+              <AppErrorBoundary>
                 <AppRoutes />
-              </BrowserRouter>
+              </AppErrorBoundary>
             </TooltipProvider>
+          </BrowserRouter>
         </CommercialProvider>
       </AuthProvider>
     </QueryClientProvider>

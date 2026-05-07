@@ -1,10 +1,16 @@
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { COMMERCIAL_DATA_RESET_VERSION, getCommercialSetting, savePipelineClientToCloud, setCommercialSetting } from '@/lib/commercialCloudStore';
+import { getCommercialSetting, savePipelineClientToCloud, setCommercialSetting } from '@/lib/commercialCloudStore';
+import { readCommercialLocalData, syncAllCommercialAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
+import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 import { normalizeImportedMoneyValue } from '@/lib/utils';
+import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
 
-const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-04-13-v3';
+const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-05-06-v8';
 const PIPELINE_IMPORT_MARKER_KEY = 'great_pipeline_csv_import_version';
 const PIPELINE_IMPORT_PATH = '/imports/pipeline_clientes_completo.csv';
+const MAY_BACKUP_IMPORT_VERSION = 'may-2026-backup-v4';
+const MAY_BACKUP_IMPORT_MARKER_KEY = 'great_may_backup_import_version';
+const MAY_BACKUP_IMPORT_PATH = '/imports/may_2026_backup.csv';
 
 const TEAM_FALLBACK = 'team-equipe-7';
 
@@ -55,6 +61,8 @@ const VENDEDOR_BY_VALUE: Record<string, string | undefined> = {
 
 const AGENDADOR_BY_VALUE: Record<string, string | undefined> = {
   PEDRO: 'PEDRO',
+  PEDRO_H: 'PEDRO_H',
+  PEDRO_JUAN: 'PEDRO_JUAN',
   HEBERT: 'HEBERT',
   HERBERT: 'HEBERT',
   CLED: 'CLED',
@@ -165,7 +173,7 @@ function normalizeFaturamento(value: string) {
 }
 
 function normalizeBoolean(value: string) {
-  return value === 'SIM' || value === 'NAO' ? value : 'NAO_PERGUNTADO';
+  return coerceCommercialAnswer(value) || 'NAO_SEI';
 }
 
 function normalizeDate(value: string, fallback = new Date().toISOString()) {
@@ -274,45 +282,141 @@ function isSameClient(left: any, right: any) {
   return Boolean(leftName && rightName && leftName === rightName);
 }
 
-export async function importBundledPipelineCsvIfNeeded() {
-  if (!isSupabaseConfigured) {
+async function importPipelineCsvFromPathIfNeeded(params: {
+  path: string;
+  version: string;
+  markerKey: string;
+}) {
+  const { path, version, markerKey } = params;
+
+  if (safeGetItem(markerKey) === version) {
     return { imported: false, count: 0 };
   }
 
-  if (await getCommercialSetting('commercial_data_reset_version') === COMMERCIAL_DATA_RESET_VERSION) {
-    return { imported: false, count: 0 };
+  try {
+    if (await getCommercialSetting(markerKey) === version) {
+      safeSetItem(markerKey, version);
+      return { imported: false, count: 0 };
+    }
+  } catch (error) {
+    console.warn('Could not read pipeline import marker from cloud, continuing with local recovery.', error);
   }
 
-  if (await getCommercialSetting(PIPELINE_IMPORT_MARKER_KEY) === PIPELINE_IMPORT_VERSION) {
-    return { imported: false, count: 0 };
-  }
-
-  const response = await fetch(PIPELINE_IMPORT_PATH, { cache: 'no-store' });
+  const response = await fetch(path, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Nao foi possivel carregar ${PIPELINE_IMPORT_PATH}`);
+    throw new Error(`Nao foi possivel carregar ${path}`);
   }
 
   const csvText = await response.text();
   const importedClients = parseCsv(csvText).map(csvRowToPipelineClientV2);
-  const { data: existingClients } = await supabase.from('pipeline_clients').select('client_name, telefone').limit(5000);
+  let existingClients: Array<{ client_name?: string; telefone?: string }> = [];
+
+  try {
+    const { data } = await supabase.from('pipeline_clients').select('client_name, telefone').limit(5000);
+    existingClients = data || [];
+  } catch (error) {
+    console.warn('Could not read pipeline clients from cloud, continuing with local recovery.', error);
+  }
+
   const newClients = importedClients.filter((imported) =>
-    !(existingClients || []).some((client) => isSameClient({ clientName: client.client_name, telefone: client.telefone }, imported))
+    !existingClients.some((client) => isSameClient({ clientName: client.client_name, telefone: client.telefone }, imported))
   );
 
   for (const client of newClients) {
-    await savePipelineClientToCloud(client as any, null);
+    try {
+      await savePipelineClientToCloud(client as any, null);
+    } catch (error) {
+      console.warn(`Cloud save failed for imported client ${client.clientName}, keeping local copy.`, error);
+    }
   }
 
   const criativos = Array.from(new Set(importedClients.map((client) => client.criativo).filter(Boolean))).sort();
+  updateCommercialLocalData((current) => {
+    const nextClients = [...current.pipelineClients];
+
+    for (const client of importedClients) {
+      const existingIndex = nextClients.findIndex((item) =>
+        isSameClient(
+          { clientName: item.clientName, telefone: item.telefone },
+          client
+        )
+      );
+
+      if (existingIndex >= 0) {
+        nextClients[existingIndex] = {
+          ...nextClients[existingIndex],
+          ...client,
+        };
+      } else {
+        nextClients.unshift({
+          ...client,
+          notes: client.notes || undefined,
+        });
+      }
+    }
+
+    const nextCriativos = Array.from(new Set([...(current.criativos || []), ...criativos])).sort();
+    return syncAllCommercialAutomations({
+      ...current,
+      pipelineClients: nextClients,
+      criativos: nextCriativos,
+    });
+  });
+
   if (criativos.length > 0) {
-    await supabase.from('criativos').upsert(
-      criativos.map((name) => ({ name, is_active: true })),
-      { onConflict: 'name' }
-    );
+    try {
+      await supabase.from('criativos').upsert(
+        criativos.map((name) => ({ name, is_active: true })),
+        { onConflict: 'name' }
+      );
+    } catch (error) {
+      console.warn('Could not upsert criativos in cloud, local recovery is preserved.', error);
+    }
   }
 
-  await setCommercialSetting('last_team_pointer', TEAM_FALLBACK, null);
-  await setCommercialSetting(PIPELINE_IMPORT_MARKER_KEY, PIPELINE_IMPORT_VERSION, null);
+  safeSetItem(markerKey, version);
 
   return { imported: true, count: newClients.length };
+}
+
+export async function importBundledPipelineCsvIfNeeded() {
+  const result = await importPipelineCsvFromPathIfNeeded({
+    path: PIPELINE_IMPORT_PATH,
+    version: PIPELINE_IMPORT_VERSION,
+    markerKey: PIPELINE_IMPORT_MARKER_KEY,
+  });
+
+  if (result.imported && isSupabaseConfigured) {
+    try {
+      await setCommercialSetting('last_team_pointer', TEAM_FALLBACK, null);
+    } catch (error) {
+      console.warn('Could not persist last team pointer in cloud, continuing with local recovery.', error);
+    }
+
+    try {
+      await setCommercialSetting(PIPELINE_IMPORT_MARKER_KEY, PIPELINE_IMPORT_VERSION, null);
+    } catch (error) {
+      console.warn('Could not persist pipeline import marker in cloud, continuing with local recovery.', error);
+    }
+  }
+
+  return result;
+}
+
+export async function importMayBackupCsvIfNeeded() {
+  const result = await importPipelineCsvFromPathIfNeeded({
+    path: MAY_BACKUP_IMPORT_PATH,
+    version: MAY_BACKUP_IMPORT_VERSION,
+    markerKey: MAY_BACKUP_IMPORT_MARKER_KEY,
+  });
+
+  if (result.imported && isSupabaseConfigured) {
+    try {
+      await setCommercialSetting(MAY_BACKUP_IMPORT_MARKER_KEY, MAY_BACKUP_IMPORT_VERSION, null);
+    } catch (error) {
+      console.warn('Could not persist May backup import marker in cloud, continuing with local recovery.', error);
+    }
+  }
+
+  return result;
 }
