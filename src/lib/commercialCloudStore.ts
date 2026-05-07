@@ -481,6 +481,22 @@ export async function resetCommercialCloudData(userId?: string | null) {
   return true;
 }
 
+export async function resetCommercialPipelineData() {
+  if (!isSupabaseConfigured) return false;
+
+  const tablesToClear: Array<[string, string]> = [
+    ['pipeline_clients', 'id'],
+    ['agenda_events', 'id'],
+    ['agendamento_leads', 'id'],
+  ];
+
+  for (const [table, column] of tablesToClear) {
+    await deleteAllRows(table, column);
+  }
+
+  return true;
+}
+
 function mergeSalesGoals(primary: SalesGoal[], fallback: SalesGoal[]) {
   const merged = new Map<string, SalesGoal>();
   fallback.forEach((goal) => merged.set(goal.month, goal));

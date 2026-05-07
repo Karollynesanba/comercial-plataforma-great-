@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { getCommercialSetting, savePipelineClientToCloud, setCommercialSetting } from '@/lib/commercialCloudStore';
+import { getCommercialSetting, resetCommercialPipelineData, savePipelineClientToCloud, setCommercialSetting } from '@/lib/commercialCloudStore';
 import { readCommercialLocalData, syncAllCommercialAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 import { normalizeImportedMoneyValue } from '@/lib/utils';
@@ -9,7 +9,7 @@ import { syncPipelineAutomationsToCloud } from '@/lib/commercialCloudStore';
 const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-05-06-v9';
 const PIPELINE_IMPORT_MARKER_KEY = 'great_pipeline_csv_import_version';
 const PIPELINE_IMPORT_PATH = '/imports/pipeline_clientes_completo.csv';
-const MAY_BACKUP_IMPORT_VERSION = 'may-2026-backup-v5';
+const MAY_BACKUP_IMPORT_VERSION = 'may-2026-backup-v7';
 const MAY_BACKUP_IMPORT_MARKER_KEY = 'great_may_backup_import_version';
 const MAY_BACKUP_IMPORT_PATH = '/imports/may_2026_backup.csv';
 
@@ -287,8 +287,9 @@ async function importPipelineCsvFromPathIfNeeded(params: {
   path: string;
   version: string;
   markerKey: string;
+  replaceExisting?: boolean;
 }) {
-  const { path, version, markerKey } = params;
+  const { path, version, markerKey, replaceExisting = false } = params;
 
   if (safeGetItem(markerKey) === version) {
     return { imported: false, count: 0 };
@@ -312,80 +313,95 @@ async function importPipelineCsvFromPathIfNeeded(params: {
   const importedClients = parseCsv(csvText).map(csvRowToPipelineClientV2);
   let existingClients: Array<{ client_name?: string; telefone?: string }> = [];
 
-  try {
-    const { data } = await supabase.from('pipeline_clients').select('client_name, telefone').limit(5000);
-    existingClients = data || [];
-  } catch (error) {
-    console.warn('Could not read pipeline clients from cloud, continuing with local recovery.', error);
-  }
-
-  const newClients = importedClients.filter((imported) =>
-    !existingClients.some((client) => isSameClient({ clientName: client.client_name, telefone: client.telefone }, imported))
-  );
-
-  for (const client of newClients) {
+  if (replaceExisting) {
+    await resetCommercialPipelineData();
+  } else {
     try {
-      await savePipelineClientToCloud(client as any, null);
+      const { data } = await supabase.from('pipeline_clients').select('client_name, telefone').limit(5000);
+      existingClients = data || [];
     } catch (error) {
-      console.warn(`Cloud save failed for imported client ${client.clientName}, keeping local copy.`, error);
+      console.warn('Could not read pipeline clients from cloud, continuing with local recovery.', error);
     }
   }
 
-  const criativos = Array.from(new Set(importedClients.map((client) => client.criativo).filter(Boolean))).sort();
-  updateCommercialLocalData((current) => {
-    const nextClients = [...current.pipelineClients];
+  try {
+    const newClients = replaceExisting
+      ? importedClients
+      : importedClients.filter((imported) =>
+          !existingClients.some((client) => isSameClient({ clientName: client.client_name, telefone: client.telefone }, imported))
+        );
 
-    for (const client of importedClients) {
-      const existingIndex = nextClients.findIndex((item) =>
-        isSameClient(
-          { clientName: item.clientName, telefone: item.telefone },
-          client
-        )
-      );
-
-      if (existingIndex >= 0) {
-        nextClients[existingIndex] = {
-          ...nextClients[existingIndex],
-          ...client,
-        };
-      } else {
-        nextClients.unshift({
-          ...client,
-          notes: client.notes || undefined,
-        });
+    for (const client of newClients) {
+      try {
+        await savePipelineClientToCloud(client as any, null);
+      } catch (error) {
+        console.warn(`Cloud save failed for imported client ${client.clientName}, keeping local copy.`, error);
       }
     }
 
-    const nextCriativos = Array.from(new Set([...(current.criativos || []), ...criativos])).sort();
-    return syncAllCommercialAutomations({
-      ...current,
-      pipelineClients: nextClients,
-      criativos: nextCriativos,
+    const criativos = Array.from(new Set(importedClients.map((client) => client.criativo).filter(Boolean))).sort();
+    updateCommercialLocalData((current) => {
+      const nextClients = replaceExisting ? [...importedClients] : [...current.pipelineClients];
+
+      if (!replaceExisting) {
+        for (const client of importedClients) {
+          const existingIndex = nextClients.findIndex((item) =>
+            isSameClient(
+              { clientName: item.clientName, telefone: item.telefone },
+              client
+            )
+          );
+
+          if (existingIndex >= 0) {
+            nextClients[existingIndex] = {
+              ...nextClients[existingIndex],
+              ...client,
+            };
+          } else {
+            nextClients.unshift({
+              ...client,
+              notes: client.notes || undefined,
+            });
+          }
+        }
+      }
+
+      const nextCriativos = Array.from(new Set([...(current.criativos || []), ...criativos])).sort();
+      return syncAllCommercialAutomations({
+        ...current,
+        pipelineClients: nextClients,
+        agendaEvents: replaceExisting ? [] : current.agendaEvents,
+        agendamentoLeads: replaceExisting ? [] : current.agendamentoLeads,
+        criativos: nextCriativos,
+      });
     });
-  });
 
-  if (criativos.length > 0) {
-    try {
-      await supabase.from('criativos').upsert(
-        criativos.map((name) => ({ name, is_active: true })),
-        { onConflict: 'name' }
-      );
-    } catch (error) {
-      console.warn('Could not upsert criativos in cloud, local recovery is preserved.', error);
+    if (criativos.length > 0) {
+      try {
+        await supabase.from('criativos').upsert(
+          criativos.map((name) => ({ name, is_active: true })),
+          { onConflict: 'name' }
+        );
+      } catch (error) {
+        console.warn('Could not upsert criativos in cloud, local recovery is preserved.', error);
+      }
     }
-  }
 
-  for (const client of importedClients) {
-    try {
-      await syncPipelineAutomationsToCloud(client as any, null);
-    } catch (error) {
-      console.warn(`Cloud automation sync failed for imported client ${client.clientName}, keeping the pipeline import.`, error);
+    for (const client of importedClients) {
+      try {
+        await syncPipelineAutomationsToCloud(client as any, null);
+      } catch (error) {
+        console.warn(`Cloud automation sync failed for imported client ${client.clientName}, keeping the pipeline import.`, error);
+      }
     }
+
+    safeSetItem(markerKey, version);
+
+    return { imported: true, count: newClients.length };
+  } catch (error) {
+    console.warn('Could not sync pipeline csv import, continuing with local recovery.', error);
+    return { imported: false, count: 0 };
   }
-
-  safeSetItem(markerKey, version);
-
-  return { imported: true, count: newClients.length };
 }
 
 export async function importBundledPipelineCsvIfNeeded() {
@@ -417,6 +433,7 @@ export async function importMayBackupCsvIfNeeded() {
     path: MAY_BACKUP_IMPORT_PATH,
     version: MAY_BACKUP_IMPORT_VERSION,
     markerKey: MAY_BACKUP_IMPORT_MARKER_KEY,
+    replaceExisting: true,
   });
 
   if (result.imported && isSupabaseConfigured) {

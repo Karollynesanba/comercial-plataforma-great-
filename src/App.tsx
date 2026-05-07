@@ -24,9 +24,9 @@ import ComercialInteligenciaOperacional from "./pages/comercial/InteligenciaOper
 import { AppLayout } from "./components/layout/AppLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
-import { importBundledPipelineCsvIfNeeded, importMayBackupCsvIfNeeded } from "@/lib/pipelineCsvImport";
+import { importMayBackupCsvIfNeeded } from "@/lib/pipelineCsvImport";
 import { resetCommercialCloudDataIfNeeded } from "@/lib/commercialCloudStore";
-import { resetGreatPlatformStorageIfNeeded, safeRemoveItem } from "@/lib/safeStorage";
+import { resetGreatPlatformStorageIfNeeded } from "@/lib/safeStorage";
 import { AlertTriangle } from "lucide-react";
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 
@@ -103,15 +103,11 @@ function PlatformBootstrap() {
         queryClient.clear();
       }
 
-      safeRemoveItem('great_pipeline_csv_import_version');
-      safeRemoveItem('great_may_backup_import_version');
-
       try {
         await resetCommercialCloudDataIfNeeded();
-        const pipelineResult = await importBundledPipelineCsvIfNeeded();
         const backupResult = await importMayBackupCsvIfNeeded();
 
-        if (isMounted && (pipelineResult.imported || backupResult.imported)) {
+        if (isMounted && backupResult.imported) {
           queryClient.clear();
           window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         }
