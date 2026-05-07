@@ -4,11 +4,12 @@ import { readCommercialLocalData, syncAllCommercialAutomations, updateCommercial
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 import { normalizeImportedMoneyValue } from '@/lib/utils';
 import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { syncPipelineAutomationsToCloud } from '@/lib/commercialCloudStore';
 
 const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-05-06-v8';
 const PIPELINE_IMPORT_MARKER_KEY = 'great_pipeline_csv_import_version';
 const PIPELINE_IMPORT_PATH = '/imports/pipeline_clientes_completo.csv';
-const MAY_BACKUP_IMPORT_VERSION = 'may-2026-backup-v4';
+const MAY_BACKUP_IMPORT_VERSION = 'may-2026-backup-v5';
 const MAY_BACKUP_IMPORT_MARKER_KEY = 'great_may_backup_import_version';
 const MAY_BACKUP_IMPORT_PATH = '/imports/may_2026_backup.csv';
 
@@ -371,6 +372,14 @@ async function importPipelineCsvFromPathIfNeeded(params: {
       );
     } catch (error) {
       console.warn('Could not upsert criativos in cloud, local recovery is preserved.', error);
+    }
+  }
+
+  for (const client of importedClients) {
+    try {
+      await syncPipelineAutomationsToCloud(client as any, null);
+    } catch (error) {
+      console.warn(`Cloud automation sync failed for imported client ${client.clientName}, keeping the pipeline import.`, error);
     }
   }
 
