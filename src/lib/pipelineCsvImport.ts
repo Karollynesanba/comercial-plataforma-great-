@@ -6,7 +6,7 @@ import { normalizeImportedMoneyValue } from '@/lib/utils';
 import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
 import { syncPipelineAutomationsToCloud } from '@/lib/commercialCloudStore';
 
-const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-05-06-v8';
+const PIPELINE_IMPORT_VERSION = 'pipeline-clientes-completo-2026-05-06-v9';
 const PIPELINE_IMPORT_MARKER_KEY = 'great_pipeline_csv_import_version';
 const PIPELINE_IMPORT_PATH = '/imports/pipeline_clientes_completo.csv';
 const MAY_BACKUP_IMPORT_VERSION = 'may-2026-backup-v5';
