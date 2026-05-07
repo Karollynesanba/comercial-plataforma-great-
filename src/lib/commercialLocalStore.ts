@@ -1,6 +1,10 @@
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
+import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
 
 const COMMERCIAL_LOCAL_DATA_KEY = 'great_commercial_local_data_v1';
+const COMMERCIAL_LOCAL_CRIATIVOS_KEY = 'great_commercial_criativos_v1';
+const COMMERCIAL_LOCAL_FUNIS_KEY = 'great_commercial_funis_v1';
+const COMMERCIAL_LOCAL_CATALOG_VERSION_KEY = 'great_commercial_catalog_version_v1';
 
 export interface CommercialLocalData {
   pipelineClients: any[];
@@ -11,6 +15,7 @@ export interface CommercialLocalData {
   paymentReminders: any[];
   criativos: string[];
   funis: string[];
+  catalogVersion: number;
   teamPointer: string;
   agendaEvents: any[];
   agendamentoLeads: any[];
@@ -61,7 +66,20 @@ export interface CEOFinanceSettings {
   customCosts: CEOFinanceCustomCost[];
 }
 
-export const DEFAULT_COMERCIAL_CRIATIVOS: string[] = [];
+export const DEFAULT_COMERCIAL_CRIATIVOS: string[] = [
+  'FORMS/CAIXINHA EVENTO 04',
+  'FORMS/ADVENTO 03',
+  'BOTOX',
+  'CAIXA DE PERGUNTAS',
+  'FORMS/CAIXINHA OFICIAL 01',
+];
+
+export const DEFAULT_COMERCIAL_FUNIS: string[] = [
+  'INSTAGRAM',
+  'FORMULARIO',
+  'MENSAGEM(WHATSAPP)',
+  'INDICACAO',
+];
 
 export const DEFAULT_COMMERCIAL_LOCAL_DATA: CommercialLocalData = {
   pipelineClients: [],
@@ -71,7 +89,8 @@ export const DEFAULT_COMMERCIAL_LOCAL_DATA: CommercialLocalData = {
   closerDailyLogs: [],
   paymentReminders: [],
   criativos: [...DEFAULT_COMERCIAL_CRIATIVOS],
-  funis: [],
+  funis: [...DEFAULT_COMERCIAL_FUNIS],
+  catalogVersion: 0,
   teamPointer: '',
   agendaEvents: [],
   agendamentoLeads: [],
@@ -213,7 +232,7 @@ function normalizeFaturamento(value?: string | null) {
 }
 
 function normalizeBooleanAnswer(value?: string | null) {
-  return value === 'SIM' ? 'SIM' : 'NAO';
+  return coerceCommercialAnswer(value) || 'NAO_SEI';
 }
 
 function agendaColorForStage(stage?: string | null) {
@@ -351,9 +370,9 @@ export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lea
         faturamento: normalizeFaturamento(lead.faturamento),
         meetingDate,
         meetingTime,
-        temSocio: lead.tem_socio === 'SIM' ? 'SIM' : 'NAO',
-        temMkt: lead.tem_mkt === 'SIM' ? 'SIM' : 'NAO',
-        temSecretaria: lead.tem_secretaria === 'SIM' ? 'SIM' : 'NAO',
+    temSocio: coerceCommercialAnswer(lead.tem_socio) || 'NAO_SEI',
+    temMkt: coerceCommercialAnswer(lead.tem_mkt) || 'NAO_SEI',
+    temSecretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
         salaoOuClinica: lead.salao_ou_clinica || client.salaoOuClinica,
       };
     }),
@@ -369,24 +388,69 @@ export function syncAllCommercialAutomations(current: CommercialLocalData): Comm
 
 export function readCommercialLocalData(): CommercialLocalData {
   const raw = safeGetItem(COMMERCIAL_LOCAL_DATA_KEY);
+  const criativosRaw = safeGetItem(COMMERCIAL_LOCAL_CRIATIVOS_KEY);
+  const funisRaw = safeGetItem(COMMERCIAL_LOCAL_FUNIS_KEY);
+  const catalogVersionRaw = safeGetItem(COMMERCIAL_LOCAL_CATALOG_VERSION_KEY);
+  const storedCatalogVersion = Number(catalogVersionRaw || 0) || 0;
 
   if (!raw) {
-    return DEFAULT_COMMERCIAL_LOCAL_DATA;
+    const criativos = parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS];
+    const funis = parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS];
+    return {
+      ...DEFAULT_COMMERCIAL_LOCAL_DATA,
+      criativos,
+      funis,
+      catalogVersion: storedCatalogVersion > 0 ? storedCatalogVersion : (criativos.length > 0 || funis.length > 0 ? 1 : 0),
+    };
   }
 
   try {
     const parsed = JSON.parse(raw);
+    const localCriativos = parseStringList(criativosRaw);
+    const localFunis = parseStringList(funisRaw);
+    const parsedVersion = Number(parsed.catalogVersion || storedCatalogVersion || 0) || 0;
     return {
       ...DEFAULT_COMMERCIAL_LOCAL_DATA,
       ...parsed,
+      criativos: localCriativos.length > 0 ? localCriativos : (parsed.criativos || DEFAULT_COMERCIAL_CRIATIVOS),
+      funis: localFunis.length > 0 ? localFunis : (parsed.funis || [...DEFAULT_COMERCIAL_FUNIS]),
+      catalogVersion: parsedVersion > 0 ? parsedVersion : ((localCriativos.length > 0 || localFunis.length > 0 || (parsed.criativos?.length || 0) > 0 || (parsed.funis?.length || 0) > 0) ? 1 : 0),
     };
   } catch {
-    return DEFAULT_COMMERCIAL_LOCAL_DATA;
+    const criativos = parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS];
+    const funis = parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS];
+    return {
+      ...DEFAULT_COMMERCIAL_LOCAL_DATA,
+      criativos,
+      funis,
+      catalogVersion: storedCatalogVersion > 0 ? storedCatalogVersion : (criativos.length > 0 || funis.length > 0 ? 1 : 0),
+    };
   }
 }
 
 export function writeCommercialLocalData(data: CommercialLocalData) {
   safeSetItem(COMMERCIAL_LOCAL_DATA_KEY, JSON.stringify(data));
+  safeSetItem(COMMERCIAL_LOCAL_CRIATIVOS_KEY, JSON.stringify(data.criativos || []));
+  safeSetItem(COMMERCIAL_LOCAL_FUNIS_KEY, JSON.stringify(data.funis || []));
+  safeSetItem(COMMERCIAL_LOCAL_CATALOG_VERSION_KEY, String(data.catalogVersion || 0));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('great-commercial-local-data-updated'));
+  }
+}
+function parseStringList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item).trim().toUpperCase()).filter(Boolean);
+    }
+  } catch {
+    return raw
+      .split(',')
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean);
+  }
+  return [];
 }
 
 export function updateCommercialLocalData(
@@ -396,4 +460,5 @@ export function updateCommercialLocalData(
   writeCommercialLocalData(next);
   return next;
 }
+
 
