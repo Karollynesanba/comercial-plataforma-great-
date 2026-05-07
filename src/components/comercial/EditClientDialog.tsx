@@ -27,7 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { CommercialAnswerGroup } from '@/components/comercial/CommercialAnswerGroup';
 import { formatBRL } from '@/lib/utils';
+import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
 import { 
   useCommercial, 
   PipelineClient,
@@ -39,6 +41,9 @@ import {
   PERIODO_OPTIONS,
   INDICACAO_OPTIONS,
   AGENDADOR_OPTIONS,
+  TEM_SOCIO_OPTIONS,
+  TEM_MKT_OPTIONS,
+  TEM_SECRETARIA_OPTIONS,
   TEAM_IDS,
   Vendedor,
   Equipe,
@@ -109,12 +114,15 @@ const formSchema = z.object({
   pacote: z.enum(['COMPLETO', 'TRAFEGO_E_CRIATIVOS', 'ATENDIMENTO', 'TRAFEGO', 'COMPLETO_NOVA_ERA', 'TRAFEGO_ARTES_IA', 'TRAFEGO_CONSULTORIA', 'IA', 'TRAFEGO_ROTEIRO', 'TRAFEGO_IA'] as const),
   periodo: z.enum(['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'TAXA_INTERESSE'] as const),
   indicacao: z.string().optional(),
-  agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'HEBERT', 'CLED', 'CAETANO'] as const).optional().nullable(),
+  agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'CLED', 'CAETANO'] as const).optional().nullable(),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
+  meetingDate: z.string().min(1, 'Data da reunião é obrigatória'),
+  meetingTime: z.string().min(1, 'Horário da reunião é obrigatório'),
   isMrr: z.enum(['SIM', 'NAO'] as const),
   mrrRemaining: z.string().optional(),
-  temSocio: z.enum(['SIM', 'NAO', 'NAO_PERGUNTADO'] as const).optional(),
-  temMkt: z.enum(['SIM', 'NAO', 'NAO_PERGUNTADO'] as const).optional(),
+  temSocio: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const).optional(),
+  temMkt: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const).optional(),
+  temSecretaria: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const).optional(),
   entrada: z.string().min(1, 'Valor é obrigatório').transform(val => {
     const num = parseFloat(val.replace(/[^\d,]/g, '').replace(',', '.'));
     return isNaN(num) ? 0 : num;
@@ -157,9 +165,14 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
       indicacao: 'NAO',
       agendadoPor: undefined,
       agendadoVia: undefined,
+      meetingDate: '',
+      meetingTime: '',
       isMrr: 'NAO',
       mrrRemaining: '',
       entrada: '',
+      temSocio: undefined,
+      temMkt: undefined,
+      temSecretaria: undefined,
     },
   });
 
@@ -191,9 +204,14 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         indicacao: client.indicacao || 'NAO',
         agendadoPor: client.agendadoPor || undefined,
         agendadoVia: (client.agendadoVia as 'LIGACAO' | 'MENSAGEM' | 'CALENDLY') || undefined,
+        meetingDate: client.meetingDate || '',
+        meetingTime: client.meetingTime || '',
         isMrr: client.isMrr ? 'SIM' : 'NAO',
         mrrRemaining: client.mrrRemaining ? client.mrrRemaining.toString() : '',
         entrada: client.entrada.toString(),
+        temSocio: coerceCommercialAnswer(client.temSocio),
+        temMkt: coerceCommercialAnswer(client.temMkt),
+        temSecretaria: coerceCommercialAnswer(client.temSecretaria),
       });
     }
   }, [client, form]);
@@ -229,10 +247,15 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         indicacao: data.indicacao,
         agendadoPor: data.agendadoPor as Agendador | undefined,
         agendadoVia: data.agendadoVia,
+        meetingDate: data.meetingDate,
+        meetingTime: data.meetingTime,
         entrada: entradaValue,
         isMrr: data.isMrr === 'SIM',
         mrrEntrada: data.isMrr === 'SIM' ? entradaValue : 0,
         mrrRemaining: data.isMrr === 'SIM' ? currencyToNumber(data.mrrRemaining) : 0,
+        temSocio: coerceCommercialAnswer(data.temSocio),
+        temMkt: coerceCommercialAnswer(data.temMkt),
+        temSecretaria: coerceCommercialAnswer(data.temSecretaria),
       });
       toast.success('Lead atualizado!');
       onOpenChange(false);
@@ -453,6 +476,68 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
               />
             </div>
 
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="temSocio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tem sócio?</FormLabel>
+                    <FormControl>
+                      <CommercialAnswerGroup
+                        name="temSocio"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={TEM_SOCIO_OPTIONS}
+                        className="grid-cols-3"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="temMkt"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tem MKT?</FormLabel>
+                    <FormControl>
+                      <CommercialAnswerGroup
+                        name="temMkt"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={TEM_MKT_OPTIONS}
+                        className="grid-cols-3"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="temSecretaria"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tem secretária?</FormLabel>
+                    <FormControl>
+                      <CommercialAnswerGroup
+                        name="temSecretaria"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={TEM_SECRETARIA_OPTIONS}
+                        className="grid-cols-3"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             {/* Campo de valor personalizado - aparece quando selecionado PERSONALIZADO */}
             {watchFaturamento === 'PERSONALIZADO' && (
               <FormField
@@ -555,14 +640,14 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                 name="agendadoPor"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Agendado Por (SDR)</FormLabel>
+                    <FormLabel>Agendado por</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value || ''}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione o SDR" />
+                          <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-popover">
@@ -600,8 +685,38 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                   </Select>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
+                )}
+              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="meetingDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data da Reunião *</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="meetingTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Horário da Reunião *</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {/* Row 6: Entrada */}
             <FormField

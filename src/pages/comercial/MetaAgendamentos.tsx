@@ -286,7 +286,7 @@ export default function MetaAgendamentos() {
                 const goalValue = parseInt(goals[agendador.value]) || 0;
                 const progress = goalValue > 0 ? Math.min((scheduledCount / goalValue) * 100, 100) : 0;
                 const isAchieved = goalValue > 0 && scheduledCount >= goalValue;
-                const isDailyTracked = agendador.value === 'MIGUEL' || agendador.value === 'HEBERT';
+                const isDailyTracked = agendador.value === 'HEBERT';
                 const dailyGoalAchieved = isDailyTracked && todayCount >= DAILY_GOAL;
 
                 return (

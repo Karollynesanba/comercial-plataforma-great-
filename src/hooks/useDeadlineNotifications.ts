@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
 interface MyDayItemWithDeadline {
   id: string;
@@ -32,13 +33,13 @@ export function useDeadlineNotifications() {
 
   // Get custom alarm sound from localStorage or use default
   const getAlarmSoundUrl = useCallback(() => {
-    const customSound = localStorage.getItem('deadline_alarm_sound');
+    const customSound = safeGetItem('deadline_alarm_sound');
     return customSound || DEFAULT_ALARM_SOUND;
   }, []);
 
   // Set custom alarm sound
   const setCustomAlarmSound = useCallback((url: string) => {
-    localStorage.setItem('deadline_alarm_sound', url);
+    safeSetItem('deadline_alarm_sound', url);
     // Update audio element with new sound
     if (audioRef.current) {
       audioRef.current.src = url;
@@ -47,7 +48,7 @@ export function useDeadlineNotifications() {
 
   // Clear custom alarm sound (use default)
   const clearCustomAlarmSound = useCallback(() => {
-    localStorage.removeItem('deadline_alarm_sound');
+    safeRemoveItem('deadline_alarm_sound');
     if (audioRef.current) {
       audioRef.current.src = DEFAULT_ALARM_SOUND;
     }

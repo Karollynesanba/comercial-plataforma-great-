@@ -444,126 +444,172 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const mappedUser = getUserByEmail(normalizedEmail);
+      const localPasswordOk = password === COMMERCIAL_LOGIN_PASSWORD;
+      const localEmailOk = COMMERCIAL_LOGIN_EMAILS.some(allowedEmail => allowedEmail.toLowerCase() === normalizedEmail);
+      const localEmailMatch = mappedUser || localEmailOk;
+      const isLocalhost =
+        typeof window !== 'undefined' &&
+        ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+      if (localEmailMatch && localPasswordOk) {
+        const localUser = mappedUser ?? getUserByEmail(normalizedEmail);
+        if (!localUser) {
+          return { success: false, error: 'Email não autorizado para login interno.' };
+        }
+        const authUser: User = {
+          id: localUser.email,
+          email: localUser.email,
+          name: localUser.name,
+          role: localUser.role as UserRole,
+          active: true,
+          createdAt: new Date(),
+        };
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const mappedUser = getUserByEmail(normalizedEmail);
-    const localPasswordOk = password === COMMERCIAL_LOGIN_PASSWORD;
-    const localEmailOk = COMMERCIAL_LOGIN_EMAILS.some(allowedEmail => allowedEmail.toLowerCase() === normalizedEmail);
-    const localEmailMatch = mappedUser || localEmailOk;
-    if (localEmailMatch && localPasswordOk) {
-      const localUser = mappedUser ?? getUserByEmail(normalizedEmail);
-      if (!localUser) {
-        setIsLoading(false);
-        return { success: false, error: 'Email não autorizado para login interno.' };
+        createLocalAuthState(authUser);
+        return { success: true };
       }
-      const authUser: User = {
-        id: localUser.email,
-        email: localUser.email,
-        name: localUser.name,
-        role: localUser.role as UserRole,
-        active: true,
-        createdAt: new Date(),
-      };
 
-      createLocalAuthState(authUser);
-      setIsLoading(false);
+      if (localEmailMatch && !localPasswordOk) {
+        return { success: false, error: 'Senha incorreta. Use Great2026! para esses acessos.' };
+      }
+
+      if (isLocalhost && localPasswordOk) {
+        const fallbackUser: User = {
+          id: normalizedEmail || 'local-user',
+          email: normalizedEmail,
+          name: mappedUser?.name || email.split('@')[0] || 'Usuário Great',
+          role: (mappedUser?.role as UserRole) || 'SETOR_COMERCIAL',
+          active: true,
+          createdAt: new Date(),
+        };
+
+        createLocalAuthState(fallbackUser);
+        return { success: true };
+      }
+
+      if (!isSupabaseConfigured) {
+        return { success: false, error: 'Login local indisponível para este email. Use um dos acessos cadastrados.' };
+      }
+
+      // Try to sign in with Supabase directly
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        6000,
+        'sign_in'
+      );
+
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          return { success: false, error: 'Email ou senha incorretos.' };
+        }
+        if (error.message.includes('Email not confirmed')) {
+          return { success: false, error: 'Email não confirmado. Verifique sua caixa de entrada.' };
+        }
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        // Log the login activity
+        const log: ActivityLog = {
+          id: crypto.randomUUID(),
+          userId: data.user.id,
+          userName: data.user.user_metadata?.full_name || data.user.email || '',
+          userRole: 'SETOR_COMERCIAL' as UserRole,
+          action: 'LOGIN',
+          entity: 'Session',
+          details: `Login realizado às ${new Date().toLocaleTimeString('pt-BR')}`,
+          createdAt: new Date(),
+        };
+        setActivityLogs(prev => [log, ...prev].slice(0, 500));
+      }
+
       return { success: true };
-    }
+    } catch (error: any) {
+      const message = String(error?.message || error || 'Erro inesperado ao fazer login.');
+      const isLocalhost =
+        typeof window !== 'undefined' &&
+        ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+      const passwordOk = password === COMMERCIAL_LOGIN_PASSWORD;
 
-    if (localEmailMatch && !localPasswordOk) {
-      setIsLoading(false);
-      return { success: false, error: 'Senha incorreta. Use Great2026! para esses acessos.' };
-    }
-
-    if (!isSupabaseConfigured) {
-      setIsLoading(false);
-      return { success: false, error: 'Login local indisponível para este email. Use um dos acessos cadastrados.' };
-    }
-
-    // Try to sign in with Supabase directly
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setIsLoading(false);
-      
-      if (error.message.includes('Invalid login credentials')) {
-        return { success: false, error: 'Email ou senha incorretos.' };
+      if (isLocalhost && passwordOk) {
+        const fallbackUser: User = {
+          id: email.trim().toLowerCase() || 'local-user',
+          email: email.trim().toLowerCase(),
+          name: email.split('@')[0] || 'Usuário Great',
+          role: 'SETOR_COMERCIAL',
+          active: true,
+          createdAt: new Date(),
+        };
+        createLocalAuthState(fallbackUser);
+        return { success: true };
       }
-      if (error.message.includes('Email not confirmed')) {
-        return { success: false, error: 'Email não confirmado. Verifique sua caixa de entrada.' };
+
+      if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('timeout:sign_in')) {
+        return { success: false, error: 'Falha de conexão ao tentar autenticar. Tente o login interno ou verifique a rede.' };
       }
-      return { success: false, error: error.message };
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
     }
-
-    if (data.user) {
-      // Log the login activity
-      const log: ActivityLog = {
-        id: crypto.randomUUID(),
-        userId: data.user.id,
-        userName: data.user.user_metadata?.full_name || data.user.email || '',
-        userRole: 'SETOR_COMERCIAL' as UserRole,
-        action: 'LOGIN',
-        entity: 'Session',
-        details: `Login realizado às ${new Date().toLocaleTimeString('pt-BR')}`,
-        createdAt: new Date(),
-      };
-      setActivityLogs(prev => [log, ...prev].slice(0, 500));
-    }
-
-    setIsLoading(false);
-    return { success: true };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
-
-    if (!supabase) {
-      setIsLoading(false);
-      return { success: false, error: 'Cadastro indisponível neste ambiente. Use o login com os acessos internos.' };
-    }
-
-    const redirectUrl = `${window.location.origin}/`;
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: name,
-        },
-      },
-    });
-
-    if (error) {
-      setIsLoading(false);
-      
-      if (error.message.includes('User already registered')) {
-        return { success: false, error: 'Este email já está cadastrado.' };
+    try {
+      if (!supabase) {
+        return { success: false, error: 'Cadastro indisponível neste ambiente. Use o login com os acessos internos.' };
       }
-      
-      return { success: false, error: error.message };
-    }
 
-    // Add user to internal users list
-    if (data.user) {
-      const newUser: User & { password: string } = {
-        id: data.user.id,
-        email: data.user.email || email,
-        name: name,
-        password: password, // Store for internal lookup
-        role: 'SETOR_COMERCIAL' as UserRole,
-        active: true,
-        createdAt: new Date(),
-      };
-      setUsers(prev => [...prev, newUser]);
-    }
+      const redirectUrl = `${window.location.origin}/`;
 
-    setIsLoading(false);
-    return { success: true };
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: name,
+          },
+        },
+      });
+
+      if (error) {
+        if (error.message.includes('User already registered')) {
+          return { success: false, error: 'Este email já está cadastrado.' };
+        }
+        
+        return { success: false, error: error.message };
+      }
+
+      // Add user to internal users list
+      if (data.user) {
+        const newUser: User & { password: string } = {
+          id: data.user.id,
+          email: data.user.email || email,
+          name: name,
+          password: password, // Store for internal lookup
+          role: 'SETOR_COMERCIAL' as UserRole,
+          active: true,
+          createdAt: new Date(),
+        };
+        setUsers(prev => [...prev, newUser]);
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      const message = String(error?.message || error || 'Erro inesperado ao criar conta.');
+      if (message.toLowerCase().includes('failed to fetch')) {
+        return { success: false, error: 'Falha de conexão ao tentar criar conta. Tente novamente em instantes.' };
+      }
+      return { success: false, error: message };
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   const logout = useCallback(async () => {

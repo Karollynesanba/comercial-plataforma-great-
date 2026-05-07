@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Calendar, CalendarDays, CalendarRange, Loader2, Search, Users, X } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarRange, Search, Users, X } from 'lucide-react';
 import { AgendaDayTimeline } from '@/components/comercial/agenda/AgendaDayTimeline';
 import { AgendaMonthCalendar } from '@/components/comercial/agenda/AgendaMonthCalendar';
 import { AgendaWeekTimeline } from '@/components/comercial/agenda/AgendaWeekTimeline';
@@ -13,7 +13,7 @@ import { AgendaEvent, useAgendaData } from '@/hooks/useAgendaData';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 
 export default function AgendaGreat() {
-  const { events, isLoading } = useAgendaData();
+  const { events } = useAgendaData();
 
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -71,14 +71,6 @@ export default function AgendaGreat() {
     setSelectedTime(undefined);
     setAddDialogOpen(true);
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 bg-[#F7F7F9]">

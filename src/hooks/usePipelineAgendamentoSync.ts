@@ -1,5 +1,6 @@
 import type { AgendamentoLead, AgendamentoLeadInsert } from './useAgendamentoData';
 import type { PipelineClient, Faturamento, PipelineStage } from '@/contexts/CommercialContext';
+import { coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
 
 type NormalizedFaturamento =
   | '0_A_10K'
@@ -123,16 +124,16 @@ export const PIPELINE_STAGE_TO_AGENDAMENTO_STATUS: Record<PipelineStage, string>
   'FECHADO': 'FECHADO',
 };
 
-function mapTemSocioToAgendamento(temSocio?: 'SIM' | 'NAO' | 'NAO_PERGUNTADO'): 'SIM' | 'NAO' {
-  return temSocio === 'SIM' ? 'SIM' : 'NAO';
+function mapTemSocioToAgendamento(temSocio?: CommercialYesNoMaybe): CommercialYesNoMaybe {
+  return coerceCommercialAnswer(temSocio) || 'NAO_SEI';
 }
 
-function mapTemMktToAgendamento(temMkt?: 'SIM' | 'NAO' | 'NAO_PERGUNTADO'): 'SIM' | 'NAO' {
-  return temMkt === 'SIM' ? 'SIM' : 'NAO';
+function mapTemMktToAgendamento(temMkt?: CommercialYesNoMaybe): CommercialYesNoMaybe {
+  return coerceCommercialAnswer(temMkt) || 'NAO_SEI';
 }
 
-function mapTemSecretariaToAgendamento(temSecretaria?: 'SIM' | 'NAO' | 'NAO_PERGUNTADO'): 'SIM' | 'NAO' {
-  return temSecretaria === 'SIM' ? 'SIM' : 'NAO';
+function mapTemSecretariaToAgendamento(temSecretaria?: CommercialYesNoMaybe): CommercialYesNoMaybe {
+  return coerceCommercialAnswer(temSecretaria) || 'NAO_SEI';
 }
 
 export function agendamentoToPipeline(
@@ -159,6 +160,9 @@ export function agendamentoToPipeline(
     dataEntrada: new Date(),
     stage,
     lostReason: stage === 'PERDIDO' ? ('status' in lead ? lead.status : undefined) : undefined,
+    temSocio: coerceCommercialAnswer(lead.tem_socio) || 'NAO_SEI',
+    temMkt: coerceCommercialAnswer(lead.tem_mkt) || 'NAO_SEI',
+    temSecretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
   };
 }
 

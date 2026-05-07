@@ -441,40 +441,25 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const refreshCommercialState = useCallback(async () => {
     if (!isSupabaseConfigured || shouldPreferLocalCommercialData()) {
       const local = readCommercialLocalData();
-      const hydratedLocal = syncAllCommercialAutomations(local);
-      if (hydratedLocal.agendaEvents.length !== local.agendaEvents.length || hydratedLocal.agendamentoLeads.length !== local.agendamentoLeads.length) {
-        writeCommercialLocalData(hydratedLocal);
-      }
       setCloudState({
         ...EMPTY_COMMERCIAL_STATE,
-        ...hydratedLocal,
+        ...syncAllCommercialAutomations(local),
       });
       return;
     }
 
     try {
       const next = await fetchCommercialCloudState(user?.id);
-      const local = readCommercialLocalData();
-      const hydratedLocal = syncAllCommercialAutomations(local);
-      if (hydratedLocal.agendaEvents.length !== local.agendaEvents.length || hydratedLocal.agendamentoLeads.length !== local.agendamentoLeads.length) {
-        writeCommercialLocalData(hydratedLocal);
-      }
       setCloudState({
-        ...syncAllCommercialAutomations(mergeCommercialSnapshots({
+        ...syncAllCommercialAutomations({
           ...next,
           teamPointer: next.teamPointer || TEAM_IDS.EQUIPE_7,
-        }, hydratedLocal)),
+        }),
       });
     } catch (error) {
-      console.warn('Cloud commercial state read failed, falling back to local cache.', error);
-      const local = readCommercialLocalData();
-      const hydratedLocal = syncAllCommercialAutomations(local);
-      if (hydratedLocal.agendaEvents.length !== local.agendaEvents.length || hydratedLocal.agendamentoLeads.length !== local.agendamentoLeads.length) {
-        writeCommercialLocalData(hydratedLocal);
-      }
+      console.warn('Cloud commercial state read failed.', error);
       setCloudState({
         ...EMPTY_COMMERCIAL_STATE,
-        ...hydratedLocal,
       });
     }
 

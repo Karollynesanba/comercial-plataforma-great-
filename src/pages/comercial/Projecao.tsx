@@ -180,10 +180,10 @@ export default function ComercialProjecao() {
           setSchedulingCost(savedSchedulingCost);
           setAdInvestment(parsed.adInvestment ?? DEFAULT_AD_INVESTMENT);
           setDesiredRevenue(parsed.desiredRevenue ?? 300000);
-          setSchedulingRate(parsed.schedulingRate ?? [DEFAULT_SCHEDULING_RATE]);
-          setShowRate(parsed.showRate ?? [DEFAULT_SHOW_RATE]);
-          setPitchRate(parsed.pitchRate ?? [DEFAULT_PITCH_RATE]);
-          setConversionRate(parsed.conversionRate ?? [DEFAULT_CONVERSION_RATE]);
+          setSchedulingRate(Array.isArray(parsed.schedulingRate) && parsed.schedulingRate.length > 0 ? parsed.schedulingRate : [DEFAULT_SCHEDULING_RATE]);
+          setShowRate(Array.isArray(parsed.showRate) && parsed.showRate.length > 0 ? parsed.showRate : [DEFAULT_SHOW_RATE]);
+          setPitchRate(Array.isArray(parsed.pitchRate) && parsed.pitchRate.length > 0 ? parsed.pitchRate : [DEFAULT_PITCH_RATE]);
+          setConversionRate(Array.isArray(parsed.conversionRate) && parsed.conversionRate.length > 0 ? parsed.conversionRate : [DEFAULT_CONVERSION_RATE]);
           setFixedMetrics(parsed.fixedMetrics ?? {
             ticketMedian: false,
             schedulingCost: false,
@@ -255,11 +255,15 @@ export default function ComercialProjecao() {
     schedulingCost,
     adInvestment,
     desiredRevenue,
-    schedulingRate: schedulingRate[0],
-    showRate: showRate[0],
-    pitchRate: pitchRate[0],
-    conversionRate: conversionRate[0],
+    schedulingRate: schedulingRate[0] ?? DEFAULT_SCHEDULING_RATE,
+    showRate: showRate[0] ?? DEFAULT_SHOW_RATE,
+    pitchRate: pitchRate[0] ?? DEFAULT_PITCH_RATE,
+    conversionRate: conversionRate[0] ?? DEFAULT_CONVERSION_RATE,
   }), [adInvestment, conversionRate, desiredRevenue, pitchRate, schedulingCost, schedulingRate, showRate, ticketMedian]);
+  const schedulingRateValue = schedulingRate[0] ?? DEFAULT_SCHEDULING_RATE;
+  const showRateValue = showRate[0] ?? DEFAULT_SHOW_RATE;
+  const pitchRateValue = pitchRate[0] ?? DEFAULT_PITCH_RATE;
+  const conversionRateValue = conversionRate[0] ?? DEFAULT_CONVERSION_RATE;
   const simulatorCards = useMemo(() => ([
     {
       label: 'Leads necessários',
@@ -282,7 +286,7 @@ export default function ComercialProjecao() {
       icon: <TrendingUp className="h-5 w-5" />,
     },
     {
-      label: 'Custo por agendamento',
+      label: 'Custo por lead',
       value: formatBRL(projection.recommendedCostPerScheduling),
       icon: <DollarSign className="h-5 w-5" />,
     },
@@ -302,7 +306,7 @@ export default function ComercialProjecao() {
           Projecao Comercial
         </h1>
         <p className="text-muted-foreground mt-1">
-          Informe ticket medio, custo por agendamento, investimento em anuncio, taxas e faturamento desejado para a plataforma calcular o funil necessario.
+          Informe ticket medio, custo por lead, investimento em anuncio, taxas e faturamento desejado para a plataforma calcular o funil necessario.
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
           {syncStatus === 'loading' && 'Carregando configuracao salva do banco...'}
@@ -351,7 +355,7 @@ export default function ComercialProjecao() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <Label>Custo por agendamento</Label>
+                <Label>Custo por lead</Label>
                   <label className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Checkbox checked={fixedMetrics.schedulingCost} onCheckedChange={() => toggleFixedMetric('schedulingCost')} />
                     Fixar
@@ -384,10 +388,10 @@ export default function ComercialProjecao() {
             </div>
 
             <div className="space-y-3 rounded-xl border bg-background p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span>Taxa de agendamento</span>
-                <strong>{schedulingRate[0].toFixed(1)}%</strong>
-              </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Taxa de agendamento</span>
+                  <strong>{schedulingRateValue.toFixed(1)}%</strong>
+                </div>
               <Slider value={schedulingRate} onValueChange={setSchedulingRate} min={0} max={100} step={0.5} />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>0%</span>
@@ -399,7 +403,7 @@ export default function ComercialProjecao() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span>Taxa de comparecimento</span>
-                  <strong>{showRate[0].toFixed(1)}%</strong>
+                  <strong>{showRateValue.toFixed(1)}%</strong>
                 </div>
                 <Slider value={showRate} onValueChange={setShowRate} min={0} max={100} step={0.5} />
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -411,7 +415,7 @@ export default function ComercialProjecao() {
               <div className="space-y-3 border-t pt-4">
                 <div className="flex items-center justify-between text-sm">
                   <span>Taxa de pitch</span>
-                  <strong>{pitchRate[0].toFixed(1)}%</strong>
+                  <strong>{pitchRateValue.toFixed(1)}%</strong>
                 </div>
                 <Slider value={pitchRate} onValueChange={setPitchRate} min={0} max={100} step={0.5} />
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -423,7 +427,7 @@ export default function ComercialProjecao() {
               <div className="space-y-3 border-t pt-4">
                 <div className="flex items-center justify-between text-sm">
                   <span>Taxa de conversao</span>
-                  <strong>{conversionRate[0].toFixed(1)}%</strong>
+                  <strong>{conversionRateValue.toFixed(1)}%</strong>
                 </div>
                 <Slider value={conversionRate} onValueChange={setConversionRate} min={0} max={100} step={0.5} />
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -474,7 +478,7 @@ export default function ComercialProjecao() {
               <strong>{formatBRL(projection.ticketMedian)}</strong>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Custo por agendamento</span>
+              <span className="text-muted-foreground">Custo por lead</span>
               <strong>{formatBRL(projection.costPerScheduling)}</strong>
             </div>
             <div className="flex items-center justify-between">

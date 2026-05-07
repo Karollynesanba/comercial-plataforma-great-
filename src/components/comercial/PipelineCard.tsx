@@ -50,6 +50,14 @@ const VENDEDOR_COLORS: Record<Vendedor, string> = {
 
 function parseValidDate(value: unknown): Date | null {
   if (!value) return null;
+  if (typeof value === 'string') {
+    const localDateOnly = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (localDateOnly) {
+      const [, year, month, day] = localDateOnly;
+      const localDate = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+      return Number.isNaN(localDate.getTime()) ? null : localDate;
+    }
+  }
   const date = value instanceof Date ? value : new Date(value as any);
   return Number.isNaN(date.getTime()) ? null : date;
 }

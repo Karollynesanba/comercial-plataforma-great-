@@ -10,10 +10,16 @@ const FALLBACK_SUPABASE_URL = 'https://placeholder.supabase.co';
 const FALLBACK_SUPABASE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder.placeholderplaceholderplaceholder';
 
-const authStorage =
-  typeof window !== 'undefined' && window.localStorage
-    ? window.localStorage
-    : undefined;
+function getAuthStorage() {
+  try {
+    if (typeof window === 'undefined') return undefined;
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+const authStorage = getAuthStorage();
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

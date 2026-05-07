@@ -18,6 +18,7 @@ import {
   FormDescription,
   FormMessage,
 } from '@/components/ui/form';
+import { CommercialAnswerGroup } from '@/components/comercial/CommercialAnswerGroup';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +33,9 @@ import {
   FUNIL_OPTIONS,
   FATURAMENTO_OPTIONS,
   SALAO_OU_CLINICA_OPTIONS,
+  TEM_SOCIO_OPTIONS,
+  TEM_MKT_OPTIONS,
+  TEM_SECRETARIA_OPTIONS,
   type Agendador,
   type Faturamento,
   type PipelineStage,
@@ -52,13 +56,13 @@ const formSchema = z.object({
     required_error: 'Faturamento e obrigatorio',
   }),
   podeInvestir: z.enum(['SIM', 'NAO'] as const).optional(),
-  agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'HEBERT', 'CLED', 'CAETANO'] as const, {
+  agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'CLED', 'CAETANO'] as const, {
     required_error: 'Informe quem agendou',
   }),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
-  temSocio: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem socio' }),
-  temMkt: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem marketing' }),
-  temSecretaria: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem secretaria' }),
+  temSocio: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem socio' }),
+  temMkt: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem marketing' }),
+  temSecretaria: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem secretaria' }),
   areaAtuacao: z.string().trim().min(1, 'Area de atuacao e obrigatoria'),
   meetingDate: z.string().min(1, 'Data da reuniao e obrigatoria'),
   meetingTime: z.string().min(1, 'Horario da reuniao e obrigatorio'),
@@ -316,24 +320,22 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
               />
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <FormField
                 control={form.control}
                 name="temSocio"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tem Socio?</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-popover">
-                        <SelectItem value="SIM">Sim</SelectItem>
-                        <SelectItem value="NAO">Nao</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Tem sócio?</FormLabel>
+                    <FormControl>
+                      <CommercialAnswerGroup
+                        name="temSocio"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={TEM_SOCIO_OPTIONS}
+                        className="grid-cols-3"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -345,17 +347,15 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tem MKT?</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-popover">
-                        <SelectItem value="SIM">Sim</SelectItem>
-                        <SelectItem value="NAO">Nao</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <CommercialAnswerGroup
+                        name="temMkt"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={TEM_MKT_OPTIONS}
+                        className="grid-cols-3"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -366,18 +366,16 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                 name="temSecretaria"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tem Secretaria?</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-popover">
-                        <SelectItem value="SIM">Sim</SelectItem>
-                        <SelectItem value="NAO">Nao</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Tem secretária?</FormLabel>
+                    <FormControl>
+                      <CommercialAnswerGroup
+                        name="temSecretaria"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={TEM_SECRETARIA_OPTIONS}
+                        className="grid-cols-3"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

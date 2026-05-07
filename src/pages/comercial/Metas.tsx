@@ -40,10 +40,10 @@ import {
 } from 'recharts';
 export default function MetasPage() {
   const { currentGoal, getGoalStats, pipelineClients, getPipelineStats, getSDRStats, sdrGoals } = useCommercial();
-  const { user, canEdit } = useAuth();
+  const { user } = useAuth();
   
   // Permitir que qualquer usuário autenticado da operação comercial registre metas
-  const canEditGoals = canEdit || !!user;
+  const canEditGoals = !!user;
   const [editGoalOpen, setEditGoalOpen] = useState(false);
   const [editSDRGoalOpen, setEditSDRGoalOpen] = useState(false);
   

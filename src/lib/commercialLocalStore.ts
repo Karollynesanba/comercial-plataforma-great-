@@ -437,6 +437,16 @@ export function writeCommercialLocalData(data: CommercialLocalData) {
     window.dispatchEvent(new CustomEvent('great-commercial-local-data-updated'));
   }
 }
+
+export function clearCommercialLocalData() {
+  safeRemoveItem(COMMERCIAL_LOCAL_DATA_KEY);
+  safeRemoveItem(COMMERCIAL_LOCAL_CRIATIVOS_KEY);
+  safeRemoveItem(COMMERCIAL_LOCAL_FUNIS_KEY);
+  safeRemoveItem(COMMERCIAL_LOCAL_CATALOG_VERSION_KEY);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('great-commercial-local-data-updated'));
+  }
+}
 function parseStringList(raw: string | null): string[] {
   if (!raw) return [];
   try {

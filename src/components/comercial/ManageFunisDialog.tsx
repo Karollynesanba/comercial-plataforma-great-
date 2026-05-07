@@ -22,8 +22,8 @@ interface ManageFunisDialogProps {
 
 export function ManageFunisDialog({ open, onOpenChange }: ManageFunisDialogProps) {
   const { funis, addFunil, updateFunil, deleteFunil, pipelineClients } = useCommercial();
-  const { canEdit, isAuthenticated } = useAuth();
-  const canManageFunis = canEdit || isAuthenticated;
+  const { isAuthenticated } = useAuth();
+  const canManageFunis = isAuthenticated;
 
   const [newFunil, setNewFunil] = useState('');
   const [editingFunil, setEditingFunil] = useState<string | null>(null);

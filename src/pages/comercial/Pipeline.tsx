@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
@@ -49,11 +50,10 @@ import {
   Filter,
   Search,
   Sparkles,
-  Trash2,
+  Table as SpreadsheetIcon,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function PipelinePage() {
   const { 
@@ -61,10 +61,8 @@ export default function PipelinePage() {
     movePipelineClient,
     updatePipelineClient,
     deletePipelineClient,
-    resetCommercialData,
     getPipelineStats 
   } = useCommercial();
-  const { canEdit } = useAuth();
   const [activeClient, setActiveClient] = useState<PipelineClient | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -85,7 +83,6 @@ export default function PipelinePage() {
   const [taxaValor, setTaxaValor] = useState<string>('');
   const [criativosDialogOpen, setCriativosDialogOpen] = useState(false);
   const [funisDialogOpen, setFunisDialogOpen] = useState(false);
-  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationData, setCelebrationData] = useState<{ clientName: string; value: number } | null>(null);
 
@@ -477,16 +474,12 @@ export default function PipelinePage() {
             <Target className="h-4 w-4" />
             Funis
           </Button>
-          {canEdit && (
-            <Button
-              variant="destructive"
-              onClick={() => setResetDialogOpen(true)}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Zerar dados
-            </Button>
-          )}
+          <Button asChild variant="outline" className="gap-2">
+            <Link to="/comercial/pipeline-planilha">
+              <SpreadsheetIcon className="h-4 w-4" />
+              Planilha Leads
+            </Link>
+          </Button>
           <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Novo Lead
@@ -765,33 +758,6 @@ export default function PipelinePage() {
         open={funisDialogOpen}
         onOpenChange={setFunisDialogOpen}
       />
-      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Zerar dados da plataforma?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Isso vai apagar leads, metas, funis, criativos, agenda e os demais dados comerciais salvos. A ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                try {
-                  await resetCommercialData();
-                  toast.success('Dados comerciais zerados.');
-                } catch (error) {
-                  console.error('Erro ao zerar dados comerciais:', error);
-                  toast.error('Não foi possível zerar os dados.');
-                }
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Zerar tudo
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Taxa de Interesse - Vendedor Selection */}
       <Dialog open={taxaDialogOpen} onOpenChange={setTaxaDialogOpen}>

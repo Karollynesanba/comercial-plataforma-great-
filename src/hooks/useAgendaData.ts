@@ -87,6 +87,31 @@ function colorToPipelineStage(color?: string | null) {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`timeout:${label}`)), ms);
+    }),
+  ]);
+}
+
+function upsertAgendaEventLocally(event: AgendaEvent) {
+  updateCommercialLocalData((current) => {
+    const exists = current.agendaEvents.some((item: any) => item.id === event.id);
+    return {
+      ...current,
+      agendaEvents: exists
+        ? current.agendaEvents.map((item: any) => (item.id === event.id ? event : item))
+        : [event, ...current.agendaEvents],
+    };
+  });
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+  }
+}
+
 async function syncRelatedRecords(event: AgendaEvent) {
   if (!isSupabaseConfigured) return;
 
@@ -162,11 +187,15 @@ export function useAgendaData() {
       if (!isSupabaseConfigured) {
         return (readCommercialLocalData().agendaEvents || []).map(enrichEvent);
       }
-      const { data, error } = await supabase
-        .from('agenda_events')
-        .select('*')
-        .order('event_date', { ascending: true })
-        .order('event_time', { ascending: true });
+      const { data, error } = await withTimeout(
+        supabase
+          .from('agenda_events')
+          .select('*')
+          .order('event_date', { ascending: true })
+          .order('event_time', { ascending: true }),
+        7000,
+        'agenda_events'
+      );
       if (error) throw error;
       return (data || []).map(enrichEvent);
     },
@@ -253,10 +282,19 @@ export function useAgendaData() {
         updated_at: new Date().toISOString(),
       };
 
+      const optimisticEvent = enrichEvent(payload);
+      upsertAgendaEventLocally(optimisticEvent);
+      queryClient.setQueryData<AgendaEvent[]>(['agenda-events'], (current = []) =>
+        current.some((item) => item.id === optimisticEvent.id)
+          ? current.map((item) => (item.id === optimisticEvent.id ? optimisticEvent : item))
+          : [optimisticEvent, ...current]
+      );
+
       const { data, error } = await supabase.from('agenda_events').update(payload).eq('id', id).select('*').single();
       if (error) throw error;
 
       const updatedEvent = enrichEvent(data);
+      upsertAgendaEventLocally(updatedEvent);
       await syncRelatedRecords(updatedEvent);
       return updatedEvent;
     },

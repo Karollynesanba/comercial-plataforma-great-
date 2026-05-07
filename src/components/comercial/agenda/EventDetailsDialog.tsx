@@ -10,9 +10,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
 import { useAgendamentoData, FATURAMENTO_OPTIONS, SALAO_OU_CLINICA_OPTIONS, STATUS_OPTIONS, TEM_MKT_OPTIONS, TEM_SECRETARIA_OPTIONS, TEM_SOCIO_OPTIONS } from '@/hooks/useAgendamentoData';
 import { useCommercialSafe, AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
-import { BadgeInfo, Bell, CalendarDays, Copy, Edit3, Loader2, Phone, StickyNote, Target, Trash2, User2 } from 'lucide-react';
+import { BadgeInfo, Bell, CalendarDays, Copy, Edit3, Loader2, Phone, StickyNote, Target, Trash2, User2, ChevronDown } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { formatBRL } from '@/lib/utils';
+import { coerceCommercialAnswer, formatCommercialAnswerLabel } from '@/lib/commercialAnswer';
 import { toast } from 'sonner';
 
 function normalizeFaturamentoBucket(value?: string | null) {
@@ -132,9 +133,9 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   useEffect(() => {
     setLeadForm({
       faturamento: normalizeFaturamentoBucket(leadData?.faturamento || pipelineClient?.faturamento) || '0_A_10K',
-      tem_socio: leadData?.tem_socio || pipelineClient?.temSocio || 'NAO',
-      tem_mkt: leadData?.tem_mkt || pipelineClient?.temMkt || 'NAO',
-      tem_secretaria: leadData?.tem_secretaria || pipelineClient?.temSecretaria || 'NAO',
+      tem_socio: coerceCommercialAnswer(leadData?.tem_socio || pipelineClient?.temSocio) || 'NAO_SEI',
+      tem_mkt: coerceCommercialAnswer(leadData?.tem_mkt || pipelineClient?.temMkt) || 'NAO_SEI',
+      tem_secretaria: coerceCommercialAnswer(leadData?.tem_secretaria || pipelineClient?.temSecretaria) || 'NAO_SEI',
       salao_ou_clinica: leadData?.salao_ou_clinica || pipelineClient?.salaoOuClinica || 'NAO_INFORMADO',
       status: leadData?.status || 'NOVO_LEAD',
       notes: event?.notes || '',
@@ -155,6 +156,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     ?.label || leadForm.salao_ou_clinica || pipelineClient?.salaoOuClinica || 'Sem informação';
   const faturamentoLabel = FATURAMENTO_OPTIONS.find((option) => option.value === leadForm.faturamento)?.label || leadForm.faturamento || 'Sem informação';
   const funilLabel = pipelineClient?.criativo || 'Sem informação';
+  const eventColorLabel = EVENT_COLORS.find((color) => color.value === eventForm.color)?.label || 'Cor do evento';
 
   if (!event) return null;
 
@@ -358,15 +360,18 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                         <PopoverTrigger asChild>
                           <button
                             type="button"
-                            aria-label="Alterar cor do evento"
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-105 hover:border-slate-300 hover:shadow-md"
+                            aria-label="Alterar cor ou status do evento"
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
                           >
-                            <span className="h-3.5 w-3.5 rounded-full ring-2 ring-white" style={{ backgroundColor: event.color }} />
+                            <span className="h-3.5 w-3.5 rounded-full ring-2 ring-white" style={{ backgroundColor: eventForm.color }} />
+                            <span className="text-xs font-semibold text-slate-700">{eventColorLabel}</span>
+                            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-72 rounded-2xl p-3">
                           <div className="mb-3">
-                            <p className="text-sm font-bold text-slate-950">Alterar cor do evento</p>
+                            <p className="text-sm font-bold text-slate-950">Status / cor do evento</p>
+                            <p className="text-xs font-medium text-slate-500">{eventColorLabel}</p>
                             <p className="text-xs text-slate-500">Clique em uma cor para atualizar o marcador.</p>
                           </div>
                           <div className="grid grid-cols-4 gap-2">
@@ -472,15 +477,15 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tem sócio?</p>
-                    <p className="mt-2 text-base font-black text-slate-950">{leadForm.tem_socio === 'SIM' ? 'Sim' : leadForm.tem_socio === 'NAO' ? 'Não' : 'Sem informação'}</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{formatCommercialAnswerLabel(leadForm.tem_socio)}</p>
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tem marketing?</p>
-                    <p className="mt-2 text-base font-black text-slate-950">{leadForm.tem_mkt === 'SIM' ? 'Sim' : leadForm.tem_mkt === 'NAO' ? 'Não' : 'Sem informação'}</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{formatCommercialAnswerLabel(leadForm.tem_mkt)}</p>
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tem secretária?</p>
-                    <p className="mt-2 text-base font-black text-slate-950">{leadForm.tem_secretaria === 'SIM' ? 'Sim' : leadForm.tem_secretaria === 'NAO' ? 'Não' : 'Sem informação'}</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{formatCommercialAnswerLabel(leadForm.tem_secretaria)}</p>
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Área de atuação</p>

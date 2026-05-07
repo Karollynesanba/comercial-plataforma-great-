@@ -359,7 +359,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                     {/* TEM SÓCIO? - Dropdown */}
                     <TableCell className="p-1">
                       <Select
-                        value={lead.tem_socio}
+                        value={lead.tem_socio || 'NAO_SEI'}
                         onValueChange={(v) => handleDropdownChange(lead.id, 'tem_socio', v)}
                       >
                         <SelectTrigger className="h-8 text-xs border-0 bg-transparent hover:bg-muted/50">
@@ -378,7 +378,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                     {/* TEM MKT? - Dropdown */}
                     <TableCell className="p-1">
                       <Select
-                        value={lead.tem_mkt}
+                        value={lead.tem_mkt || 'NAO_SEI'}
                         onValueChange={(v) => handleDropdownChange(lead.id, 'tem_mkt', v)}
                       >
                         <SelectTrigger className="h-8 text-xs border-0 bg-transparent hover:bg-muted/50">
@@ -397,7 +397,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                     {/* TEM SECRETÁRIA? - Dropdown */}
                     <TableCell className="p-1">
                       <Select
-                        value={lead.tem_secretaria || 'NAO'}
+                        value={lead.tem_secretaria || 'NAO_SEI'}
                         onValueChange={(v) => handleDropdownChange(lead.id, 'tem_secretaria', v)}
                       >
                         <SelectTrigger className="h-8 text-xs border-0 bg-transparent hover:bg-muted/50">

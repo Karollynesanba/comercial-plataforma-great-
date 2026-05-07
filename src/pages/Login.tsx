@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { Logo, LogoLoader } from '@/components/brand/Logo';
+import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,8 @@ export default function Login() {
       const result = await login(email, password);
       if (!result.success) {
         setError(result.error || 'Erro ao fazer login.');
+      } else {
+        navigate('/comercial/dashboards', { replace: true });
       }
     } else {
       if (!name.trim()) {
@@ -50,6 +52,8 @@ export default function Login() {
       const result = await signUp(email, password, name);
       if (!result.success) {
         setError(result.error || 'Erro ao criar conta.');
+      } else {
+        navigate('/comercial/dashboards', { replace: true });
       }
     }
     
@@ -104,15 +108,6 @@ export default function Login() {
     }),
   };
 
-  // Show loader while checking auth state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <LogoLoader className="h-12 w-12" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left side - Branding */}
@@ -161,14 +156,14 @@ export default function Login() {
             className="text-xl text-primary font-semibold mb-6"
             variants={itemVariants}
           >
-            Aqui a performance é padrão, não exceção
+            Aqui a performance Ã© padrÃ£o, nÃ£o exceÃ§Ã£o
           </motion.p>
           
           <motion.p 
             className="text-base text-muted-foreground max-w-lg mb-8"
             variants={itemVariants}
           >
-            Este é o ambiente interno onde a Great opera, executa e escala.
+            Este Ã© o ambiente interno onde a Great opera, executa e escala.
             Metas claras, processos definidos e responsabilidade individual por resultados.
           </motion.p>
 
@@ -177,8 +172,8 @@ export default function Login() {
             {[
               'Metas acompanhadas em tempo real',
               'Clientes sob controle absoluto',
-              'Execução diária com padrão operacional',
-              'Performance individual visível e mensurável',
+              'ExecuÃ§Ã£o diÃ¡ria com padrÃ£o operacional',
+              'Performance individual visÃ­vel e mensurÃ¡vel',
             ].map((feature, index) => (
               <motion.div 
                 key={feature} 
@@ -260,10 +255,10 @@ export default function Login() {
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div className="space-y-1">
-                    <p className="font-medium">Seu navegador está bloqueando o armazenamento do site.</p>
+                    <p className="font-medium">Seu navegador estÃ¡ bloqueando o armazenamento do site.</p>
                     <p className="text-xs text-destructive/90">
-                      Isso impede manter a sessão e pode causar logout automático. Desative modo anônimo/privado,
-                      extensões de bloqueio (AdBlock/Brave Shield) e permita cookies/dados do site.
+                      Isso impede manter a sessÃ£o e pode causar logout automÃ¡tico. Desative modo anÃ´nimo/privado,
+                      extensÃµes de bloqueio (AdBlock/Brave Shield) e permita cookies/dados do site.
                     </p>
                   </div>
                 </motion.div>
@@ -290,9 +285,9 @@ export default function Login() {
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div className="space-y-1">
-                    <p className="font-medium">Cadastro indispon�vel neste ambiente.</p>
+                    <p className="font-medium">Cadastro indisponível neste ambiente.</p>
                     <p className="text-xs text-muted-foreground">
-                      O login interno j� funciona com os acessos cadastrados, mas para criar conta o Supabase precisa estar configurado.
+                      O login interno já funciona com os acessos cadastrados, mas para criar conta o Supabase precisa estar configurado.
                     </p>
                   </div>
                 </motion.div>
@@ -354,7 +349,7 @@ export default function Login() {
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
+                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10"
@@ -370,7 +365,7 @@ export default function Login() {
                   </button>
                 </div>
                 {mode === 'signup' && (
-                  <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres</p>
+                  <p className="text-xs text-muted-foreground">MÃ­nimo de 6 caracteres</p>
                 )}
               </motion.div>
 
@@ -399,9 +394,9 @@ export default function Login() {
                 <Button type="submit" size="xl" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
-                      <LogoLoader className="h-5 w-5" />
-                      {mode === 'login' ? 'Entrando...' : 'Criando conta...'}
-                    </>
+            <div className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              {mode === 'login' ? 'Entrando...' : 'Criando conta...'}
+            </>
                   ) : (
                     mode === 'login' ? 'Entrar' : 'Criar conta'
                   )}
@@ -416,7 +411,7 @@ export default function Login() {
               >
                 {mode === 'login' ? (
                   <p className="text-muted-foreground">
-                    Não tem uma conta?{' '}
+                    NÃ£o tem uma conta?{' '}
                     <button
                       type="button"
                       onClick={() => { setMode('signup'); setError(''); }}
@@ -427,7 +422,7 @@ export default function Login() {
                   </p>
                 ) : (
                   <p className="text-muted-foreground">
-                    Já tem uma conta?{' '}
+                    JÃ¡ tem uma conta?{' '}
                     <button
                       type="button"
                       onClick={() => { setMode('login'); setError(''); }}

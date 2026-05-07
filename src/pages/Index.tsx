@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogoLoader } from '@/components/brand/Logo';
 
 const Index = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -21,7 +20,7 @@ const Index = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
-        <LogoLoader className="mb-4" />
+        <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
         <p className="text-muted-foreground">Carregando...</p>
       </div>
     </div>

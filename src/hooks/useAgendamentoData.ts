@@ -7,6 +7,16 @@ import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commer
 import { savePipelineClientToCloud } from '@/lib/commercialCloudStore';
 import { agendamentoToPipeline } from './usePipelineAgendamentoSync';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
+import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
+
+function normalizeAgendamentoLeadAnswers(lead: AgendamentoLead): AgendamentoLead {
+  return {
+    ...lead,
+    tem_socio: coerceCommercialAnswer(lead.tem_socio) || 'NAO_SEI',
+    tem_mkt: coerceCommercialAnswer(lead.tem_mkt) || 'NAO_SEI',
+    tem_secretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
+  };
+}
 
 export interface AgendamentoLead {
   id: string;
@@ -15,9 +25,9 @@ export interface AgendamentoLead {
   telefone: string;
   horario: 'MANHA' | 'TARDE' | 'NOITE';
   horario_especifico?: string;
-  tem_socio: 'SIM' | 'NAO';
-  tem_mkt: 'SIM' | 'NAO';
-  tem_secretaria: 'SIM' | 'NAO';
+  tem_socio: CommercialYesNoMaybe;
+  tem_mkt: CommercialYesNoMaybe;
+  tem_secretaria: CommercialYesNoMaybe;
   salao_ou_clinica: 'SALAO' | 'CLINICA' | 'NAO_INFORMADO';
   faturamento:
     | '0_A_10K'
@@ -58,20 +68,11 @@ export const HORARIO_OPTIONS = [
   { value: 'NOITE', label: 'NOITE' },
 ] as const;
 
-export const TEM_SOCIO_OPTIONS = [
-  { value: 'SIM', label: 'SIM' },
-  { value: 'NAO', label: 'NAO' },
-] as const;
+export const TEM_SOCIO_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS;
 
-export const TEM_MKT_OPTIONS = [
-  { value: 'SIM', label: 'SIM' },
-  { value: 'NAO', label: 'NAO' },
-] as const;
+export const TEM_MKT_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS;
 
-export const TEM_SECRETARIA_OPTIONS = [
-  { value: 'SIM', label: 'SIM' },
-  { value: 'NAO', label: 'NAO' },
-] as const;
+export const TEM_SECRETARIA_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS;
 
 export const SALAO_OU_CLINICA_OPTIONS = [
   { value: 'SALAO', label: 'SALAO' },
@@ -182,6 +183,15 @@ function buildLeadWithAgenda(lead: any, agendaEvents: any[]): AgendamentoLead {
   };
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`timeout:${label}`)), ms);
+    }),
+  ]);
+}
+
 export function useAgendamentoData() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -191,19 +201,23 @@ export function useAgendamentoData() {
     queryKey: ['agendamento-leads'],
     queryFn: async () => {
       if (!isSupabaseConfigured) {
-        return (readCommercialLocalData().agendamentoLeads || []) as AgendamentoLead[];
+        return (readCommercialLocalData().agendamentoLeads || []).map((lead: any) => normalizeAgendamentoLeadAnswers(lead)) as AgendamentoLead[];
       }
-      const [{ data: agendamentoLeads, error: leadsError }, { data: agendaEvents, error: agendaError }] = await Promise.all([
-        supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
-        supabase.from('agenda_events').select('*').order('event_date', { ascending: true }),
-      ]);
+      const [{ data: agendamentoLeads, error: leadsError }, { data: agendaEvents, error: agendaError }] = await withTimeout(
+        Promise.all([
+          supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
+          supabase.from('agenda_events').select('*').order('event_date', { ascending: true }),
+        ]),
+        7000,
+        'agendamento_leads'
+      );
       if (leadsError) throw leadsError;
       if (agendaError) throw agendaError;
       return (agendamentoLeads || []).map((lead: any) => buildLeadWithAgenda(
-        {
+        normalizeAgendamentoLeadAnswers({
           ...lead,
           faturamento: normalizeAgendamentoFaturamento(lead.faturamento),
-        },
+        }),
         agendaEvents || []
       ));
     },

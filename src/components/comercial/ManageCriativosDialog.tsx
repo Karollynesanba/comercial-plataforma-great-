@@ -22,8 +22,8 @@ interface ManageCriativosDialogProps {
 
 export function ManageCriativosDialog({ open, onOpenChange }: ManageCriativosDialogProps) {
   const { criativos, addCriativo, updateCriativo, deleteCriativo, pipelineClients } = useCommercial();
-  const { canEdit, isAuthenticated } = useAuth();
-  const canManageCriativos = canEdit || isAuthenticated;
+  const { isAuthenticated } = useAuth();
+  const canManageCriativos = isAuthenticated;
   const visibleCriativos = criativos;
 
   const [newCriativo, setNewCriativo] = useState('');

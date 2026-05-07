@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { DEFAULT_COMERCIAL_CRIATIVOS, DEFAULT_COMERCIAL_FUNIS, DEFAULT_COMMERCIAL_LOCAL_DATA, readCommercialLocalData, type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
+import { DEFAULT_COMERCIAL_CRIATIVOS, DEFAULT_COMERCIAL_FUNIS, DEFAULT_COMMERCIAL_LOCAL_DATA, clearCommercialLocalData, readCommercialLocalData, type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
 import type { Agendador, Equipe, Faturamento, Pacote, PagadorAnuncio, PaymentReminder, Periodo, PipelineClient, PipelineStage, PodeInvestir, SalaoOuClinica, SDRGoal, TemMkt, TemSecretaria, TemSocio, Vendedor } from '@/contexts/CommercialContext';
 import type { SalesGoal } from '@/types';
 import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
@@ -600,6 +600,9 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
     local.sdrGoals.length > 0 ||
     local.preSalesDailyLogs.length > 0 ||
     local.closerDailyLogs.length > 0 ||
+    local.paymentReminders.length > 0 ||
+    (local.agendaEvents?.length || 0) > 0 ||
+    (local.agendamentoLeads?.length || 0) > 0 ||
     local.criativos.length > 0 ||
     local.funis.length > 0;
 
@@ -617,10 +620,25 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
     .select('id', { count: 'exact', head: true });
 
   if ((count || 0) === 0) {
+    const localPipelineKey = (client: any) =>
+      `${normalizePhone(client.telefone)}::${String(client.clientName || '').trim().toLowerCase()}`;
+    const pipelineIdMap = new Map<string, string>();
+    const localPipelineRows = local.pipelineClients.map((client) => localPipelineToDb(client, userId));
+
     if (local.pipelineClients.length) {
-      await supabase.from('pipeline_clients').insert(
-        local.pipelineClients.map((client) => localPipelineToDb(client, userId))
-      );
+      const { data: insertedPipelineClients, error: pipelineInsertError } = await supabase
+        .from('pipeline_clients')
+        .insert(localPipelineRows)
+        .select('id, client_name, telefone');
+
+      if (pipelineInsertError) throw pipelineInsertError;
+
+      (insertedPipelineClients || []).forEach((row: any, index: number) => {
+        const localClient = local.pipelineClients[index];
+        if (!localClient) return;
+        pipelineIdMap.set(localClient.id, row.id);
+        pipelineIdMap.set(localPipelineKey(localClient), row.id);
+      });
     }
 
     if (local.salesGoals.length) {
@@ -676,6 +694,76 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
       );
     }
 
+    if (local.paymentReminders.length) {
+      await supabase.from('payment_reminders').insert(
+        local.paymentReminders.map((reminder: any) => ({
+          id: reminder.id,
+          client_id: pipelineIdMap.get(reminder.clientId) || pipelineIdMap.get(localPipelineKey(local.pipelineClients.find((client: any) => client.id === reminder.clientId) || {})) || reminder.clientId,
+          client_name: reminder.clientName,
+          clinic_name: reminder.clinicName || null,
+          deal_value: Number(reminder.dealValue || 0),
+          payment_deadline: new Date(reminder.paymentDeadline || new Date()).toISOString(),
+          dismissed: Boolean(reminder.dismissed),
+          created_at: new Date(reminder.createdAt || new Date()).toISOString(),
+          updated_at: new Date(reminder.updatedAt || reminder.createdAt || new Date()).toISOString(),
+        }))
+      );
+    }
+
+    if (local.agendaEvents?.length) {
+      await supabase.from('agenda_events').insert(
+        local.agendaEvents.map((event: any) => ({
+          id: event.id,
+          title: event.title || `Reuniao com ${event.client_name || 'Lead sem nome'}`,
+          description: event.description || null,
+          notes: event.notes || null,
+          client_name: event.client_name || 'Lead sem nome',
+          client_phone: event.client_phone || '',
+          event_date: event.event_date || new Date().toISOString().slice(0, 10),
+          event_time: event.event_time || '09:00:00',
+          duration_minutes: Number(event.duration_minutes || 60),
+          meeting_link: event.meeting_link || null,
+          color: event.color || '#3B82F6',
+          reminder_2h_sent: Boolean(event.reminder_2h_sent),
+          reminder_30min_sent: Boolean(event.reminder_30min_sent),
+          created_by_user_id: toDbUserId(event.created_by_user_id || userId),
+          assigned_closer_id: event.assigned_closer_id || null,
+          team_id: event.team_id || null,
+          created_at: event.created_at || new Date().toISOString(),
+          updated_at: event.updated_at || new Date().toISOString(),
+          pipeline_client_id: pipelineIdMap.get(event.pipeline_client_id) || event.pipeline_client_id || null,
+        }))
+      );
+    }
+
+    if (local.agendamentoLeads?.length) {
+      await supabase.from('agendamento_leads').insert(
+        local.agendamentoLeads.map((lead: any) => ({
+          id: lead.id,
+          data: lead.data || '',
+          nome: lead.nome || 'Lead sem nome',
+          telefone: lead.telefone || '',
+          horario: lead.horario || 'MANHA',
+          horario_especifico: lead.horario_especifico || null,
+          tem_socio: lead.tem_socio || 'NAO_SEI',
+          tem_mkt: lead.tem_mkt || 'NAO_SEI',
+          tem_secretaria: lead.tem_secretaria || 'NAO_SEI',
+          salao_ou_clinica: lead.salao_ou_clinica || 'NAO_INFORMADO',
+          faturamento: lead.faturamento || 'NAO_INFORMADO',
+          pode_investir: lead.pode_investir || null,
+          agendado_via: lead.agendado_via || null,
+          funil: lead.funil || 'NAO IDENTIFICADO',
+          status: lead.status || 'NOVO_LEAD',
+          created_by_user_id: toDbUserId(lead.created_by_user_id || userId),
+          created_at: lead.created_at || new Date().toISOString(),
+          updated_at: lead.updated_at || new Date().toISOString(),
+          pipeline_client_id: pipelineIdMap.get(lead.pipeline_client_id) || lead.pipeline_client_id || null,
+          agenda_event_date: lead.agenda_event_date || null,
+          agenda_event_time: lead.agenda_event_time || null,
+        }))
+      );
+    }
+
     if (local.criativos.length) {
       await supabase.from('criativos').upsert(
         local.criativos.map((name) => ({
@@ -702,6 +790,8 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
         console.warn('Could not persist last team pointer during migration.', settingError);
       }
     }
+
+    clearCommercialLocalData();
   }
 
   try {
@@ -781,8 +871,8 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       agendamentoLeads: (agendamentoLeads.data || []),
     };
   } catch (error) {
-    console.warn('Commercial cloud read failed, using local cache.', error);
-    return readCommercialLocalData();
+    console.warn('Commercial cloud read failed.', error);
+    return DEFAULT_CLOUD_STATE;
   }
 }
 

@@ -100,7 +100,7 @@ export function RecontatoList({ clients, onEditClient, onNotesClient }: Recontat
 
   const handleSaveSchedule = (clientId: string) => {
     if (!scheduleDate) return;
-    const meetingDate = scheduleDate.toISOString().split('T')[0];
+    const meetingDate = format(scheduleDate, 'yyyy-MM-dd');
     updatePipelineClient(clientId, {
       meetingDate,
       meetingTime: scheduleTime || (null as any),

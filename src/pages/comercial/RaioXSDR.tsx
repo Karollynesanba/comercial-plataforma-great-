@@ -293,7 +293,7 @@ export default function RaioXSDR() {
               Pré venda
             </h1>
             <p className="text-muted-foreground mt-2 max-w-3xl">
-              Análise individual apenas dos SDRs oficiais, Miguel e Herbert. Os outros usuários podem agendar no pipeline, mas não entram como SDR oficial nesta leitura.
+              Análise individual apenas dos SDRs oficiais, Herbert. Os outros usuários podem agendar no pipeline, mas não entram como SDR oficial nesta leitura.
             </p>
           </div>
           <RaioXFilters value={filter} onChange={setFilter} />
@@ -317,7 +317,7 @@ export default function RaioXSDR() {
                 Daily SDR | 2026
               </CardTitle>
               <CardDescription>
-                Grade separada por semana e dia: Miguel à esquerda, Herbert ao lado e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
+                Grade separada por semana e dia: Herbert e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
               </CardDescription>
             </div>
             <Button className="gap-2" onClick={() => void saveAllVisibleRows()}>
@@ -339,53 +339,41 @@ export default function RaioXSDR() {
               <TableHeader>
                 <TableRow className="bg-slate-950 text-white hover:bg-slate-950">
                   <TableHead className="w-[7%] bg-slate-950 px-1 text-white">Período</TableHead>
-                  <TableHead className="border-l-2 border-red-600 text-center text-white" colSpan={5}>Miguel</TableHead>
-                  <TableHead className="w-[10px] bg-red-700 p-0" />
                   <TableHead className="text-center text-white" colSpan={5}>Herbert</TableHead>
                   <TableHead className="w-[10px] bg-red-700 p-0" />
                   <TableHead className="text-center text-white" colSpan={5}>Total</TableHead>
                 </TableRow>
                 <TableRow className="bg-red-600 text-white hover:bg-red-600">
                   <TableHead className="bg-red-600 px-1 text-white">Dia</TableHead>
-                  <MetricHeader separated />
-                  <DividerHeader />
                   <MetricHeader />
                   <DividerHeader />
                   <MetricHeader />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <AggregatedRow label="TOTAL" miguel={getSdrTotals(visibleDates, 'MIGUEL')} herbert={getSdrTotals(visibleDates, 'HEBERT')} total={grandTotals} strong />
+                <AggregatedRow label="TOTAL" herbert={getSdrTotals(visibleDates, 'HEBERT')} total={grandTotals} strong />
 
                 {weekGroups.map((week) => (
                   <Fragment key={week.label}>
                     <AggregatedRow
                       key={`${week.label}-total`}
                       label={week.label}
-                      miguel={getSdrTotals(week.dates, 'MIGUEL')}
                       herbert={getSdrTotals(week.dates, 'HEBERT')}
                       total={getCombinedTotals(week.dates)}
                     />
 
                     {week.dates.map((date) => {
-                      const miguel = getMetrics(date, 'MIGUEL');
                       const herbert = getMetrics(date, 'HEBERT');
-                      const total = addMetrics(miguel, herbert);
+                      const total = addMetrics(emptyMetrics(), herbert);
 
                       return (
                         <TableRow key={date}>
                           <TableCell className="bg-background px-1 font-medium">{formatDateBR(date)}</TableCell>
                           <EditableSdrBlock
-                            draft={drafts[`${date}:MIGUEL`] || emptyDraft()}
-                            onChange={(field, value) => updateDraft(date, 'MIGUEL', field, value)}
-                            onBlur={() => saveDailyLog(date, 'MIGUEL')}
-                            separated
-                          />
-                          <DividerCell />
-                          <EditableSdrBlock
                             draft={drafts[`${date}:HEBERT`] || emptyDraft()}
                             onChange={(field, value) => updateDraft(date, 'HEBERT', field, value)}
                             onBlur={() => saveDailyLog(date, 'HEBERT')}
+                            separated
                           />
                           <DividerCell />
                           <ReadonlyMetricBlock metrics={total} separated />
@@ -431,7 +419,7 @@ export default function RaioXSDR() {
             Agendadores do pipeline
           </CardTitle>
           <CardDescription>
-            Todos que podem marcar reuniÃ£o aparecem aqui. Miguel e Herbert continuam destacados como SDRs oficiais, mas Pedro, Cled e Caetano tambÃ©m tÃªm leitura de agendamentos e vendas geradas pelos leads que agendaram.
+            Todos que podem marcar reuniÃ£o aparecem aqui. Herbert continuam destacados como SDRs oficiais, mas Pedro, Cled e Caetano tambÃ©m tÃªm leitura de agendamentos e vendas geradas pelos leads que agendaram.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -600,13 +588,11 @@ function ReadonlyMetricBlock({ metrics, separated }: { metrics: SheetMetrics; se
 
 function AggregatedRow({
   label,
-  miguel,
   herbert,
   total,
   strong,
 }: {
   label: string;
-  miguel: SheetMetrics;
   herbert: SheetMetrics;
   total: SheetMetrics;
   strong?: boolean;
@@ -616,8 +602,6 @@ function AggregatedRow({
       <TableCell className={strong ? 'bg-red-700 px-1 text-white' : 'bg-red-600 px-1 text-white'}>
         {label}
       </TableCell>
-      <ReadonlyMetricBlock metrics={miguel} separated />
-      <DividerCell />
       <ReadonlyMetricBlock metrics={herbert} separated />
       <DividerCell />
       <ReadonlyMetricBlock metrics={total} separated />

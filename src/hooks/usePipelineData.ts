@@ -4,6 +4,7 @@ import { useAuthSafe } from '@/contexts/AuthContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { savePipelineClientToCloud, syncPipelineAutomationsToCloud } from '@/lib/commercialCloudStore';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
+import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
 
 export interface PipelineClientDB {
   id: string;
@@ -63,9 +64,9 @@ function localToDb(client: any): PipelineClientDB {
     notes: client.notes || null,
     agendado_por: client.agendadoPor || null,
     pagador_anuncio: client.pagadorAnuncio || null,
-    tem_socio: client.temSocio || null,
-    tem_mkt: client.temMkt || null,
-    tem_secretaria: client.temSecretaria || null,
+    tem_socio: coerceCommercialAnswer(client.temSocio) || null,
+    tem_mkt: coerceCommercialAnswer(client.temMkt) || null,
+    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || null,
     meeting_date: client.meetingDate || null,
     meeting_time: client.meetingTime || null,
     created_by_user_id: client.createdByUserId || null,
@@ -96,9 +97,9 @@ function dbToLocal(client: Partial<PipelineClientDB>, userId?: string | null) {
     notes: client.notes || undefined,
     agendadoPor: client.agendado_por || undefined,
     pagadorAnuncio: client.pagador_anuncio || undefined,
-    temSocio: client.tem_socio || undefined,
-    temMkt: client.tem_mkt || undefined,
-    temSecretaria: client.tem_secretaria || undefined,
+    temSocio: coerceCommercialAnswer(client.tem_socio) || undefined,
+    temMkt: coerceCommercialAnswer(client.tem_mkt) || undefined,
+    temSecretaria: coerceCommercialAnswer(client.tem_secretaria) || undefined,
     meetingDate: client.meeting_date || undefined,
     meetingTime: client.meeting_time || undefined,
     createdByUserId: client.created_by_user_id || userId || 'local-user',
@@ -119,17 +120,12 @@ export function usePipelineData() {
         return (readCommercialLocalData().pipelineClients || []).map((client: any) => localToDb(client, user?.id));
       }
 
-      try {
-        const { data, error } = await supabase
-          .from('pipeline_clients')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        return (data || []) as PipelineClientDB[];
-      } catch (fetchError) {
-        console.warn('Pipeline cloud read failed, using local cache.', fetchError);
-        return (readCommercialLocalData().pipelineClients || []).map((client: any) => localToDb(client, user?.id));
-      }
+      const { data, error } = await supabase
+        .from('pipeline_clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as PipelineClientDB[];
     },
   });
 

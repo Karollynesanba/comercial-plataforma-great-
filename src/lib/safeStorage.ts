@@ -45,14 +45,11 @@ export function canUseLocalStorage(): boolean {
 export function resetGreatPlatformStorageIfNeeded(
   resetVersion = PLATFORM_STORAGE_RESET_VERSION
 ): boolean {
+  // Preserve user data on normal app boots. Manual cleanup remains available
+  // via resetGreatPlatformStorageNow() when explicitly invoked.
   if (safeGetItem('great_test_session_bypass') === 'true') return false;
   if (!canUseLocalStorage()) return false;
-
-  try {
-    return resetGreatPlatformStorageNow(resetVersion);
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 export function resetGreatPlatformStorageNow(resetVersion = PLATFORM_STORAGE_RESET_VERSION): boolean {
