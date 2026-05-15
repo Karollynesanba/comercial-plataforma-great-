@@ -12,8 +12,9 @@ import { useAgendamentoData, FATURAMENTO_OPTIONS, SALAO_OU_CLINICA_OPTIONS, STAT
 import { useCommercialSafe, AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { BadgeInfo, Bell, CalendarDays, Copy, Edit3, Loader2, Phone, StickyNote, Target, Trash2, User2, ChevronDown } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
-import { formatBRL } from '@/lib/utils';
+import { cn, formatBRL } from '@/lib/utils';
 import { coerceCommercialAnswer, formatCommercialAnswerLabel } from '@/lib/commercialAnswer';
+import { normalizeMeetingClientName, normalizeMeetingTitle } from '@/lib/agendaTitle';
 import { toast } from 'sonner';
 
 function normalizeFaturamentoBucket(value?: string | null) {
@@ -72,7 +73,9 @@ interface EventDetailsDialogProps {
 export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: EventDetailsDialogProps) {
   const { updateEvent, deleteEvent } = useAgendaData();
   const { leads, updateLead } = useAgendamentoData();
-  const { pipelineClients } = useCommercialSafe();
+  const commercial = useCommercialSafe();
+  const pipelineClients = commercial?.pipelineClients || [];
+  const updatePipelineClient = commercial?.updatePipelineClient;
   const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
@@ -133,8 +136,8 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   useEffect(() => {
     setLeadForm({
       faturamento: normalizeFaturamentoBucket(leadData?.faturamento || pipelineClient?.faturamento) || '0_A_10K',
-      tem_socio: coerceCommercialAnswer(leadData?.tem_socio || pipelineClient?.temSocio) || 'NAO_SEI',
-      tem_mkt: coerceCommercialAnswer(leadData?.tem_mkt || pipelineClient?.temMkt) || 'NAO_SEI',
+      tem_socio: coerceCommercialAnswer(leadData?.tem_socio || pipelineClient?.temSocio, 'NAO'),
+      tem_mkt: coerceCommercialAnswer(leadData?.tem_mkt || pipelineClient?.temMkt, 'NAO'),
       tem_secretaria: coerceCommercialAnswer(leadData?.tem_secretaria || pipelineClient?.temSecretaria) || 'NAO_SEI',
       salao_ou_clinica: leadData?.salao_ou_clinica || pipelineClient?.salaoOuClinica || 'NAO_INFORMADO',
       status: leadData?.status || 'NOVO_LEAD',
@@ -156,24 +159,102 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     ?.label || leadForm.salao_ou_clinica || pipelineClient?.salaoOuClinica || 'Sem informação';
   const faturamentoLabel = FATURAMENTO_OPTIONS.find((option) => option.value === leadForm.faturamento)?.label || leadForm.faturamento || 'Sem informação';
   const funilLabel = pipelineClient?.criativo || 'Sem informação';
-  const eventColorLabel = EVENT_COLORS.find((color) => color.value === eventForm.color)?.label || 'Cor do evento';
+  const currentColorOption = EVENT_COLORS.find((color) => color.value === eventForm.color) || EVENT_COLORS[0];
+  const isNoShowColor = (color: string) => color.toUpperCase() === '#FF0000';
+  const recoveredStatus = leadForm.status === 'NO_SHOW' ? 'NOVO_LEAD' : leadForm.status;
+  const recoveredStatusOption = STATUS_OPTIONS.find((option) => option.value === recoveredStatus);
+  const recoveredPipelineStage = recoveredStatusOption?.pipelineStage || 'NOVO';
+
+  const syncNoShowToCrm = async (input: { color?: string; force?: boolean } = {}, options?: { skipPipeline?: boolean }) => {
+    if (!input.force && !input.color) return;
+    if (!input.force && !isNoShowColor(input.color || '')) return;
+
+    const shouldUpdatePipeline = !options?.skipPipeline && !!pipelineClient && pipelineClient.stage !== 'NO_SHOW';
+    if (!shouldUpdatePipeline) return;
+
+    const noShowReason = pipelineClient?.noShowReason || leadForm.notes || 'Marcado como no show pela agenda';
+
+    if (shouldUpdatePipeline) {
+      commercial?.movePipelineClient(pipelineClient!.id, 'NO_SHOW', undefined, {
+        noShowReason,
+      });
+    }
+  };
 
   if (!event) return null;
 
   const handleSaveEvent = async () => {
+    const canonicalTitle = normalizeMeetingTitle(eventForm.title || eventForm.client_name || event.title) || event.title;
+    const canonicalClientName = normalizeMeetingClientName(eventForm.client_name || eventForm.title || event.client_name || event.title) || event.client_name;
+    const shouldBeNoShow = isNoShowColor(eventForm.color);
+    const resolvedLeadStatus = shouldBeNoShow
+      ? 'NO_SHOW'
+      : leadForm.status === 'NO_SHOW'
+        ? 'NOVO_LEAD'
+        : leadForm.status;
+    const leadUpdates = {
+      nome: canonicalClientName,
+      faturamento: leadForm.faturamento as any,
+      tem_socio: leadForm.tem_socio as any,
+      tem_mkt: leadForm.tem_mkt as any,
+      tem_secretaria: leadForm.tem_secretaria as any,
+      salao_ou_clinica: leadForm.salao_ou_clinica as any,
+      agenda_event_date: eventForm.event_date,
+      agenda_event_time: eventForm.event_time,
+      status: resolvedLeadStatus,
+    };
+
+    const pipelineUpdates = {
+      clientName: canonicalClientName,
+      temSocio: leadForm.tem_socio as any,
+      temMkt: leadForm.tem_mkt as any,
+      temSecretaria: leadForm.tem_secretaria as any,
+      meetingDate: eventForm.event_date,
+      meetingTime: eventForm.event_time,
+    };
+
     await updateEvent.mutateAsync({
       id: event.id,
       ...eventForm,
+      title: canonicalTitle,
+      client_name: canonicalClientName,
       client_phone: formatPhoneForWhatsApp(eventForm.client_phone),
       meeting_link: eventForm.meeting_link || null,
       description: eventForm.description || null,
       notes: eventForm.notes || null,
     });
 
+    if (leadData) {
+      await updateLead.mutateAsync({
+        id: leadData.id,
+        ...leadUpdates,
+      });
+    }
+
+    if (pipelineClient) {
+      if (shouldBeNoShow) {
+        await syncNoShowToCrm({ color: eventForm.color, force: true });
+      } else if (pipelineClient.stage === 'NO_SHOW') {
+        commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
+          ...pipelineUpdates,
+          clinicName: pipelineClient.clinicName || canonicalClientName,
+          meetingDate: eventForm.event_date,
+          meetingTime: eventForm.event_time,
+        });
+      } else {
+        updatePipelineClient(pipelineClient.id, {
+          ...pipelineUpdates,
+          clinicName: pipelineClient.clinicName || canonicalClientName,
+        });
+      }
+    }
+
     setIsEditingEvent(false);
   };
 
   const handleColorChange = async (color: string) => {
+    const previousColor = eventForm.color;
+    const canonicalClientName = normalizeMeetingClientName(eventForm.client_name || eventForm.title || event.client_name || event.title) || event.client_name;
     setEventForm((current) => ({ ...current, color }));
 
     await updateEvent.mutateAsync({
@@ -185,26 +266,74 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       description: eventForm.description || null,
       notes: eventForm.notes || null,
     });
+
+    if (!isNoShowColor(previousColor) && isNoShowColor(color)) {
+      await syncNoShowToCrm({ color, force: true });
+    }
+
+    if (isNoShowColor(previousColor) && !isNoShowColor(color) && pipelineClient) {
+      commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
+        clientName: canonicalClientName,
+        clinicName: pipelineClient.clinicName || canonicalClientName,
+        meetingDate: eventForm.event_date,
+        meetingTime: eventForm.event_time,
+      });
+    }
     toast.success('Cor do evento atualizada!');
   };
 
   const handleSaveLead = async () => {
+    const canonicalTitle = normalizeMeetingTitle(eventForm.title || eventForm.client_name || event.title) || event.title;
+    const canonicalClientName = normalizeMeetingClientName(eventForm.client_name || eventForm.title || event.client_name || event.title) || event.client_name;
+    const shouldBeNoShow = isNoShowColor(eventForm.color);
+    const resolvedLeadStatus = shouldBeNoShow
+      ? 'NO_SHOW'
+      : leadForm.status === 'NO_SHOW'
+        ? 'NOVO_LEAD'
+        : leadForm.status;
+    const leadUpdates = {
+      faturamento: leadForm.faturamento as any,
+      tem_socio: leadForm.tem_socio as any,
+      tem_mkt: leadForm.tem_mkt as any,
+      tem_secretaria: leadForm.tem_secretaria as any,
+      salao_ou_clinica: leadForm.salao_ou_clinica as any,
+      status: resolvedLeadStatus,
+    };
+
+    const pipelineUpdates = {
+      temSocio: leadForm.tem_socio as any,
+      temMkt: leadForm.tem_mkt as any,
+      temSecretaria: leadForm.tem_secretaria as any,
+    };
+
     if (leadData) {
       await updateLead.mutateAsync({
         id: leadData.id,
-        faturamento: leadForm.faturamento as any,
-        tem_socio: leadForm.tem_socio as any,
-        tem_mkt: leadForm.tem_mkt as any,
-        tem_secretaria: leadForm.tem_secretaria as any,
-        salao_ou_clinica: leadForm.salao_ou_clinica as any,
-        status: leadForm.status,
+        ...leadUpdates,
       });
+    }
+
+    if (pipelineClient) {
+      if (shouldBeNoShow) {
+        await syncNoShowToCrm({ color: eventForm.color, force: true });
+      } else if (pipelineClient.stage === 'NO_SHOW') {
+        commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
+          ...pipelineUpdates,
+          clientName: canonicalClientName,
+          clinicName: pipelineClient.clinicName || canonicalClientName,
+          meetingDate: eventForm.event_date,
+          meetingTime: eventForm.event_time,
+        });
+      } else {
+        updatePipelineClient(pipelineClient.id, pipelineUpdates);
+      }
     }
 
     await updateEvent.mutateAsync({
       id: event.id,
       notes: leadForm.notes || null,
-      title: eventForm.title,
+      title: canonicalTitle,
+      client_name: canonicalClientName,
     });
 
     setIsEditingLead(false);
@@ -257,6 +386,71 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 <Input type="time" value={eventForm.event_time} onChange={(e) => setEventForm((current) => ({ ...current, event_time: e.target.value }))} />
               </div>
               <div className="col-span-2">
+                <Label>Cor</Label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {EVENT_COLOR_PRESET.map((color) => {
+                    const active = eventForm.color === color.value;
+
+                    return (
+                      <Button
+                        key={color.value}
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setEventForm((current) => ({ ...current, color: color.value }));
+                        }}
+                        className={[
+                          'h-9 rounded-full border px-4 text-xs font-medium shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                          active
+                            ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-500/15'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                        ].join(' ')}
+                      >
+                        <span
+                          className="mr-2 h-2.5 w-2.5 rounded-full ring-2 ring-white"
+                          style={{ backgroundColor: color.value }}
+                          aria-hidden="true"
+                        />
+                        {color.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <Label>Tem sócio?</Label>
+                <Select value={leadForm.tem_socio} onValueChange={(value) => setLeadForm((current) => ({ ...current, tem_socio: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TEM_SOCIO_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tem MKT?</Label>
+                <Select value={leadForm.tem_mkt} onValueChange={(value) => setLeadForm((current) => ({ ...current, tem_mkt: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TEM_MKT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tem secretária?</Label>
+                <Select value={leadForm.tem_secretaria} onValueChange={(value) => setLeadForm((current) => ({ ...current, tem_secretaria: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TEM_SECRETARIA_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
                 <Label>Link</Label>
                 <Input value={eventForm.meeting_link} onChange={(e) => setEventForm((current) => ({ ...current, meeting_link: e.target.value }))} />
               </div>
@@ -267,19 +461,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
               <div className="col-span-2">
                 <Label>Anotações</Label>
                 <Textarea value={eventForm.notes} onChange={(e) => setEventForm((current) => ({ ...current, notes: e.target.value }))} />
-              </div>
-              <div className="col-span-2">
-                <Label>Cor</Label>
-                <Select value={eventForm.color} onValueChange={(value) => setEventForm((current) => ({ ...current, color: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {EVENT_COLORS.map((color) => (
-                      <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
@@ -300,23 +481,28 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                     <div className="flex items-center gap-3">
                       <Popover open={isColorPickerOpen} onOpenChange={setIsColorPickerOpen}>
                         <PopoverTrigger asChild>
-                          <button
+                          <Button
                             type="button"
+                            variant="outline"
                             aria-label="Alterar cor ou status do evento"
-                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                            title="Clique para trocar a cor do evento"
+                            className="inline-flex h-9 items-center gap-2 rounded-full border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
                           >
-                            <span className="h-3.5 w-3.5 rounded-full ring-2 ring-white" style={{ backgroundColor: eventForm.color }} />
-                            <span className="text-xs font-semibold text-slate-700">{eventColorLabel}</span>
+                            <span
+                              className="h-3.5 w-3.5 rounded-full ring-2 ring-white"
+                              style={{ backgroundColor: currentColorOption.value }}
+                            />
+                            <span className="max-w-[140px] truncate">{currentColorOption.label}</span>
                             <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                          </button>
+                          </Button>
                         </PopoverTrigger>
-                        <PopoverContent align="start" className="w-72 rounded-2xl p-3">
+                        <PopoverContent align="start" className="w-[420px] rounded-3xl p-4">
                           <div className="mb-3">
-                            <p className="text-sm font-bold text-slate-950">Status / cor do evento</p>
-                            <p className="text-xs font-medium text-slate-500">{eventColorLabel}</p>
-                            <p className="text-xs text-slate-500">Clique em uma cor para atualizar o marcador.</p>
+                            <p className="text-sm font-bold text-slate-950">Cor</p>
+                            <p className="text-xs font-medium text-slate-500">{currentColorOption.label}</p>
+                            <p className="text-xs text-slate-500">Clique em uma opção para salvar automaticamente no evento, sem entrar em edição.</p>
                           </div>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="flex flex-wrap gap-2">
                             {EVENT_COLOR_PRESET.map((color) => (
                               <button
                                 key={color.value}
@@ -326,19 +512,53 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                                   setIsColorPickerOpen(false);
                                   await handleColorChange(color.value);
                                 }}
-                                className="group flex flex-col items-center gap-1 rounded-xl border border-slate-100 p-2 transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm"
+                                className="group inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
                               >
                                 <span
-                                  className="h-7 w-7 rounded-full border border-white shadow-sm ring-1 ring-slate-200 transition group-hover:scale-105"
+                                  className="h-2.5 w-2.5 rounded-full ring-2 ring-white transition group-hover:scale-110"
                                   style={{ backgroundColor: color.value }}
                                 />
-                                <span className="text-[10px] font-medium text-slate-500">{color.label}</span>
+                                <span className={cn('truncate', eventForm.color === color.value ? 'text-slate-950' : 'text-slate-700')}>
+                                  {color.label}
+                                </span>
                               </button>
                             ))}
                           </div>
                         </PopoverContent>
                       </Popover>
                       <p className="text-[1.8rem] font-black tracking-tight text-slate-950">{event.client_name}</p>
+                    </div>
+                    <div className="space-y-2 pt-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Cor</p>
+                      <div className="flex flex-wrap gap-2">
+                        {EVENT_COLOR_PRESET.map((color) => {
+                          const active = eventForm.color === color.value;
+
+                          return (
+                            <Button
+                              key={color.value}
+                              type="button"
+                              variant="outline"
+                              onClick={async () => {
+                                await handleColorChange(color.value);
+                              }}
+                              className={[
+                                'h-8 rounded-full border px-3 text-[11px] font-medium shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                                active
+                                  ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-500/15'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                              ].join(' ')}
+                            >
+                              <span
+                                className="mr-2 h-2.5 w-2.5 rounded-full ring-2 ring-white"
+                                style={{ backgroundColor: color.value }}
+                                aria-hidden="true"
+                              />
+                              {color.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white shadow-sm hover:bg-slate-950">
@@ -356,6 +576,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                         </Badge>
                       )}
                     </div>
+
                   </div>
 
                   <div className="flex items-center gap-2">
