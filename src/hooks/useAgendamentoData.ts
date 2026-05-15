@@ -5,16 +5,17 @@ import { useCommercialSafe } from '@/contexts/CommercialContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { readCommercialLocalData, syncAgendamentoLeadAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { savePipelineClientToCloud } from '@/lib/commercialCloudStore';
-import { agendamentoToPipeline } from './usePipelineAgendamentoSync';
+import { agendamentoToPipeline, AGENDAMENTO_STATUS_TO_PIPELINE_STAGE } from './usePipelineAgendamentoSync';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
-import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
+import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, commercialAnswerToDb, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
+import { matchMeetingName, normalizeMeetingClientName, normalizeMeetingTitle } from '@/lib/agendaTitle';
 
 function normalizeAgendamentoLeadAnswers(lead: AgendamentoLead): AgendamentoLead {
   return {
     ...lead,
-    tem_socio: coerceCommercialAnswer(lead.tem_socio) || 'NAO_SEI',
-    tem_mkt: coerceCommercialAnswer(lead.tem_mkt) || 'NAO_SEI',
-    tem_secretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
+    tem_socio: commercialAnswerToDb(lead.tem_socio),
+    tem_mkt: commercialAnswerToDb(lead.tem_mkt),
+    tem_secretaria: commercialAnswerToDb(lead.tem_secretaria),
   };
 }
 
@@ -68,9 +69,15 @@ export const HORARIO_OPTIONS = [
   { value: 'NOITE', label: 'NOITE' },
 ] as const;
 
-export const TEM_SOCIO_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS;
+export const TEM_SOCIO_OPTIONS = [
+  { value: 'SIM', label: 'Sim' },
+  { value: 'NAO', label: 'Nao' },
+] as const;
 
-export const TEM_MKT_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS;
+export const TEM_MKT_OPTIONS = [
+  { value: 'SIM', label: 'Sim' },
+  { value: 'NAO', label: 'Nao' },
+] as const;
 
 export const TEM_SECRETARIA_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS;
 
@@ -181,6 +188,10 @@ function buildLeadWithAgenda(lead: any, agendaEvents: any[]): AgendamentoLead {
     agenda_event_date: agendaEvent?.event_date || null,
     agenda_event_time: agendaEvent?.event_time || null,
   };
+}
+
+function normalizePhoneDigits(value?: string | null) {
+  return String(value || '').replace(/\D/g, '');
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -308,14 +319,19 @@ export function useAgendamentoData() {
 
   const updateLead = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & AgendamentoLeadUpdate) => {
+      const { agenda_event_date, agenda_event_time, ...dbUpdates } = updates as AgendamentoLeadUpdate & {
+        agenda_event_date?: string | null;
+        agenda_event_time?: string | null;
+      };
+
       if (!isSupabaseConfigured) {
-        const formattedPhone = updates.telefone ? formatPhoneForWhatsApp(updates.telefone) : undefined;
+        const formattedPhone = dbUpdates.telefone ? formatPhoneForWhatsApp(dbUpdates.telefone) : undefined;
         updateCommercialLocalData((current) => {
           const nextLeads = current.agendamentoLeads.map((item: any) =>
             item.id === id
               ? {
                   ...item,
-                  ...updates,
+                  ...dbUpdates,
                   ...(formattedPhone ? { telefone: formattedPhone } : {}),
                   updated_at: new Date().toISOString(),
                 }
@@ -339,15 +355,113 @@ export function useAgendamentoData() {
           return synced;
         });
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
-        return { id, ...updates } as AgendamentoLead;
+        return { id, ...dbUpdates } as AgendamentoLead;
       }
+      const { data: previousLead } = await supabase.from('agendamento_leads').select('*').eq('id', id).single();
+
       const payload = {
-        ...updates,
-        telefone: updates.telefone ? formatPhoneForWhatsApp(updates.telefone) : undefined,
+        ...dbUpdates,
+        telefone: dbUpdates.telefone ? formatPhoneForWhatsApp(dbUpdates.telefone) : undefined,
         updated_at: new Date().toISOString(),
       };
       const { data: updatedLead, error } = await supabase.from('agendamento_leads').update(payload).eq('id', id).select('*').single();
       if (error) throw error;
+
+      const leadPhone = formatPhoneForWhatsApp(updatedLead.telefone || dbUpdates.telefone || '');
+      const leadPhoneDigits = normalizePhoneDigits(leadPhone);
+      const leadName = normalizeMeetingClientName(updatedLead.nome || '');
+      const previousLeadPhoneDigits = normalizePhoneDigits(previousLead?.telefone);
+      const previousLeadName = matchMeetingName(previousLead?.nome || '');
+      const agendaDate = agenda_event_date || updatedLead.data || null;
+      const agendaTime = agenda_event_time || updatedLead.horario_especifico || null;
+
+      try {
+        if (agendaDate && agendaTime) {
+          const { data: agendaEvents, error: agendaError } = await supabase.from('agenda_events').select('*').limit(1000);
+          if (agendaError) throw agendaError;
+
+          const matchingEvent = (agendaEvents || []).find((event: any) => {
+            const eventPhoneDigits = normalizePhoneDigits(event.client_phone);
+            const eventName = matchMeetingName(event.client_name || event.title || '');
+            return (
+              (leadPhoneDigits && eventPhoneDigits && leadPhoneDigits === eventPhoneDigits) ||
+              (previousLeadPhoneDigits && eventPhoneDigits && previousLeadPhoneDigits === eventPhoneDigits) ||
+              (leadName && eventName && leadName.toLowerCase() === eventName) ||
+              (previousLeadName && eventName && previousLeadName === eventName)
+            );
+          });
+
+          const agendaPayload = {
+            ...(matchingEvent || {}),
+            title: normalizeMeetingTitle(updatedLead.nome || matchingEvent?.title || leadName || 'Lead') || matchingEvent?.title || `Reuniao com ${leadName || 'Lead'}`,
+            description: matchingEvent?.description || (updatedLead.funil ? `Lead de Agendamento - ${updatedLead.funil}` : 'Lead de Agendamento'),
+            notes: matchingEvent?.notes ?? updatedLead.notes ?? null,
+            client_name: leadName || normalizeMeetingClientName(matchingEvent?.client_name) || 'Lead sem nome',
+            client_phone: matchingEvent?.client_phone || leadPhone || '',
+            clinic_name: matchingEvent?.clinic_name || updatedLead.clinic_name || leadName || 'Lead sem nome',
+            event_date: matchingEvent?.event_date || agendaDate,
+            event_time: matchingEvent?.event_time || (agendaTime.length === 5 ? `${agendaTime}:00` : agendaTime),
+            duration_minutes: matchingEvent?.duration_minutes || 60,
+            meeting_link: matchingEvent?.meeting_link || null,
+            scheduled_by: matchingEvent?.scheduled_by || updatedLead.agendado_por || null,
+            lead_stage: matchingEvent?.lead_stage || AGENDAMENTO_STATUS_TO_PIPELINE_STAGE[updatedLead.status] || 'NOVO',
+            creative_source: matchingEvent?.creative_source || updatedLead.funil || null,
+            color: matchingEvent?.color || '#3B82F6',
+            reminder_2h_sent: matchingEvent?.reminder_2h_sent || false,
+            reminder_30min_sent: matchingEvent?.reminder_30min_sent || false,
+            created_by_user_id: matchingEvent?.created_by_user_id || updatedLead.created_by_user_id || user?.id || null,
+            assigned_closer_id: matchingEvent?.assigned_closer_id || null,
+            created_at: matchingEvent?.created_at || updatedLead.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          if (matchingEvent?.id) {
+            const { error: updateAgendaError } = await supabase.from('agenda_events').update(agendaPayload as any).eq('id', matchingEvent.id);
+            if (updateAgendaError) throw updateAgendaError;
+          } else {
+            const { error: insertAgendaError } = await supabase.from('agenda_events').insert(agendaPayload as any);
+            if (insertAgendaError) throw insertAgendaError;
+          }
+        }
+
+        const linkedPipelineClient = commercial?.pipelineClients.find((client) =>
+          normalizePhoneDigits(client.telefone) === leadPhoneDigits ||
+          matchMeetingName(client.clientName || '') === leadName.toLowerCase()
+        );
+
+        if (linkedPipelineClient && commercial?.updatePipelineClient) {
+          commercial.updatePipelineClient(linkedPipelineClient.id, {
+            clientName: leadName || updatedLead.nome,
+            clinicName: updatedLead.clinic_name || leadName || updatedLead.nome,
+            telefone: leadPhone || linkedPipelineClient.telefone,
+            meetingDate: agendaDate || undefined,
+            meetingTime: agendaTime || undefined,
+            temSocio: coerceCommercialAnswer(updatedLead.tem_socio, 'NAO'),
+            temMkt: coerceCommercialAnswer(updatedLead.tem_mkt, 'NAO'),
+            temSecretaria: coerceCommercialAnswer(updatedLead.tem_secretaria, 'NAO_SEI'),
+            salaoOuClinica: updatedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
+            agendadoVia: updatedLead.agendado_via || linkedPipelineClient.agendadoVia,
+            agendadoPor: updatedLead.agendado_por || linkedPipelineClient.agendadoPor,
+          });
+        } else if (linkedPipelineClient) {
+          await savePipelineClientToCloud({
+            ...linkedPipelineClient,
+            clientName: leadName || updatedLead.nome,
+            clinicName: updatedLead.clinic_name || leadName || updatedLead.nome,
+            telefone: leadPhone || linkedPipelineClient.telefone,
+            meetingDate: agendaDate || undefined,
+            meetingTime: agendaTime || undefined,
+            temSocio: coerceCommercialAnswer(updatedLead.tem_socio, 'NAO'),
+            temMkt: coerceCommercialAnswer(updatedLead.tem_mkt, 'NAO'),
+            temSecretaria: coerceCommercialAnswer(updatedLead.tem_secretaria, 'NAO_SEI'),
+            salaoOuClinica: updatedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
+            agendadoVia: updatedLead.agendado_via || linkedPipelineClient.agendadoVia,
+            agendadoPor: updatedLead.agendado_por || linkedPipelineClient.agendadoPor,
+          }, user?.id);
+        }
+      } catch (syncError) {
+        console.error('Falha ao sincronizar agenda/pipeline do lead atualizado', syncError);
+      }
 
       return updatedLead;
     },
