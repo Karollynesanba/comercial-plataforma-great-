@@ -58,6 +58,7 @@ export interface AgendamentoLead {
   updated_at: string;
   agenda_event_date?: string | null;
   agenda_event_time?: string | null;
+  agenda_event_title?: string | null;
 }
 
 export type AgendamentoLeadInsert = Omit<AgendamentoLead, 'id' | 'created_at' | 'updated_at' | 'created_by_user_id'> & { horario_especifico?: string; pode_investir?: 'SIM' | 'NAO' | null };
@@ -319,9 +320,10 @@ export function useAgendamentoData() {
 
   const updateLead = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & AgendamentoLeadUpdate) => {
-      const { agenda_event_date, agenda_event_time, ...dbUpdates } = updates as AgendamentoLeadUpdate & {
+      const { agenda_event_date, agenda_event_time, agenda_event_title, ...dbUpdates } = updates as AgendamentoLeadUpdate & {
         agenda_event_date?: string | null;
         agenda_event_time?: string | null;
+        agenda_event_title?: string | null;
       };
 
       if (!isSupabaseConfigured) {
@@ -391,9 +393,14 @@ export function useAgendamentoData() {
             );
           });
 
+          const explicitAgendaTitle = normalizeMeetingTitle(agenda_event_title || '') || '';
+          const existingAgendaTitle = String(matchingEvent?.title || '').trim();
+          const defaultAgendaTitle = normalizeMeetingTitle(leadName || updatedLead.nome || 'Lead') || `Reuniao com ${leadName || updatedLead.nome || 'Lead'}`;
+          const nextAgendaTitle = explicitAgendaTitle || existingAgendaTitle || defaultAgendaTitle;
+
           const agendaPayload = {
             ...(matchingEvent || {}),
-            title: normalizeMeetingTitle(updatedLead.nome || matchingEvent?.title || leadName || 'Lead') || matchingEvent?.title || `Reuniao com ${leadName || 'Lead'}`,
+            title: nextAgendaTitle,
             description: matchingEvent?.description || (updatedLead.funil ? `Lead de Agendamento - ${updatedLead.funil}` : 'Lead de Agendamento'),
             notes: matchingEvent?.notes ?? updatedLead.notes ?? null,
             client_name: leadName || normalizeMeetingClientName(matchingEvent?.client_name) || 'Lead sem nome',

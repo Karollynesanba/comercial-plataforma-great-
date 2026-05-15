@@ -46,15 +46,27 @@ export type Funil = string;
 
 export const FUNIL_OPTIONS = [
   'INSTAGRAM',
-  'CAIXA DE PERGUNTAS',
-  'IA',
-  'PROMOCAO',
-  'ATENCAO DONA',
-  'JALECO',
-  'NAO IDENTIFICADO',
+  'MENSAGEM(WHATSAPP)',
+  'FORMULARIO',
   'INDICACAO',
+] as const;
+
+export const FUNIL_LABELS: Record<(typeof FUNIL_OPTIONS)[number], string> = {
+  INSTAGRAM: 'Instagram',
+  'MENSAGEM(WHATSAPP)': 'Mensagem (WhatsApp)',
+  FORMULARIO: 'Forms',
+  INDICACAO: 'Indicação',
+};
+
+export const CRIATIVO_REQUIRED_FUNIS = [
+  'MENSAGEM(WHATSAPP)',
   'FORMULARIO',
 ] as const;
+
+export const getFunilLabel = (funil?: string) => {
+  if (!funil) return 'Funil';
+  return FUNIL_LABELS[funil as keyof typeof FUNIL_LABELS] || funil;
+};
 
 export const TEAM_IDS = {
   EQUIPE_7: 'team-equipe-7',
@@ -62,11 +74,10 @@ export const TEAM_IDS = {
 } as const;
 
 export const AGENDADOR_OPTIONS = [
-  { value: 'PEDRO' as Agendador, label: 'Pedro' },
-  { value: 'PEDRO_H' as Agendador, label: 'Pedro Henrique' },
   { value: 'PEDRO_JUAN' as Agendador, label: 'Pedro Juan' },
-  { value: 'HEBERT' as Agendador, label: 'Herbert' },
+  { value: 'PEDRO_H' as Agendador, label: 'Pedro Henrique' },
   { value: 'CLED' as Agendador, label: 'Cled' },
+  { value: 'HEBERT' as Agendador, label: 'Herbert' },
   { value: 'CAETANO' as Agendador, label: 'Bruno' },
 ];
 
@@ -76,15 +87,15 @@ export const OFFICIAL_SDR_OPTIONS = [
 
 export const OFFICIAL_SDR_VALUES = OFFICIAL_SDR_OPTIONS.map((option) => option.value);
 
-export const TEM_SOCIO_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS.map((option) => ({
-  value: option.value as TemSocio,
-  label: option.label,
-}));
+export const TEM_SOCIO_OPTIONS = [
+  { value: 'SIM' as TemSocio, label: 'Sim' },
+  { value: 'NAO' as TemSocio, label: 'Nao' },
+];
 
-export const TEM_MKT_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS.map((option) => ({
-  value: option.value as TemMkt,
-  label: option.label,
-}));
+export const TEM_MKT_OPTIONS = [
+  { value: 'SIM' as TemMkt, label: 'Sim' },
+  { value: 'NAO' as TemMkt, label: 'Nao' },
+];
 
 export const TEM_SECRETARIA_OPTIONS = COMMERCIAL_YES_NO_MAYBE_OPTIONS.map((option) => ({
   value: option.value as TemSecretaria,
@@ -330,13 +341,26 @@ function normalizePipelineClientKey(client: any) {
   return `${phone}::${name}`;
 }
 
+function toTimestamp(value?: string | Date | null) {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function preferLatestRecord<T extends { updated_at?: string | Date | null }>(current: T | undefined, incoming: T): T {
+  if (!current) return incoming;
+  return toTimestamp(incoming.updated_at) >= toTimestamp(current.updated_at) ? incoming : current;
+}
+
 function mergeCommercialSnapshots(remote: CommercialCloudState, local: ReturnType<typeof readCommercialLocalData>): CommercialCloudState {
   const mergedPipelineClients = new Map<string, any>();
   for (const client of remote.pipelineClients) {
     mergedPipelineClients.set(normalizePipelineClientKey(client), client);
   }
   for (const client of local.pipelineClients) {
-    mergedPipelineClients.set(normalizePipelineClientKey(client), client);
+    const key = normalizePipelineClientKey(client);
+    mergedPipelineClients.set(key, preferLatestRecord(mergedPipelineClients.get(key), client));
   }
 
   const mergedAgendaEvents = new Map<string, any>();
@@ -346,7 +370,7 @@ function mergeCommercialSnapshots(remote: CommercialCloudState, local: ReturnTyp
   }
   for (const event of local.agendaEvents) {
     const key = `${String(event.client_phone || '').replace(/\D/g, '')}::${String(event.client_name || '').trim().toLowerCase()}`;
-    mergedAgendaEvents.set(key, event);
+    mergedAgendaEvents.set(key, preferLatestRecord(mergedAgendaEvents.get(key), event));
   }
 
   const mergedAgendamentoLeads = new Map<string, any>();
@@ -356,7 +380,7 @@ function mergeCommercialSnapshots(remote: CommercialCloudState, local: ReturnTyp
   }
   for (const lead of local.agendamentoLeads) {
     const key = `${String(lead.telefone || '').replace(/\D/g, '')}::${String(lead.nome || '').trim().toLowerCase()}`;
-    mergedAgendamentoLeads.set(key, lead);
+    mergedAgendamentoLeads.set(key, preferLatestRecord(mergedAgendamentoLeads.get(key), lead));
   }
 
   const useLocalCatalog = (local.catalogVersion || 0) > (remote.catalogVersion || 0);
@@ -366,8 +390,8 @@ function mergeCommercialSnapshots(remote: CommercialCloudState, local: ReturnTyp
     pipelineClients: Array.from(mergedPipelineClients.values()),
     salesGoals: mergeSalesGoals(remote.salesGoals || [], local.salesGoals || []),
     sdrGoals: mergeSdrGoals(remote.sdrGoals || [], local.sdrGoals || []),
-    criativos: useLocalCatalog ? [...local.criativos].sort() : [...remote.criativos].sort(),
-    funis: useLocalCatalog ? [...local.funis].sort() : [...remote.funis].sort(),
+    criativos: Array.from(new Set((useLocalCatalog ? local.criativos : remote.criativos).map((item) => String(item || '').trim().toUpperCase()).filter(Boolean))).sort(),
+    funis: Array.from(new Set((useLocalCatalog ? local.funis : remote.funis).map((item) => String(item || '').trim().toUpperCase()).filter(Boolean))).sort(),
     catalogVersion: useLocalCatalog ? (local.catalogVersion || 0) : (remote.catalogVersion || 0),
     agendaEvents: Array.from(mergedAgendaEvents.values()),
     agendamentoLeads: Array.from(mergedAgendamentoLeads.values()),
@@ -389,8 +413,8 @@ function revivePipelineClient(client: any): PipelineClient {
 function normalizePipelineClientAnswers(client: any) {
   return {
     ...client,
-    temSocio: coerceCommercialAnswer(client.temSocio, 'NAO_SEI'),
-    temMkt: coerceCommercialAnswer(client.temMkt, 'NAO_SEI'),
+    temSocio: coerceCommercialAnswer(client.temSocio, 'NAO'),
+    temMkt: coerceCommercialAnswer(client.temMkt, 'NAO'),
     temSecretaria: coerceCommercialAnswer(client.temSecretaria, 'NAO_SEI'),
   };
 }
@@ -434,6 +458,8 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const queryClient = useQueryClient();
   const authContext = useAuthSafe();
   const user = authContext?.user;
+  const supabaseUser = authContext?.supabaseUser;
+  const session = authContext?.session;
   const logActivity = authContext?.logActivity ?? (() => {});
   const [cloudState, setCloudState] = useState<CommercialCloudState>(EMPTY_COMMERCIAL_STATE);
   const [isHydrating, setIsHydrating] = useState(true);
@@ -551,6 +577,16 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       dataEntrada: client.dataEntrada || new Date(),
     };
 
+    console.info('[commercial] addPipelineClient called', {
+      userId: user?.id || null,
+      supabaseUserId: supabaseUser?.id || null,
+      hasSession: Boolean(session),
+      clientName: newClient.clientName,
+      stage: newClient.stage,
+      meetingDate: newClient.meetingDate,
+      meetingTime: newClient.meetingTime,
+    });
+
     setCloudState((current) => ({
       ...current,
       pipelineClients: current.pipelineClients.some((item) => item.id === newClient.id)
@@ -563,24 +599,29 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
         savePipelineClientToCloud(newClient, user?.id),
         new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:save_pipeline_client')), 8000)),
       ]) as PipelineClient | null;
-      if (savedClient) {
-        setCloudState((current) => ({
-          ...current,
-          pipelineClients: current.pipelineClients.some((item) => item.id === savedClient.id)
+      if (!savedClient) {
+        throw new Error('cloud_save_returned_empty_result');
+      }
+
+      setCloudState((current) => ({
+        ...current,
+        pipelineClients: current.pipelineClients.some((item) => item.id === newClient.id)
+          ? current.pipelineClients.map((item) => (item.id === newClient.id ? savedClient : item))
+          : current.pipelineClients.some((item) => item.id === savedClient.id)
             ? current.pipelineClients.map((item) => (item.id === savedClient.id ? savedClient : item))
             : [savedClient, ...current.pipelineClients],
-          }));
-      }
+      }));
+
+      await refreshCommercialState();
+      logActivity('CLIENT_CREATED', 'Pipeline', savedClient.id, `Cliente ${savedClient.clientName} criado`);
     } catch (error) {
       console.warn('Lead save cloud sync failed or timed out.', error);
+      await refreshCommercialState().catch((refreshError) => {
+        console.warn('Lead save failed, and refresh also failed.', refreshError);
+      });
+      throw error;
     }
-
-    refreshCommercialState().catch((refreshError) => {
-      console.warn('Lead saved, but the immediate refresh failed. The lead will refresh again on the next realtime event.', refreshError);
-    });
-
-    logActivity('CLIENT_CREATED', 'Pipeline', newClient.id, `Cliente ${newClient.clientName} criado`);
-  }, [logActivity, refreshCommercialState, user?.id]);
+  }, [logActivity, refreshCommercialState, session, supabaseUser?.id, user?.id]);
 
   const updatePipelineClient = useCallback((id: string, data: Partial<PipelineClient>) => {
     const previousClient = pipelineClients.find((client) => client.id === id);

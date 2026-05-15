@@ -1,5 +1,7 @@
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
+import { matchMeetingName, normalizeMeetingClientName, normalizeMeetingTitle } from '@/lib/agendaTitle';
 
 const COMMERCIAL_LOCAL_DATA_KEY = 'great_commercial_local_data_v1';
 const COMMERCIAL_LOCAL_CRIATIVOS_KEY = 'great_commercial_criativos_v1';
@@ -72,12 +74,14 @@ export const DEFAULT_COMERCIAL_CRIATIVOS: string[] = [
   'BOTOX',
   'CAIXA DE PERGUNTAS',
   'FORMS/CAIXINHA OFICIAL 01',
+  'FORMS/CAIXINHA',
+  'NAO IDENTIFICADO',
 ];
 
 export const DEFAULT_COMERCIAL_FUNIS: string[] = [
   'INSTAGRAM',
-  'FORMULARIO',
   'MENSAGEM(WHATSAPP)',
+  'FORMULARIO',
   'INDICACAO',
 ];
 
@@ -140,7 +144,7 @@ function normalizePhone(value?: string | null) {
 function peopleMatch(recordPhone: string | null | undefined, recordName: string | null | undefined, targetPhone: string, targetName: string) {
   const recordDigits = normalizePhone(recordPhone);
   if (recordDigits && targetPhone && recordDigits === targetPhone) return true;
-  return Boolean(recordName && targetName && recordName.trim().toLowerCase() === targetName.trim().toLowerCase());
+  return Boolean(recordName && targetName && matchMeetingName(recordName) === matchMeetingName(targetName));
 }
 
 function toLocalIsoDate(value?: string | Date | null) {
@@ -235,6 +239,10 @@ function normalizeBooleanAnswer(value?: string | null) {
   return coerceCommercialAnswer(value) || 'NAO_SEI';
 }
 
+function getStoredLeadOrigin(input: { creative_source?: string | null; criativo?: string | null; funil?: string | null }) {
+  return getCommercialLeadOrigin(input);
+}
+
 function agendaColorForStage(stage?: string | null) {
   if (stage === 'NO_SHOW' || stage === 'PERDIDO') return '#FF0000';
   if (stage === 'FECHADO' || stage === 'NEGOCIACAO' || stage === 'TAXA_INTERESSE') return '#66FF00';
@@ -243,7 +251,7 @@ function agendaColorForStage(stage?: string | null) {
 
 export function syncPipelineClientAutomations(current: CommercialLocalData, client: any): CommercialLocalData {
   const phone = normalizePhone(client.telefone);
-  const clientName = client.clientName || client.nome || 'Lead sem nome';
+  const clientName = normalizeMeetingClientName(client.clientName || client.nome || 'Lead sem nome') || 'Lead sem nome';
   const clinicName = client.clinicName || client.clinic_name || clientName;
   const meetingDate = toLocalIsoDate(client.meetingDate);
   const meetingTime = toTime(client.meetingTime);
@@ -260,20 +268,20 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
   const agendaEvent = {
     ...(existingEvent || {}),
     id: existingEvent?.id || `agenda-${crypto.randomUUID()}`,
-    title: `Reuniao com ${clientName}`,
-    description: client.criativo ? `Lead do Pipeline - ${client.criativo}` : 'Lead do Pipeline',
-    notes: client.notes || existingEvent?.notes || null,
-    client_name: clientName,
-    client_phone: phone || existingEvent?.client_phone || '',
-    clinic_name: clinicName,
-    event_date: meetingDate,
-    event_time: toAgendaTime(meetingTime),
+    title: String(existingEvent?.title || '').trim() || normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
+    description: existingEvent?.description || `Lead do Pipeline - ${getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
+    notes: existingEvent?.notes ?? client.notes ?? null,
+    client_name: existingEvent?.client_name || clientName,
+    client_phone: existingEvent?.client_phone || phone || '',
+    clinic_name: existingEvent?.clinic_name || clinicName,
+    event_date: existingEvent?.event_date || meetingDate,
+    event_time: existingEvent?.event_time || toAgendaTime(meetingTime),
     duration_minutes: existingEvent?.duration_minutes || 60,
     meeting_link: existingEvent?.meeting_link || null,
-    scheduled_by: client.agendadoPor || client.assignedSDR || existingEvent?.scheduled_by || null,
-    lead_stage: client.stage || existingEvent?.lead_stage || 'NOVO',
-    creative_source: client.criativo || existingEvent?.creative_source || null,
-    color: agendaColorForStage(client.stage),
+    scheduled_by: existingEvent?.scheduled_by || client.agendadoPor || client.assignedSDR || null,
+    lead_stage: existingEvent?.lead_stage || client.stage || 'NOVO',
+    creative_source: existingEvent?.creative_source || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: existingEvent?.creative_source }) || null,
+    color: existingEvent?.color || agendaColorForStage(client.stage),
     reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
     reminder_30min_sent: existingEvent?.reminder_30min_sent || false,
     created_by_user_id: client.createdByUserId || existingEvent?.created_by_user_id || 'local-user',
@@ -289,25 +297,25 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
   const agendamentoLead = {
     ...(existingLead || {}),
     id: existingLead?.id || `agendamento-${crypto.randomUUID()}`,
-    data: isoToBrazilianDate(meetingDate),
-    nome: clientName,
-    telefone: phone || existingLead?.telefone || '',
-    horario: timeToPeriod(meetingTime),
-    horario_especifico: meetingTime,
-    tem_socio: normalizeBooleanAnswer(client.temSocio),
-    tem_mkt: normalizeBooleanAnswer(client.temMkt),
-    tem_secretaria: normalizeBooleanAnswer(client.temSecretaria),
-    salao_ou_clinica: client.salaoOuClinica || 'NAO_INFORMADO',
-    faturamento: normalizeFaturamento(client.faturamento),
-    pode_investir: client.podeInvestir || existingLead?.pode_investir || null,
-    agendado_via: client.agendadoVia || existingLead?.agendado_via || null,
-    funil: client.criativo || existingLead?.funil || 'NAO IDENTIFICADO',
-    status: STAGE_TO_AGENDAMENTO_STATUS[client.stage] || existingLead?.status || 'NOVO_LEAD',
+    data: existingLead?.data || isoToBrazilianDate(meetingDate),
+    nome: existingLead?.nome || clientName,
+    telefone: existingLead?.telefone || phone || '',
+    horario: existingLead?.horario || timeToPeriod(meetingTime),
+    horario_especifico: existingLead?.horario_especifico || meetingTime,
+    tem_socio: existingLead?.tem_socio || coerceCommercialAnswer(client.temSocio, 'NAO'),
+    tem_mkt: existingLead?.tem_mkt || coerceCommercialAnswer(client.temMkt, 'NAO'),
+    tem_secretaria: existingLead?.tem_secretaria || coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
+    salao_ou_clinica: existingLead?.salao_ou_clinica || client.salaoOuClinica || 'NAO_INFORMADO',
+    faturamento: existingLead?.faturamento || normalizeFaturamento(client.faturamento),
+    pode_investir: existingLead?.pode_investir || client.podeInvestir || null,
+    agendado_via: existingLead?.agendado_via || client.agendadoVia || null,
+    funil: existingLead?.funil || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: existingLead?.funil }) || 'NAO IDENTIFICADO',
+    status: existingLead?.status || STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
     created_by_user_id: client.createdByUserId || existingLead?.created_by_user_id || 'local-user',
     created_at: existingLead?.created_at || now,
     updated_at: now,
-    agenda_event_date: meetingDate,
-    agenda_event_time: toAgendaTime(meetingTime),
+    agenda_event_date: existingLead?.agenda_event_date || meetingDate,
+    agenda_event_time: existingLead?.agenda_event_time || toAgendaTime(meetingTime),
   };
 
   return {
@@ -323,7 +331,7 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
 
 export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lead: any, fallbackPipelineClient?: any): CommercialLocalData {
   const phone = normalizePhone(lead.telefone);
-  const clientName = lead.nome || fallbackPipelineClient?.clientName || 'Lead sem nome';
+  const clientName = normalizeMeetingClientName(lead.nome || fallbackPipelineClient?.clientName || 'Lead sem nome') || 'Lead sem nome';
   const clinicName = lead.clinic_name || fallbackPipelineClient?.clinicName || fallbackPipelineClient?.clinic_name || clientName;
   const meetingDate = brazilianToIsoDate(lead.data || lead.agenda_event_date);
   const agendaTime = leadTimeToAgendaTime(lead);
@@ -342,20 +350,20 @@ export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lea
   const agendaEvent = {
     ...(existingEvent || {}),
     id: existingEvent?.id || `agenda-${crypto.randomUUID()}`,
-    title: `Reuniao com ${clientName}`,
-    description: lead.funil ? `Lead de Agendamento - ${lead.funil}` : 'Lead de Agendamento',
-    notes: existingEvent?.notes || null,
-    client_name: clientName,
-    client_phone: phone || existingEvent?.client_phone || '',
-    clinic_name: clinicName,
-    event_date: meetingDate,
-    event_time: agendaTime,
+    title: String(existingEvent?.title || '').trim() || normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
+    description: existingEvent?.description || `Lead de Agendamento - ${getStoredLeadOrigin({ criativo: fallbackPipelineClient?.criativo, funil: lead.funil })}`,
+    notes: existingEvent?.notes ?? lead.notes ?? null,
+    client_name: existingEvent?.client_name || clientName,
+    client_phone: existingEvent?.client_phone || phone || '',
+    clinic_name: existingEvent?.clinic_name || clinicName,
+    event_date: existingEvent?.event_date || meetingDate,
+    event_time: existingEvent?.event_time || agendaTime,
     duration_minutes: existingEvent?.duration_minutes || 60,
     meeting_link: existingEvent?.meeting_link || null,
-    scheduled_by: lead.agendado_por || fallbackPipelineClient?.agendadoPor || existingEvent?.scheduled_by || null,
-    lead_stage: agendaStage,
-    creative_source: lead.funil || fallbackPipelineClient?.criativo || existingEvent?.creative_source || null,
-    color: agendaColorForStage(agendaStage),
+    scheduled_by: existingEvent?.scheduled_by || lead.agendado_por || fallbackPipelineClient?.agendadoPor || null,
+    lead_stage: existingEvent?.lead_stage || agendaStage,
+    creative_source: existingEvent?.creative_source || getStoredLeadOrigin({ criativo: fallbackPipelineClient?.criativo, funil: lead.funil, creative_source: existingEvent?.creative_source }) || null,
+    color: existingEvent?.color || agendaColorForStage(agendaStage),
     reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
     reminder_30min_sent: existingEvent?.reminder_30min_sent || false,
     created_by_user_id: lead.created_by_user_id || existingEvent?.created_by_user_id || 'local-user',
@@ -376,12 +384,12 @@ export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lea
         ...client,
         clientName,
         telefone: phone || client.telefone,
-        criativo: lead.funil || client.criativo,
+        criativo: getStoredLeadOrigin({ criativo: client.criativo, funil: lead.funil }),
         faturamento: normalizeFaturamento(lead.faturamento),
         meetingDate,
         meetingTime,
-    temSocio: coerceCommercialAnswer(lead.tem_socio) || 'NAO_SEI',
-    temMkt: coerceCommercialAnswer(lead.tem_mkt) || 'NAO_SEI',
+    temSocio: coerceCommercialAnswer(lead.tem_socio, 'NAO'),
+    temMkt: coerceCommercialAnswer(lead.tem_mkt, 'NAO'),
     temSecretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
         salaoOuClinica: lead.salao_ou_clinica || client.salaoOuClinica,
       };
@@ -404,8 +412,8 @@ export function readCommercialLocalData(): CommercialLocalData {
   const storedCatalogVersion = Number(catalogVersionRaw || 0) || 0;
 
   if (!raw) {
-    const criativos = parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS];
-    const funis = parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS];
+    const criativos = normalizeUniqueList(parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS]);
+    const funis = normalizeUniqueList(parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS]);
     return {
       ...DEFAULT_COMMERCIAL_LOCAL_DATA,
       criativos,
@@ -422,13 +430,13 @@ export function readCommercialLocalData(): CommercialLocalData {
     return {
       ...DEFAULT_COMMERCIAL_LOCAL_DATA,
       ...parsed,
-      criativos: localCriativos.length > 0 ? localCriativos : (parsed.criativos || DEFAULT_COMERCIAL_CRIATIVOS),
-      funis: localFunis.length > 0 ? localFunis : (parsed.funis || [...DEFAULT_COMERCIAL_FUNIS]),
+      criativos: normalizeUniqueList(localCriativos.length > 0 ? localCriativos : (parsed.criativos || DEFAULT_COMERCIAL_CRIATIVOS)),
+      funis: normalizeUniqueList(localFunis.length > 0 ? localFunis : (parsed.funis || [...DEFAULT_COMERCIAL_FUNIS])),
       catalogVersion: parsedVersion > 0 ? parsedVersion : ((localCriativos.length > 0 || localFunis.length > 0 || (parsed.criativos?.length || 0) > 0 || (parsed.funis?.length || 0) > 0) ? 1 : 0),
     };
   } catch {
-    const criativos = parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS];
-    const funis = parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS];
+    const criativos = normalizeUniqueList(parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS]);
+    const funis = normalizeUniqueList(parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS]);
     return {
       ...DEFAULT_COMMERCIAL_LOCAL_DATA,
       criativos,
@@ -462,7 +470,7 @@ function parseStringList(raw: string | null): string[] {
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed.map((item) => String(item).trim().toUpperCase()).filter(Boolean);
+      return Array.from(new Set(parsed.map((item) => String(item).trim().toUpperCase()).filter(Boolean)));
     }
   } catch {
     return raw
@@ -471,6 +479,10 @@ function parseStringList(raw: string | null): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+function normalizeUniqueList(items: string[]): string[] {
+  return Array.from(new Set(items.map((item) => String(item).trim().toUpperCase()).filter(Boolean))).sort();
 }
 
 export function updateCommercialLocalData(

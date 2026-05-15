@@ -201,6 +201,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       salao_ou_clinica: leadForm.salao_ou_clinica as any,
       agenda_event_date: eventForm.event_date,
       agenda_event_time: eventForm.event_time,
+      agenda_event_title: canonicalTitle,
       status: resolvedLeadStatus,
     };
 
@@ -212,17 +213,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       meetingDate: eventForm.event_date,
       meetingTime: eventForm.event_time,
     };
-
-    await updateEvent.mutateAsync({
-      id: event.id,
-      ...eventForm,
-      title: canonicalTitle,
-      client_name: canonicalClientName,
-      client_phone: formatPhoneForWhatsApp(eventForm.client_phone),
-      meeting_link: eventForm.meeting_link || null,
-      description: eventForm.description || null,
-      notes: eventForm.notes || null,
-    });
 
     if (leadData) {
       await updateLead.mutateAsync({
@@ -248,6 +238,17 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
         });
       }
     }
+
+    await updateEvent.mutateAsync({
+      id: event.id,
+      ...eventForm,
+      title: canonicalTitle,
+      client_name: canonicalClientName,
+      client_phone: formatPhoneForWhatsApp(eventForm.client_phone),
+      meeting_link: eventForm.meeting_link || null,
+      description: eventForm.description || null,
+      notes: eventForm.notes || null,
+    });
 
     setIsEditingEvent(false);
   };
@@ -297,6 +298,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       tem_mkt: leadForm.tem_mkt as any,
       tem_secretaria: leadForm.tem_secretaria as any,
       salao_ou_clinica: leadForm.salao_ou_clinica as any,
+      agenda_event_title: canonicalTitle,
       status: resolvedLeadStatus,
     };
 
@@ -355,7 +357,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
         <div className="max-h-[94vh] overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-slate-50 p-0">
         <DialogHeader className="border-b border-slate-200/70 px-8 py-6">
           <DialogTitle className="text-[1.8rem] font-black tracking-tight text-slate-950 sm:text-3xl">
-            {isEditingEvent ? 'Editar evento' : event.title}
+            {isEditingEvent ? (eventForm.title || 'Editar evento') : event.title}
           </DialogTitle>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             Visão consolidada do agendamento, do lead e do pipeline vinculado.
