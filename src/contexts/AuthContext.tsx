@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { User, UserRole, Module, ActivityLog, Team } from '@/types';
-import { COMMERCIAL_LOGIN_EMAILS, COMMERCIAL_LOGIN_PASSWORD, canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
+import { COMMERCIAL_LOGIN_EMAILS, COMMERCIAL_LOGIN_PASSWORD, TEAM_USERS, canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
 import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
 
@@ -34,9 +34,18 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const isBrowser = typeof window !== 'undefined';
+const isLocalhost = isBrowser && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 
-// Initial mock users - Using centralized TEAM_USERS mapping
-const INITIAL_USERS: (User & { password: string })[] = [];
+const INITIAL_USERS: (User & { password: string })[] = Object.values(TEAM_USERS).map((entry) => ({
+  id: entry.email,
+  name: entry.name,
+  email: entry.email,
+  role: entry.role as UserRole,
+  active: true,
+  createdAt: new Date(),
+  password: COMMERCIAL_LOGIN_PASSWORD,
+}));
 
 const INITIAL_TEAMS: Team[] = [];
 
@@ -46,39 +55,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   // Store both roles from database
   const [commercialRole, setCommercialRole] = useState<string | null>(null);
-  const [users, setUsers] = useState<(User & { password: string })[]>(() => {
-    const stored = safeGetItem('great_users');
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {
-        return INITIAL_USERS;
-      }
-    }
-    return INITIAL_USERS;
-  });
-  const [teams, setTeams] = useState<Team[]>(() => {
-    const stored = safeGetItem('great_teams');
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {
-        return INITIAL_TEAMS;
-      }
-    }
-    return INITIAL_TEAMS;
-  });
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {
-    const stored = safeGetItem('great_activity_logs');
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
+  const [users, setUsers] = useState<(User & { password: string })[]>(INITIAL_USERS);
+  const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedModule, setSelectedModule] = useState<Module | null>('COMERCIAL');
 
@@ -113,6 +92,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     safeSetItem('great_local_auth_bypass', 'true');
     safeSetItem('great_local_auth_user', JSON.stringify(authUser));
     safeRemoveItem('great_test_session_bypass');
+  }
+
+  async function syncCommercialProfile(authUser: User) {
+    if (!isSupabaseConfigured) return;
+
+    const mappedUser = getUserByEmail(authUser.email);
+    console.info('[auth] syncing commercial profile', {
+      email: authUser.email,
+      userId: authUser.id,
+      commercialRole: mappedUser?.role || null,
+    });
+    await supabase
+      .from('profiles')
+      .update({
+        full_name: authUser.name,
+        email: authUser.email,
+        commercial_role: mappedUser?.role === 'SDR' || mappedUser?.role === 'CLOSER' || mappedUser?.role === 'COORDENADOR_COMERCIAL'
+          ? mappedUser.role
+          : null,
+      })
+      .eq('id', authUser.id);
   }
 
   function withTimeout<T>(thenable: PromiseLike<T>, ms: number, label: string): Promise<T> {
@@ -230,6 +230,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       setUser(userWithCorrectId);
       safeSetItem('great_user', JSON.stringify(userWithCorrectId));
+      void syncCommercialProfile(userWithCorrectId).catch((error) => {
+        console.warn('Could not sync commercial profile.', error);
+      });
     } else {
       // User exists in Supabase but not in internal users list - fetch from database
       let role: UserRole = (mappedUser?.role as UserRole) || 'SETOR_COMERCIAL';
@@ -269,6 +272,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       setUser(newUser);
       safeSetItem('great_user', JSON.stringify(newUser));
+      void syncCommercialProfile(newUser).catch((error) => {
+        console.warn('Could not sync commercial profile.', error);
+      });
     }
   }, [users]);
 
@@ -326,7 +332,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const localAuthBypass = safeGetItem('great_local_auth_bypass') === 'true';
-    if (localAuthBypass) {
+    const shouldHonorLocalAuthBypass =
+      localAuthBypass || isLocalhost || safeGetItem('great_enable_localhost_fallback') === 'true' || safeGetItem('great_test_session_bypass') === 'true';
+    if (shouldHonorLocalAuthBypass) {
       const storedUser = safeGetItem('great_local_auth_user') || safeGetItem('great_user');
       if (storedUser) {
         try {
@@ -409,21 +417,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []); // Empty deps - use ref for syncInternalUser
 
-  // Persist users to localStorage
-  useEffect(() => {
-    safeSetItem('great_users', JSON.stringify(users));
-  }, [users]);
-
-  // Persist teams to localStorage
-  useEffect(() => {
-    safeSetItem('great_teams', JSON.stringify(teams));
-  }, [teams]);
-
-  // Persist activity logs
-  useEffect(() => {
-    safeSetItem('great_activity_logs', JSON.stringify(activityLogs));
-  }, [activityLogs]);
-
   const logActivity = useCallback((action: string, entity: string, entityId?: string, details?: string) => {
     if (!user) return;
     
@@ -450,10 +443,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const localPasswordOk = password === COMMERCIAL_LOGIN_PASSWORD;
       const localEmailOk = COMMERCIAL_LOGIN_EMAILS.some(allowedEmail => allowedEmail.toLowerCase() === normalizedEmail);
       const localEmailMatch = mappedUser || localEmailOk;
-      const isLocalhost =
-        typeof window !== 'undefined' &&
-        ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-      if (localEmailMatch && localPasswordOk) {
+      const canUseLocalAuth = localEmailMatch && localPasswordOk;
+
+      console.info('[auth] login attempt', {
+        email: normalizedEmail,
+        localEmailMatch: Boolean(localEmailMatch),
+        canUseLocalAuth,
+        isSupabaseConfigured,
+        hostname: isBrowser ? window.location.hostname : 'server',
+      });
+
+      if (canUseLocalAuth) {
         const localUser = mappedUser ?? getUserByEmail(normalizedEmail);
         if (!localUser) {
           return { success: false, error: 'Email não autorizado para login interno.' };
@@ -468,6 +468,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         createLocalAuthState(authUser);
+        console.info('[auth] local auth session created', {
+          email: authUser.email,
+          userId: authUser.id,
+        });
         return { success: true };
       }
 
@@ -475,25 +479,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: 'Senha incorreta. Use Great2026! para esses acessos.' };
       }
 
-      if (isLocalhost && localPasswordOk) {
-        const fallbackUser: User = {
-          id: normalizedEmail || 'local-user',
-          email: normalizedEmail,
-          name: mappedUser?.name || email.split('@')[0] || 'Usuário Great',
-          role: (mappedUser?.role as UserRole) || 'SETOR_COMERCIAL',
-          active: true,
-          createdAt: new Date(),
-        };
-
-        createLocalAuthState(fallbackUser);
-        return { success: true };
-      }
-
       if (!isSupabaseConfigured) {
-        return { success: false, error: 'Login local indisponível para este email. Use um dos acessos cadastrados.' };
+        return { success: false, error: 'Login indisponível neste ambiente. Use os acessos internos.' };
       }
 
-      // Try to sign in with Supabase directly
+      // Try to sign in with Supabase directly for non-commercial access only.
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({
           email,
@@ -514,6 +504,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
+        console.info('[auth] supabase login successful', {
+          email: data.user.email,
+          userId: data.user.id,
+        });
         // Log the login activity
         const log: ActivityLog = {
           id: crypto.randomUUID(),
@@ -531,9 +525,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: true };
     } catch (error: any) {
       const message = String(error?.message || error || 'Erro inesperado ao fazer login.');
-      const isLocalhost =
-        typeof window !== 'undefined' &&
-        ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
       const passwordOk = password === COMMERCIAL_LOGIN_PASSWORD;
 
       if (isLocalhost && passwordOk) {

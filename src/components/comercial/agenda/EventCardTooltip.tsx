@@ -14,7 +14,7 @@ import {
   SALAO_OU_CLINICA_OPTIONS,
 } from '@/hooks/useAgendamentoData';
 import { getPhoneMatchCandidates } from '@/lib/phoneUtils';
-import { useCommercialSafe } from '@/contexts/CommercialContext';
+import { AGENDADOR_OPTIONS, useCommercialSafe } from '@/contexts/CommercialContext';
 import { useAgendamentoData } from '@/hooks/useAgendamentoData';
 
 interface EventCardTooltipProps {
@@ -153,6 +153,11 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
   };
 
   const colorLabel = EVENT_COLORS.find(c => c.value === event.color)?.label || 'Sem status';
+  const scheduledByLabel = event.scheduled_by
+    ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
+    : pipelineClient?.agendadoPor
+      ? AGENDADOR_OPTIONS.find((option) => option.value === pipelineClient.agendadoPor)?.label || pipelineClient.agendadoPor
+      : null;
   const endTime = format(
     addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
     'HH:mm'
@@ -174,6 +179,11 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
           <h4 className="font-semibold text-foreground truncate flex-1">{event.title}</h4>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{colorLabel}</p>
+        {scheduledByLabel && (
+          <p className="text-xs font-semibold text-muted-foreground mt-1">
+            Agendado por: {scheduledByLabel}
+          </p>
+        )}
       </div>
 
       {/* Content - Agendamento Data Grid */}

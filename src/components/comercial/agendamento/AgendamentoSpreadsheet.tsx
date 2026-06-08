@@ -179,6 +179,8 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
     return getHorarioLabel(derivedHorario || lead.horario);
   };
 
+  const normalizeSocioOrMktValue = (value?: string | null) => (value === 'SIM' ? 'SIM' : 'NAO');
+
   // Check if lead has agenda data
   const hasAgendaData = (lead: AgendamentoLead) => {
     return !!lead.agenda_event_date && !!lead.agenda_event_time;
@@ -359,7 +361,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                     {/* TEM SÓCIO? - Dropdown */}
                     <TableCell className="p-1">
                       <Select
-                        value={lead.tem_socio || 'NAO_SEI'}
+                        value={normalizeSocioOrMktValue(lead.tem_socio)}
                         onValueChange={(v) => handleDropdownChange(lead.id, 'tem_socio', v)}
                       >
                         <SelectTrigger className="h-8 text-xs border-0 bg-transparent hover:bg-muted/50">
@@ -378,7 +380,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                     {/* TEM MKT? - Dropdown */}
                     <TableCell className="p-1">
                       <Select
-                        value={lead.tem_mkt || 'NAO_SEI'}
+                        value={normalizeSocioOrMktValue(lead.tem_mkt)}
                         onValueChange={(v) => handleDropdownChange(lead.id, 'tem_mkt', v)}
                       >
                         <SelectTrigger className="h-8 text-xs border-0 bg-transparent hover:bg-muted/50">

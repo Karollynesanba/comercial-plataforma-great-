@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Calendar, Edit2, Loader2, Save, Sparkles, Target, TrendingUp, Users, Clock } from 'lucide-react';
-import { AGENDADOR_OPTIONS, Agendador, useCommercial } from '@/contexts/CommercialContext';
+import { AGENDADOR_OPTIONS, Agendador, OFFICIAL_SDR_VALUES, useCommercial } from '@/contexts/CommercialContext';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/comercial/PeriodFilter';
@@ -20,6 +20,7 @@ import { getScheduleDate, parseCalendarDate } from '@/lib/preVendaAnalytics';
 const DAILY_GOAL = 8;
 const SDR_NAMES: Record<string, string> = {
 HEBERT: 'Herbert',
+ALAN: 'Alan',
 };
 
 export default function MetaAgendamentos() {
@@ -38,6 +39,7 @@ export default function MetaAgendamentos() {
 
   const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const currentMonthLabel = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const recognizedAgendadores = useMemo(() => new Set(AGENDADOR_OPTIONS.map((option) => option.value)), []);
 
   const [generalGoal, setGeneralGoal] = useState('');
   const [goals, setGoals] = useState<Record<Agendador, string>>(() => {
@@ -93,7 +95,7 @@ export default function MetaAgendamentos() {
   }, [customEnd, customStart, filterByPeriod, period, pipelineClients]);
 
   useEffect(() => {
-    ['HEBERT'].forEach((name) => {
+    OFFICIAL_SDR_VALUES.forEach((name) => {
       if ((sdrStats as any)[name]?.todayCount >= DAILY_GOAL && !celebrated.has(name)) {
         confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 } });
         toast.success(`${SDR_NAMES[name]} bateu a meta diaria!`);
@@ -103,9 +105,10 @@ export default function MetaAgendamentos() {
   }, [celebrated, sdrStats]);
 
   const totalScheduled = useMemo(() => pipelineClients.filter((client) => {
+    if (!client.agendadoPor || !recognizedAgendadores.has(client.agendadoPor)) return false;
     const date = parseCalendarDate(getScheduleDate(client));
     return date ? filterByPeriod(date, period, customStart, customEnd) : false;
-  }).length, [customEnd, customStart, filterByPeriod, period, pipelineClients]);
+  }).length, [customEnd, customStart, filterByPeriod, period, pipelineClients, recognizedAgendadores]);
 
   const effectiveGeneralGoal = parseInt(generalGoal) || AGENDADOR_OPTIONS.reduce((sum, option) => sum + (parseInt(goals[option.value]) || 0), 0);
   const totalProgress = effectiveGeneralGoal > 0 ? Math.min((totalScheduled / effectiveGeneralGoal) * 100, 100) : 0;
@@ -286,7 +289,7 @@ export default function MetaAgendamentos() {
                 const goalValue = parseInt(goals[agendador.value]) || 0;
                 const progress = goalValue > 0 ? Math.min((scheduledCount / goalValue) * 100, 100) : 0;
                 const isAchieved = goalValue > 0 && scheduledCount >= goalValue;
-                const isDailyTracked = agendador.value === 'HEBERT';
+                const isDailyTracked = OFFICIAL_SDR_VALUES.includes(agendador.value);
                 const dailyGoalAchieved = isDailyTracked && todayCount >= DAILY_GOAL;
 
                 return (
@@ -352,6 +355,7 @@ export default function MetaAgendamentos() {
                   </Card>
                 );
               })}
+
             </div>
           </CardContent>
         </Card>
@@ -404,6 +408,7 @@ export default function MetaAgendamentos() {
                 selectedDay={period === 'day' || period === 'current_day' ? customStart || new Date() : undefined}
                 selectedMonth={period === 'current_month' ? format(new Date(), 'yyyy-MM') : undefined}
                 selectedMonthRange={selectedMonthRange}
+                period={period}
               />
             )}
           </CardContent>

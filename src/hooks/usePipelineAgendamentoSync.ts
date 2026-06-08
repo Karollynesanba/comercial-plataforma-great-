@@ -1,6 +1,7 @@
 import type { AgendamentoLead, AgendamentoLeadInsert } from './useAgendamentoData';
 import type { PipelineClient, Faturamento, PipelineStage } from '@/contexts/CommercialContext';
-import { coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
+import { commercialAnswerToDb, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 type NormalizedFaturamento =
   | '0_A_10K'
@@ -45,6 +46,21 @@ const FATURAMENTO_ALIASES: Record<string, NormalizedFaturamento> = {
 function normalizeFaturamento(value?: string | null): NormalizedFaturamento {
   if (!value) return 'NAO_INFORMADO';
   return FATURAMENTO_ALIASES[value] || FATURAMENTO_ALIASES[value.toUpperCase()] || 'NAO_INFORMADO';
+}
+
+function brazilianDateToIso(value?: string | null) {
+  if (!value) return undefined;
+  const match = String(value).trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return undefined;
+  const [, day, month, year] = match;
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeTime(value?: string | null) {
+  if (!value) return undefined;
+  const match = String(value).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return undefined;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
 export const AGENDAMENTO_TO_PIPELINE_FATURAMENTO: Record<string, Faturamento> = {
@@ -97,14 +113,14 @@ export const AGENDAMENTO_STATUS_TO_PIPELINE_STAGE: Record<string, PipelineStage>
   'PERDIDO': 'PERDIDO',
   'FECHADO': 'FECHADO',
   'NOSHOW': 'NO_SHOW',
-  'REMARCAÃ‡ÃƒO': 'NOVO',
+  'REMARCAÃƒâ€¡ÃƒÆ’O': 'NOVO',
   'FOLLOW UP': 'NEGOCIACAO',
   'VENDA PERDIDA': 'PERDIDO',
   'LEAD DESQUALIFICADO': 'PERDIDO',
   'ENTRAR EM CONTATO': 'NOVO',
   'INTERESSEIRO': 'NEGOCIACAO',
   'FUP - ONE LEVEL': 'NEGOCIACAO',
-  'SEM RESPOSTA - PÃ“S': 'NO_SHOW',
+  'SEM RESPOSTA - PÃƒâ€œS': 'NO_SHOW',
   'REEMBOLSO': 'PERDIDO',
   'ARROGANTE': 'PERDIDO',
   'OUTRA PROPOSTA': 'NEGOCIACAO',
@@ -112,7 +128,7 @@ export const AGENDAMENTO_STATUS_TO_PIPELINE_STAGE: Record<string, PipelineStage>
   'FECHOU COM OUTRO': 'PERDIDO',
   'VIU CNPJ': 'NEGOCIACAO',
   'PAGOU TAXA DE INT': 'TAXA_INTERESSE',
-  'NÃƒO FECHOU': 'PERDIDO',
+  'NÃƒÆ’O FECHOU': 'PERDIDO',
 };
 
 export const PIPELINE_STAGE_TO_AGENDAMENTO_STATUS: Record<PipelineStage, string> = {
@@ -125,15 +141,15 @@ export const PIPELINE_STAGE_TO_AGENDAMENTO_STATUS: Record<PipelineStage, string>
 };
 
 function mapTemSocioToAgendamento(temSocio?: CommercialYesNoMaybe): CommercialYesNoMaybe {
-  return coerceCommercialAnswer(temSocio) || 'NAO_SEI';
+  return commercialAnswerToDb(temSocio);
 }
 
 function mapTemMktToAgendamento(temMkt?: CommercialYesNoMaybe): CommercialYesNoMaybe {
-  return coerceCommercialAnswer(temMkt) || 'NAO_SEI';
+  return commercialAnswerToDb(temMkt);
 }
 
 function mapTemSecretariaToAgendamento(temSecretaria?: CommercialYesNoMaybe): CommercialYesNoMaybe {
-  return coerceCommercialAnswer(temSecretaria) || 'NAO_SEI';
+  return commercialAnswerToDb(temSecretaria);
 }
 
 export function agendamentoToPipeline(
@@ -150,7 +166,7 @@ export function agendamentoToPipeline(
     clientName: lead.nome,
     clinicName: lead.nome,
     vendedor: undefined,
-    criativo: lead.funil || 'NÃƒO IDENTIFICADO',
+    criativo: getCommercialLeadOrigin({ funil: lead.funil }),
     equipe: nextTeam,
     faturamento: normalizeFaturamento(lead.faturamento) as Faturamento,
     pacote: 'COMPLETO',
@@ -160,9 +176,11 @@ export function agendamentoToPipeline(
     dataEntrada: new Date(),
     stage,
     lostReason: stage === 'PERDIDO' ? ('status' in lead ? lead.status : undefined) : undefined,
-    temSocio: coerceCommercialAnswer(lead.tem_socio) || 'NAO_SEI',
-    temMkt: coerceCommercialAnswer(lead.tem_mkt) || 'NAO_SEI',
-    temSecretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
+    temSocio: commercialAnswerToDb(lead.tem_socio),
+    temMkt: commercialAnswerToDb(lead.tem_mkt),
+    temSecretaria: commercialAnswerToDb(lead.tem_secretaria),
+    meetingDate: lead.agenda_event_date || brazilianDateToIso(lead.data),
+    meetingTime: normalizeTime(lead.agenda_event_time || lead.horario_especifico) || undefined,
   };
 }
 
@@ -182,7 +200,7 @@ export function pipelineToAgendamento(
     tem_secretaria: mapTemSecretariaToAgendamento(client.temSecretaria),
     salao_ou_clinica: 'NAO_INFORMADO',
     faturamento: normalizeFaturamento(client.faturamento) as AgendamentoLead['faturamento'],
-    funil: client.criativo || 'NÃƒO IDENTIFICADO',
+    funil: getCommercialLeadOrigin({ criativo: client.creativeSource || client.criativo, funil: client.funil }),
     status: PIPELINE_STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'ENTRAR EM CONTATO',
   };
 }

@@ -27,13 +27,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CommercialAnswerGroup } from '@/components/comercial/CommercialAnswerGroup';
 import { formatBRL } from '@/lib/utils';
 import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import { 
   useCommercial, 
   PipelineClient,
   FUNIL_OPTIONS,
+  CRIATIVO_REQUIRED_FUNIS,
+  getFunilLabel,
   VENDEDOR_OPTIONS,
   EQUIPE_OPTIONS,
   FATURAMENTO_OPTIONS,
@@ -114,7 +116,7 @@ const formSchema = z.object({
   pacote: z.enum(['COMPLETO', 'TRAFEGO_E_CRIATIVOS', 'ATENDIMENTO', 'TRAFEGO', 'COMPLETO_NOVA_ERA', 'TRAFEGO_ARTES_IA', 'TRAFEGO_CONSULTORIA', 'IA', 'TRAFEGO_ROTEIRO', 'TRAFEGO_IA'] as const),
   periodo: z.enum(['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'TAXA_INTERESSE'] as const),
   indicacao: z.string().optional(),
-  agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'CLED', 'CAETANO'] as const).optional().nullable(),
+  agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'CLED', 'CAETANO'] as const).optional().nullable(),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
   meetingDate: z.string().min(1, 'Data da reunião é obrigatória'),
   meetingTime: z.string().min(1, 'Horário da reunião é obrigatório'),
@@ -128,10 +130,10 @@ const formSchema = z.object({
     return isNaN(num) ? 0 : num;
   }),
 }).refine((data) => {
-  if (data.funil === 'INSTAGRAM') return true;
+  if (!CRIATIVO_REQUIRED_FUNIS.includes(data.funil as (typeof CRIATIVO_REQUIRED_FUNIS)[number])) return true;
   return Boolean(data.criativo?.trim());
 }, {
-  message: 'Informe o criativo quando o funil nao for Instagram',
+  message: 'Informe o criativo quando o funil for WhatsApp ou Forms',
   path: ['criativo'],
 });
 
@@ -144,7 +146,7 @@ interface EditClientDialogProps {
 }
 
 export function EditClientDialog({ open, onOpenChange, client }: EditClientDialogProps) {
-  const { updatePipelineClient, criativos, funis } = useCommercial();
+  const { updatePipelineClient, criativos } = useCommercial();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isNovoLead = client?.stage === 'NOVO';
 
@@ -185,6 +187,16 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
   const showMrrSection = Boolean(client?.stage === 'FECHADO' || client?.isMrr || client?.mrrRemaining || isMrr);
   const entradaValue = currencyToNumber(watchEntrada);
   const mrrRemainingValue = currencyToNumber(watchMrrRemaining);
+  const selectedFunil = watchFunil || client?.funil || '';
+  const funnelOptions = client?.funil && !FUNIL_OPTIONS.includes(client.funil as (typeof FUNIL_OPTIONS)[number])
+    ? [client.funil, ...FUNIL_OPTIONS]
+    : [...FUNIL_OPTIONS];
+  const shouldShowCriativo =
+    CRIATIVO_REQUIRED_FUNIS.includes(selectedFunil as (typeof CRIATIVO_REQUIRED_FUNIS)[number]) ||
+    (Boolean(selectedFunil) &&
+      !FUNIL_OPTIONS.includes(selectedFunil as (typeof FUNIL_OPTIONS)[number]) &&
+      selectedFunil !== 'INSTAGRAM' &&
+      selectedFunil !== 'INDICACAO');
 
   // Update form when client changes
   useEffect(() => {
@@ -195,7 +207,11 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         telefone: client.telefone || '',
         vendedor: client.stage === 'NOVO' ? undefined : client.vendedor,
         funil: client.funil || 'INSTAGRAM',
-        criativo: client.criativo,
+        criativo: getCommercialLeadOrigin({
+          creativeSource: client.creativeSource,
+          criativo: client.criativo,
+          funil: client.funil,
+        }),
         equipe: client.equipe,
         faturamento: normalizeFaturamentoBucket(client.faturamento),
         faturamentoPersonalizado: client.faturamentoPersonalizado || '',
@@ -209,8 +225,8 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         isMrr: client.isMrr ? 'SIM' : 'NAO',
         mrrRemaining: client.mrrRemaining ? client.mrrRemaining.toString() : '',
         entrada: client.entrada.toString(),
-        temSocio: coerceCommercialAnswer(client.temSocio),
-        temMkt: coerceCommercialAnswer(client.temMkt),
+        temSocio: coerceCommercialAnswer(client.temSocio, 'NAO'),
+        temMkt: coerceCommercialAnswer(client.temMkt, 'NAO'),
         temSecretaria: coerceCommercialAnswer(client.temSecretaria),
       });
     }
@@ -395,7 +411,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                     <Select
                       onValueChange={(value) => {
                         field.onChange(value);
-                        if (value === 'INSTAGRAM') {
+                        if (!CRIATIVO_REQUIRED_FUNIS.includes(value as (typeof CRIATIVO_REQUIRED_FUNIS)[number])) {
                           form.setValue('criativo', '');
                         }
                       }}
@@ -407,9 +423,9 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-popover">
-                        {(funis.length > 0 ? funis : [...FUNIL_OPTIONS]).map(funil => (
+                        {funnelOptions.map((funil) => (
                           <SelectItem key={funil} value={funil}>
-                            {funil}
+                            {getFunilLabel(funil)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -419,12 +435,13 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                 )}
               />
 
+              <div className={shouldShowCriativo ? '' : 'hidden'}>
               <FormField
                 control={form.control}
                 name="criativo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Criativo {watchFunil === 'INSTAGRAM' ? '(opcional)' : '*'}</FormLabel>
+                    <FormLabel>Criativo *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || ''}>
                     <FormControl>
                       <SelectTrigger>
@@ -474,6 +491,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                   </FormItem>
                 )}
               />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -484,13 +502,18 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                   <FormItem>
                     <FormLabel>Tem sócio?</FormLabel>
                     <FormControl>
-                      <CommercialAnswerGroup
-                        name="temSocio"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        options={TEM_SOCIO_OPTIONS}
-                        className="grid-cols-3"
-                      />
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value || ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          {TEM_SOCIO_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -504,13 +527,18 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                   <FormItem>
                     <FormLabel>Tem MKT?</FormLabel>
                     <FormControl>
-                      <CommercialAnswerGroup
-                        name="temMkt"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        options={TEM_MKT_OPTIONS}
-                        className="grid-cols-3"
-                      />
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value || ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          {TEM_MKT_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -524,13 +552,18 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                   <FormItem>
                     <FormLabel>Tem secretária?</FormLabel>
                     <FormControl>
-                      <CommercialAnswerGroup
-                        name="temSecretaria"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        options={TEM_SECRETARIA_OPTIONS}
-                        className="grid-cols-3"
-                      />
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value || ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          {TEM_SECRETARIA_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

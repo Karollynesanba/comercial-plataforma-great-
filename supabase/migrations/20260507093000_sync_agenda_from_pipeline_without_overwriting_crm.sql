@@ -29,6 +29,13 @@ BEGIN
     WHEN NEW.stage IN ('TAXA_INTERESSE', 'NEGOCIACAO', 'FECHADO') THEN '#66FF00'
     ELSE '#3B82F6'
   END;
+  -- Map legacy pipeline team ids to agenda UUIDs.
+  -- Keep unknown teams null so the migration can run safely.
+  -- These UUIDs match the agenda team records already used by the app.
+  -- EQUIPE_7 -> ac2c282a-54a6-491e-b133-90890e2d299d
+  -- TROPA_DE_ELITE -> 5090ad67-315d-45f5-b4b2-5a1a73ae201d
+  
+  -- inline mapping used below
 
   INSERT INTO public.agenda_events (
     pipeline_client_id,
@@ -71,7 +78,11 @@ BEGIN
     false,
     false,
     NEW.created_by_user_id,
-    NEW.equipe,
+    CASE
+      WHEN NEW.equipe = 'team-equipe-7' THEN 'ac2c282a-54a6-491e-b133-90890e2d299d'
+      WHEN NEW.equipe = 'team-tropa-de-elite' THEN '5090ad67-315d-45f5-b4b2-5a1a73ae201d'
+      ELSE NULL
+    END::uuid,
     now()
   )
   ON CONFLICT (pipeline_client_id)
@@ -183,7 +194,11 @@ SET
     WHEN pc.stage IN ('TAXA_INTERESSE', 'NEGOCIACAO', 'FECHADO') THEN '#66FF00'
     ELSE '#3B82F6'
   END,
-  team_id = pc.equipe,
+  team_id = CASE
+    WHEN pc.equipe = 'team-equipe-7' THEN 'ac2c282a-54a6-491e-b133-90890e2d299d'
+    WHEN pc.equipe = 'team-tropa-de-elite' THEN '5090ad67-315d-45f5-b4b2-5a1a73ae201d'
+    ELSE NULL
+  END::uuid,
   updated_at = now()
 FROM public.pipeline_clients pc
 WHERE ae.pipeline_client_id = pc.id
@@ -236,7 +251,11 @@ SELECT
   false,
   false,
   pc.created_by_user_id,
-  pc.equipe,
+  CASE
+    WHEN pc.equipe = 'team-equipe-7' THEN 'ac2c282a-54a6-491e-b133-90890e2d299d'
+    WHEN pc.equipe = 'team-tropa-de-elite' THEN '5090ad67-315d-45f5-b4b2-5a1a73ae201d'
+    ELSE NULL
+  END::uuid,
   COALESCE(pc.created_at, now()),
   now()
 FROM public.pipeline_clients pc

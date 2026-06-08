@@ -23,7 +23,7 @@ const VENDEDORES = [
   { value: 'CLED', label: 'Cled' },
   { value: 'PEDRO_H', label: 'Pedro H' },
   { value: 'PEDRO_JUAN', label: 'Pedro Juan' },
-  { value: 'CAETANO', label: 'Caetano' },
+  { value: 'CAETANO', label: 'Bruno' },
 ];
 
 interface NoShowReasonDialogProps {

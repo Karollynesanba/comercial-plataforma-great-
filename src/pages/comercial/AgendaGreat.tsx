@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Calendar, CalendarDays, CalendarRange, Search, Users, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar, CalendarDays, CalendarRange, Search, Users, X, Filter, Trash2 } from 'lucide-react';
 import { AgendaDayTimeline } from '@/components/comercial/agenda/AgendaDayTimeline';
 import { AgendaMonthCalendar } from '@/components/comercial/agenda/AgendaMonthCalendar';
 import { AgendaWeekTimeline } from '@/components/comercial/agenda/AgendaWeekTimeline';
@@ -9,8 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { AgendaEvent, useAgendaData } from '@/hooks/useAgendaData';
+import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
+import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
+
+const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
+
+const COLOR_FILTER_LABELS: Record<string, string> = {
+  '#3B82F6': 'Reunião Marcada',
+  '#66FF00': 'Call Feita',
+  '#FF0000': 'Call Não Comparecida',
+  '#B000FF': 'Recontato',
+  '#FFA500': 'Ficou de Confirmar',
+  '#808080': 'Reuniões - Great',
+};
 
 export default function AgendaGreat() {
   const { events } = useAgendaData();
@@ -24,11 +36,23 @@ export default function AgendaGreat() {
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicatingEvent, setDuplicatingEvent] = useState<AgendaEvent | null>(null);
+  const [selectedColors, setSelectedColors] = useState<string[]>(() => {
+    try {
+      const stored = safeGetItem(AGENDA_COLOR_FILTER_STORAGE_KEY);
+      return stored ? (JSON.parse(stored) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const teams = [
     { id: AGENDA_TEAM_IDS.TROPA_DE_ELITE, name: 'Tropa de Elite' },
     { id: AGENDA_TEAM_IDS.EQUIPE_7, name: 'Equipe 7' },
   ];
+
+  useEffect(() => {
+    safeSetItem(AGENDA_COLOR_FILTER_STORAGE_KEY, JSON.stringify(selectedColors));
+  }, [selectedColors]);
 
   const filteredEvents = useMemo(() => {
     let result = events;
@@ -43,12 +67,24 @@ export default function AgendaGreat() {
         (e) =>
           e.client_name.toLowerCase().includes(query) ||
           e.client_phone.includes(query) ||
-          e.title.toLowerCase().includes(query),
+        e.title.toLowerCase().includes(query),
       );
     }
 
+    if (selectedColors.length > 0) {
+      result = result.filter((e) => selectedColors.includes(e.color));
+    }
+
     return result;
-  }, [events, selectedTeamId, searchQuery]);
+  }, [events, selectedTeamId, searchQuery, selectedColors]);
+
+  const toggleColorFilter = (colorValue: string) => {
+    setSelectedColors((current) =>
+      current.includes(colorValue)
+        ? current.filter((item) => item !== colorValue)
+        : [...current, colorValue]
+    );
+  };
 
   const handleEventClick = (event: AgendaEvent) => {
     setAddDialogOpen(false);
@@ -147,6 +183,55 @@ export default function AgendaGreat() {
               <span className="hidden sm:inline">Mês</span>
             </ToggleGroupItem>
           </ToggleGroup>
+        </div>
+
+        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50/70 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-slate-500" />
+              <span className="text-sm font-semibold text-slate-700">Cor</span>
+            </div>
+            {selectedColors.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-2 rounded-full px-3 text-xs text-slate-500 hover:bg-white hover:text-slate-950"
+                onClick={() => setSelectedColors([])}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Limpar filtro
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {EVENT_COLORS.map((color) => {
+              const isActive = selectedColors.includes(color.value);
+              const label = COLOR_FILTER_LABELS[color.value] || color.label;
+
+              return (
+                <Button
+                  key={color.value}
+                  type="button"
+                  variant="outline"
+                  onClick={() => toggleColorFilter(color.value)}
+                  className={[
+                    'h-9 rounded-full border px-4 text-xs font-medium shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                    isActive
+                      ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-500/15'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span
+                    className="mr-2 h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: color.value }}
+                    aria-hidden="true"
+                  />
+                  {label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

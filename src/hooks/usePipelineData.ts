@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuthSafe } from '@/contexts/AuthContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
-import { savePipelineClientToCloud, syncPipelineAutomationsToCloud } from '@/lib/commercialCloudStore';
+import { deletePipelineClientFromCloud, savePipelineClientToCloud } from '@/lib/commercialCloudStore';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
-import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { commercialAnswerToDb, coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 export interface PipelineClientDB {
   id: string;
@@ -49,7 +50,7 @@ function localToDb(client: any): PipelineClientDB {
     clinic_name: client.clinicName || null,
     telefone: client.telefone || null,
     vendedor: client.vendedor || null,
-    criativo: client.criativo || null,
+    criativo: getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
     equipe: client.equipe || null,
     faturamento: client.faturamento || null,
     pacote: client.pacote || null,
@@ -64,9 +65,9 @@ function localToDb(client: any): PipelineClientDB {
     notes: client.notes || null,
     agendado_por: client.agendadoPor || null,
     pagador_anuncio: client.pagadorAnuncio || null,
-    tem_socio: coerceCommercialAnswer(client.temSocio) || null,
-    tem_mkt: coerceCommercialAnswer(client.temMkt) || null,
-    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || null,
+    tem_socio: commercialAnswerToDb(client.temSocio),
+    tem_mkt: commercialAnswerToDb(client.temMkt),
+    tem_secretaria: commercialAnswerToDb(client.temSecretaria),
     meeting_date: client.meetingDate || null,
     meeting_time: client.meetingTime || null,
     created_by_user_id: client.createdByUserId || null,
@@ -82,7 +83,7 @@ function dbToLocal(client: Partial<PipelineClientDB>, userId?: string | null) {
     clinicName: client.clinic_name || client.client_name || '',
     telefone: client.telefone || '',
     vendedor: client.vendedor || undefined,
-    criativo: client.criativo || 'NAO IDENTIFICADO',
+    criativo: getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
     equipe: client.equipe || '',
     faturamento: client.faturamento || 'NAO_INFORMADO',
     pacote: client.pacote || 'COMPLETO',
@@ -97,8 +98,8 @@ function dbToLocal(client: Partial<PipelineClientDB>, userId?: string | null) {
     notes: client.notes || undefined,
     agendadoPor: client.agendado_por || undefined,
     pagadorAnuncio: client.pagador_anuncio || undefined,
-    temSocio: coerceCommercialAnswer(client.tem_socio) || undefined,
-    temMkt: coerceCommercialAnswer(client.tem_mkt) || undefined,
+    temSocio: coerceCommercialAnswer(client.tem_socio, 'NAO') || undefined,
+    temMkt: coerceCommercialAnswer(client.tem_mkt, 'NAO') || undefined,
     temSecretaria: coerceCommercialAnswer(client.tem_secretaria) || undefined,
     meetingDate: client.meeting_date || undefined,
     meetingTime: client.meeting_time || undefined,
@@ -177,15 +178,18 @@ export function usePipelineData() {
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return localToDb({ id, ...data } as any, user?.id);
       }
-      const { data: updatedClient, error } = await supabase
-        .from('pipeline_clients')
-        .update({ ...data, updated_at: new Date().toISOString() } as any)
-        .eq('id', id)
-        .select('*')
-        .single();
-      if (error) throw error;
-      await syncPipelineAutomationsToCloud(dbToLocal(updatedClient, user?.id) as any, user?.id);
-      return updatedClient as PipelineClientDB;
+      const current = clients.find((client) => client.id === id);
+      if (!current) {
+        throw new Error('Lead nao encontrado');
+      }
+      const saved = await savePipelineClientToCloud({
+        ...dbToLocal(current, user?.id),
+        ...data,
+        id,
+        updatedAt: new Date().toISOString(),
+      } as any, user?.id);
+      if (!saved) throw new Error('Falha ao salvar lead');
+      return localToDb(saved);
     },
     onSuccess: refreshCommercialQueries,
     onError: () => {
@@ -203,23 +207,12 @@ export function usePipelineData() {
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return;
       }
-      const { data: removed } = await supabase.from('pipeline_clients').select('*').eq('id', id).maybeSingle();
-      await supabase.from('pipeline_clients').delete().eq('id', id);
-
+      const removed = clients.find((client) => client.id === id);
       if (removed) {
-        const phone = String(removed.telefone || '').replace(/\D/g, '');
-        const [{ data: events }, { data: leads }] = await Promise.all([
-          supabase.from('agenda_events').select('id, client_name, client_phone').limit(1000),
-          supabase.from('agendamento_leads').select('id, nome, telefone').limit(1000),
-        ]);
-        await Promise.all([
-          ...(events || [])
-            .filter((event) => event.client_name === removed.client_name || (phone && String(event.client_phone || '').replace(/\D/g, '') === phone))
-            .map((event) => supabase.from('agenda_events').delete().eq('id', event.id)),
-          ...(leads || [])
-            .filter((lead) => lead.nome === removed.client_name || (phone && String(lead.telefone || '').replace(/\D/g, '') === phone))
-            .map((lead) => supabase.from('agendamento_leads').delete().eq('id', lead.id)),
-        ]);
+        await deletePipelineClientFromCloud({
+          ...removed,
+          id,
+        } as any);
       }
     },
     onSuccess: () => {
@@ -266,24 +259,23 @@ export function usePipelineData() {
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return localToDb({ id, ...(extraData || {}), stage: newStage } as any, user?.id);
       }
-      const payload = {
-        ...(extraData || {}),
+      const current = clients.find((client) => client.id === id);
+      if (!current) {
+        throw new Error('Lead nao encontrado');
+      }
+      const saved = await savePipelineClientToCloud({
+        ...dbToLocal(current, user?.id),
+        ...extraData,
+        id,
         stage: newStage,
         ativo: newStage !== 'PERDIDO',
-        lost_reason: newStage === 'PERDIDO' ? lostReason || null : undefined,
-        no_show_reason: newStage === 'NO_SHOW' ? noShowReason || null : undefined,
-        last_stage_change: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      const { data: updatedClient, error } = await supabase
-        .from('pipeline_clients')
-        .update(payload as any)
-        .eq('id', id)
-        .select('*')
-        .single();
-      if (error) throw error;
-      await syncPipelineAutomationsToCloud(dbToLocal(updatedClient, user?.id) as any, user?.id);
-      return updatedClient as PipelineClientDB;
+        lostReason: newStage === 'PERDIDO' ? lostReason || current.lost_reason || current.lostReason : current.lost_reason || current.lostReason,
+        noShowReason: newStage === 'NO_SHOW' ? noShowReason || current.no_show_reason || current.noShowReason : current.no_show_reason || current.noShowReason,
+        lastStageChange: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as any, user?.id);
+      if (!saved) throw new Error('Falha ao mover lead');
+      return localToDb(saved);
     },
     onSuccess: refreshCommercialQueries,
     onError: () => {

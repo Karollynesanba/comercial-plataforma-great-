@@ -13,6 +13,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
+import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaDayTimelineProps {
@@ -41,6 +42,11 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
     const dateKey = format(currentDate, 'yyyy-MM-dd');
     return events.filter((e) => e.event_date === dateKey);
   }, [events, currentDate]);
+
+  const getScheduledByLabel = (event: AgendaEvent) =>
+    event.scheduled_by
+      ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
+      : null;
 
   const positionedEvents = useMemo(() => {
     if (dayEvents.length === 0) return [];
@@ -250,6 +256,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
                   addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
                   'HH:mm'
                 );
+                const scheduledByLabel = getScheduledByLabel(event);
 
                 return (
                   <EventCardTooltip key={event.id} event={event}>
@@ -275,6 +282,11 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
                         <p className="text-xs font-medium opacity-90">
                           {event.event_time.slice(0, 5)} – {endTime}
                         </p>
+                        {scheduledByLabel && (
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
+                            {scheduledByLabel}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </EventCardTooltip>

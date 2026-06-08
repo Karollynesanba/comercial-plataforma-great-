@@ -31,9 +31,7 @@ type WeekGroup = {
   dates: string[];
 };
 
-const SDRS = [
-  { value: 'HEBERT' as Agendador, label: 'Herbert' },
-];
+const SDRS = OFFICIAL_SDR_OPTIONS;
 
 const MONEY_REVENUE_STAGES = ['FECHADO', 'TAXA_INTERESSE'] as const;
 
@@ -317,7 +315,7 @@ export default function RaioXSDR() {
                 Daily SDR | 2026
               </CardTitle>
               <CardDescription>
-                Grade separada por semana e dia: Herbert e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
+                Grade separada por semana e dia: Herbert, Alan e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
               </CardDescription>
             </div>
             <Button className="gap-2" onClick={() => void saveAllVisibleRows()}>
@@ -341,6 +339,8 @@ export default function RaioXSDR() {
                   <TableHead className="w-[7%] bg-slate-950 px-1 text-white">Período</TableHead>
                   <TableHead className="text-center text-white" colSpan={5}>Herbert</TableHead>
                   <TableHead className="w-[10px] bg-red-700 p-0" />
+                  <TableHead className="text-center text-white" colSpan={5}>Alan</TableHead>
+                  <TableHead className="w-[10px] bg-red-700 p-0" />
                   <TableHead className="text-center text-white" colSpan={5}>Total</TableHead>
                 </TableRow>
                 <TableRow className="bg-red-600 text-white hover:bg-red-600">
@@ -348,10 +348,12 @@ export default function RaioXSDR() {
                   <MetricHeader />
                   <DividerHeader />
                   <MetricHeader />
+                  <DividerHeader />
+                  <MetricHeader />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <AggregatedRow label="TOTAL" herbert={getSdrTotals(visibleDates, 'HEBERT')} total={grandTotals} strong />
+                <AggregatedRow label="TOTAL" herbert={getSdrTotals(visibleDates, 'HEBERT')} alan={getSdrTotals(visibleDates, 'ALAN')} total={grandTotals} strong />
 
                 {weekGroups.map((week) => (
                   <Fragment key={week.label}>
@@ -359,12 +361,14 @@ export default function RaioXSDR() {
                       key={`${week.label}-total`}
                       label={week.label}
                       herbert={getSdrTotals(week.dates, 'HEBERT')}
+                      alan={getSdrTotals(week.dates, 'ALAN')}
                       total={getCombinedTotals(week.dates)}
                     />
 
                     {week.dates.map((date) => {
                       const herbert = getMetrics(date, 'HEBERT');
-                      const total = addMetrics(emptyMetrics(), herbert);
+                      const alan = getMetrics(date, 'ALAN');
+                      const total = addMetrics(addMetrics(emptyMetrics(), herbert), alan);
 
                       return (
                         <TableRow key={date}>
@@ -373,6 +377,13 @@ export default function RaioXSDR() {
                             draft={drafts[`${date}:HEBERT`] || emptyDraft()}
                             onChange={(field, value) => updateDraft(date, 'HEBERT', field, value)}
                             onBlur={() => saveDailyLog(date, 'HEBERT')}
+                            separated
+                          />
+                          <DividerCell />
+                          <EditableSdrBlock
+                            draft={drafts[`${date}:ALAN`] || emptyDraft()}
+                            onChange={(field, value) => updateDraft(date, 'ALAN', field, value)}
+                            onBlur={() => saveDailyLog(date, 'ALAN')}
                             separated
                           />
                           <DividerCell />
@@ -419,7 +430,7 @@ export default function RaioXSDR() {
             Agendadores do pipeline
           </CardTitle>
           <CardDescription>
-            Todos que podem marcar reuniÃ£o aparecem aqui. Herbert continuam destacados como SDRs oficiais, mas Pedro, Cled e Caetano tambÃ©m tÃªm leitura de agendamentos e vendas geradas pelos leads que agendaram.
+            Todos que podem marcar reuniÃ£o aparecem aqui. Herbert continuam destacados como SDRs oficiais, mas Pedro, Cled e Bruno tambÃ©m tÃªm leitura de agendamentos e vendas geradas pelos leads que agendaram.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -589,11 +600,13 @@ function ReadonlyMetricBlock({ metrics, separated }: { metrics: SheetMetrics; se
 function AggregatedRow({
   label,
   herbert,
+  alan,
   total,
   strong,
 }: {
   label: string;
   herbert: SheetMetrics;
+  alan: SheetMetrics;
   total: SheetMetrics;
   strong?: boolean;
 }) {
@@ -603,6 +616,8 @@ function AggregatedRow({
         {label}
       </TableCell>
       <ReadonlyMetricBlock metrics={herbert} separated />
+      <DividerCell />
+      <ReadonlyMetricBlock metrics={alan} separated />
       <DividerCell />
       <ReadonlyMetricBlock metrics={total} separated />
     </TableRow>
@@ -638,3 +653,4 @@ function MetricLine({ label, value, danger, success }: { label: string; value: s
     </div>
   );
 }
+

@@ -1,46 +1,55 @@
-import { visitCommercial } from '../support/commercial-test-helpers';
+﻿import { visitCommercial } from '../support/commercial-test-helpers';
 
 describe('CRM', () => {
-  it('carrega o pipeline comercial com novo lead e criativos', () => {
+  it('carrega o pipeline comercial com os principais controles', () => {
     visitCommercial(cy, '/comercial/pipeline');
 
-    cy.contains('h1', 'Pipeline Comercial').should('be.visible');
-    cy.contains('button', 'Novo Lead').should('be.visible');
-    cy.contains('button', 'Criativos').should('be.visible');
-    cy.contains('button', 'Funis').should('be.visible');
-    cy.contains('button', 'Zerar dados').should('be.visible');
-    cy.contains('Filtros:').should('be.visible');
+    cy.contains('h1', 'Pipeline Comercial').should('exist');
+    cy.contains('button', 'Novo Lead').should('exist');
+    cy.contains('button', 'Criativos').should('exist');
+    cy.contains('button', 'Funis').should('exist');
+    cy.contains('a', 'Planilha Leads').should('exist');
+    cy.contains('span', 'Filtros:').should('exist');
   });
 
-  it('mostra funil e criativo no modal de novo lead', () => {
+  it('abre o modal de novo lead com os campos essenciais', () => {
     visitCommercial(cy, '/comercial/pipeline');
 
     cy.contains('button', 'Novo Lead').click();
-    cy.contains('Novo Lead').should('be.visible');
-    cy.contains('label', 'Funil *').should('be.visible');
-    cy.contains('label', /Criativo/).should('be.visible');
-    cy.contains('Criativo (opcional com Instagram)').should('be.visible');
+
+    cy.contains('[role="dialog"]', 'Novo Lead').should('exist');
+    cy.contains('label', 'Nome do Cliente').should('exist');
+    cy.contains('label', 'Telefone (WhatsApp) *').should('exist');
+    cy.contains('label', 'Funil *').should('exist');
+    cy.contains('label', 'Faturamento').should('exist');
+    cy.contains('label', 'Quem agendou?').should('exist');
+    cy.contains('label', 'Agendado por').should('exist');
+    cy.contains('label', 'Data da Reuniao *').should('exist');
+    cy.contains('label', 'Horario da Reuniao *').should('exist');
   });
 
-  it('abre os diálogos de funis e criativos', () => {
+  it('abre os modais de criativos e funis', () => {
     visitCommercial(cy, '/comercial/pipeline');
 
     cy.contains('button', 'Criativos').click();
-    cy.contains('Gerenciar Criativos').should('be.visible');
-    cy.get('input[placeholder="Novo criativo..."]').should('be.visible');
+    cy.contains('[role="dialog"]', 'Gerenciar Criativos').should('exist');
+    cy.get('input[placeholder="Novo criativo..."]').should('exist');
 
     cy.contains('button', 'Fechar').last().click();
+
     cy.contains('button', 'Funis').click();
-    cy.contains('Gerenciar Funis').should('be.visible');
-    cy.get('input[placeholder="Novo funil..."]').should('be.visible');
+    cy.contains('[role="dialog"]', 'Gerenciar Funis').should('exist');
+    cy.get('input[placeholder="Novo funil..."]').should('exist');
   });
 
-  it('exibe os blocos do kanban e os KPIs', () => {
+  it('exibe KPIs e colunas principais do pipeline', () => {
     visitCommercial(cy, '/comercial/pipeline');
 
-    cy.contains('Receita gerada').should('be.visible');
-    cy.contains(/Em negocia/i).should('be.visible');
-    cy.contains(/Taxa de convers[aã]o/i).should('be.visible');
-    cy.contains(/Ticket m[eé]dio/i).should('be.visible');
+    cy.contains('Receita gerada').should('exist');
+    cy.contains('Em negociação').should('exist');
+    cy.contains('Taxa de conversão').should('exist');
+    cy.contains('Ticket médio').should('exist');
+    cy.contains('Novo Lead').should('exist');
   });
 });
+

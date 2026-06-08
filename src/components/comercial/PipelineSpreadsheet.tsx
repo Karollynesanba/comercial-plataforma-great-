@@ -52,6 +52,7 @@ import {
   Agendador,
 } from '@/contexts/CommercialContext';
 import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from './PeriodFilter';
+import { parseLocalDateValue } from './MonthPeriodFilter';
 import { 
   Search, 
   ArrowUpDown, 
@@ -91,75 +92,74 @@ type SortDirection = 'asc' | 'desc';
 
 // Color mappings for pills - based on category
 const ATIVO_COLORS = {
-  true: 'bg-success/20 text-success border-success/30',
-  false: 'bg-muted text-muted-foreground border-border',
+  true: 'bg-blue-50 text-blue-700 border-blue-100',
+  false: 'bg-slate-50 text-slate-500 border-slate-200',
 };
 
 const VENDEDOR_COLORS: Record<Vendedor, string> = {
-  'HERBERT': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  'CLED': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'PEDRO_H': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  'PEDRO_JUAN': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  'CAETANO': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  'HERBERT': 'bg-blue-50 text-blue-700 border-blue-100',
+  'CLED': 'bg-amber-50 text-amber-700 border-amber-100',
+  'PEDRO_H': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  'PEDRO_JUAN': 'bg-blue-50 text-blue-700 border-blue-100',
+  'CAETANO': 'bg-orange-50 text-orange-700 border-orange-100',
 };
 
 const EQUIPE_COLORS: Record<Equipe, string> = {
-  'LIRA': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  'KAUAN': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  'LIRA': 'bg-slate-100 text-slate-700 border-slate-200',
+  'KAUAN': 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const FATURAMENTO_COLORS: Partial<Record<Faturamento, string>> = {
-  '0_A_10K': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  '10K_A_20K': 'bg-sky-500/20 text-sky-400 border-sky-500/30',
-  '20K_A_30K': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  '30K_A_50K': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  '50K_A_80K': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  '80K_A_100K': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  '100K_A_150K': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  '150K_A_250K': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  '250K_A_400K': 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-  '400K_A_600K': 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-  '600K_A_1M': 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
-  '1M_PLUS': 'bg-red-500/20 text-red-400 border-red-500/30',
-  'NAO_INFORMADO': 'bg-muted text-muted-foreground border-border',
-  'PERSONALIZADO': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  '0_A_10K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '10K_A_20K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '20K_A_30K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '30K_A_50K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '50K_A_80K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '80K_A_100K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '100K_A_150K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '150K_A_250K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '250K_A_400K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '400K_A_600K': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '600K_A_1M': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  '1M_PLUS': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  'NAO_INFORMADO': 'bg-slate-50 text-slate-500 border-slate-200',
+  'PERSONALIZADO': 'bg-emerald-50 text-emerald-700 border-emerald-100',
 };
 
 const PACOTE_COLORS: Record<Pacote, string> = {
-  'COMPLETO': 'bg-red-500/20 text-red-400 border-red-500/30',
-  'TRAFEGO_E_CRIATIVOS': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  'ATENDIMENTO': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  'TRAFEGO': 'bg-lime-500/20 text-lime-400 border-lime-500/30',
-  'COMPLETO_NOVA_ERA': 'bg-green-500/20 text-green-400 border-green-500/30',
-  'TRAFEGO_ARTES_IA': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  'TRAFEGO_CONSULTORIA': 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-  'IA': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-  'TRAFEGO_ROTEIRO': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  'TRAFEGO_IA': 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
+  'COMPLETO': 'bg-red-50 text-red-700 border-red-100',
+  'TRAFEGO_E_CRIATIVOS': 'bg-orange-50 text-orange-700 border-orange-100',
+  'ATENDIMENTO': 'bg-amber-50 text-amber-700 border-amber-100',
+  'TRAFEGO': 'bg-lime-50 text-lime-700 border-lime-100',
+  'COMPLETO_NOVA_ERA': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  'TRAFEGO_ARTES_IA': 'bg-violet-50 text-violet-700 border-violet-100',
+  'TRAFEGO_CONSULTORIA': 'bg-pink-50 text-pink-700 border-pink-100',
+  'IA': 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
 const PERIODO_COLORS: Record<Periodo, string> = {
-  'MENSAL': 'bg-green-500/20 text-green-400 border-green-500/30',
-  'TRIMESTRAL': 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-  'SEMESTRAL': 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
-  'TAXA_INTERESSE': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  'MENSAL': 'bg-slate-100 text-slate-700 border-slate-200',
+  'TRIMESTRAL': 'bg-slate-100 text-slate-700 border-slate-200',
+  'SEMESTRAL': 'bg-slate-100 text-slate-700 border-slate-200',
+  'TAXA_INTERESSE': 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const AGENDADOR_COLORS: Record<Agendador, string> = {
-  'MIGUEL': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  'PEDRO': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  'HEBERT': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  'CLED': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  'CAETANO': 'bg-lime-500/20 text-lime-400 border-lime-500/30',
+  'MIGUEL': 'bg-blue-50 text-blue-700 border-blue-100',
+  'PEDRO': 'bg-red-50 text-red-700 border-red-100',
+  'HEBERT': 'bg-blue-50 text-blue-700 border-blue-100',
+  'ALAN': 'bg-blue-50 text-blue-700 border-blue-100',
+  'CLED': 'bg-orange-50 text-orange-700 border-orange-100',
+  'CAETANO': 'bg-emerald-50 text-emerald-700 border-emerald-100',
 };
 
 const STAGE_COLORS: Record<PipelineStage, string> = {
-  'NOVO': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'NO_SHOW': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  'TAXA_INTERESSE': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  'NEGOCIACAO': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  'PERDIDO': 'bg-muted text-muted-foreground border-border',
-  'FECHADO': 'bg-success/20 text-success border-success/30',
+  'NOVO': 'bg-blue-50 text-blue-700 border-blue-100',
+  'NO_SHOW': 'bg-rose-50 text-rose-700 border-rose-100',
+  'TAXA_INTERESSE': 'bg-amber-50 text-amber-700 border-amber-100',
+  'NEGOCIACAO': 'bg-violet-50 text-violet-700 border-violet-100',
+  'PERDIDO': 'bg-slate-50 text-slate-500 border-slate-200',
+  'FECHADO': 'bg-emerald-50 text-emerald-700 border-emerald-100',
 };
 
 export function PipelineSpreadsheet({ 
@@ -270,8 +270,8 @@ export function PipelineSpreadsheet({
 
     // Period filter
     result = result.filter(c => {
-      const clientDate = c.dataEntrada || c.entryDate;
-      return filterByPeriod(clientDate ? new Date(clientDate) : undefined, periodFilter, customStart, customEnd);
+      const clientDate = c.createdAt || c.dataEntrada || c.entryDate;
+      return filterByPeriod(clientDate ? parseLocalDateValue(clientDate) || undefined : undefined, periodFilter, customStart, customEnd);
     });
 
     // Sort
@@ -291,7 +291,7 @@ export function PipelineSpreadsheet({
           comparison = a.stage.localeCompare(b.stage);
           break;
         case 'dataEntrada':
-          comparison = new Date(a.dataEntrada).getTime() - new Date(b.dataEntrada).getTime();
+          comparison = (parseLocalDateValue(a.createdAt || a.dataEntrada || a.entryDate)?.getTime() || 0) - (parseLocalDateValue(b.createdAt || b.dataEntrada || b.entryDate)?.getTime() || 0);
           break;
         case 'equipe':
           comparison = a.equipe.localeCompare(b.equipe);
@@ -333,7 +333,7 @@ export function PipelineSpreadsheet({
     }
 
     if (newStage === 'FECHADO') {
-      // Ask for pagador anúncio
+      // Ask for pagador anÃºncio
       setPendingClosedClient(client);
       setClosedDialogOpen(true);
       return;
@@ -407,11 +407,11 @@ export function PipelineSpreadsheet({
   };
 
   const getDaysInPipeline = (client: PipelineClient) => {
-    return differenceInDays(new Date(), new Date(client.dataEntrada));
+    const createdDate = parseLocalDateValue(client.createdAt || client.dataEntrada || client.entryDate);
+    return createdDate ? differenceInDays(new Date(), createdDate) : 0;
   };
 
   const exportToCSV = () => {
-    const headers = ['ATIVO', 'CLIENTE', 'VENDEDOR', 'FUNIL', 'CRIATIVO', 'EQUIPE', 'FATURAMENTO', 'PACOTE', 'PERÍODO', 'INDICAÇÃO', 'ENTRADA', 'DATA', 'DIAS', 'STATUS', 'MOTIVO PERDA'];
     const rows = filteredClients.map(c => [
       c.ativo ? 'ATIVO' : 'INATIVO',
       c.clientName,
@@ -422,11 +422,8 @@ export function PipelineSpreadsheet({
       c.faturamento === 'PERSONALIZADO' && c.faturamentoPersonalizado
         ? c.faturamentoPersonalizado
         : (FATURAMENTO_OPTIONS.find(f => f.value === c.faturamento)?.label || c.faturamento),
-      PACOTE_OPTIONS.find(p => p.value === c.pacote)?.label || c.pacote,
       PERIODO_OPTIONS.find(p => p.value === c.periodo)?.label || c.periodo,
-      c.indicacao || '-',
-      c.entrada,
-      format(new Date(c.dataEntrada), 'dd/MM/yyyy'),
+      format(parseLocalDateValue(c.createdAt || c.dataEntrada || c.entryDate) || new Date(), 'dd/MM/yyyy'),
       getDaysInPipeline(c),
       STAGE_LABELS[c.stage],
       c.lostReason || '-',
@@ -463,29 +460,29 @@ export function PipelineSpreadsheet({
       isFullscreen && "fixed inset-0 z-50 bg-background p-6 overflow-auto"
     )}>
       {/* Filters Row 1: Search and Actions */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[250px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[260px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome ou telefone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 h-11 text-base"
+            className="h-11 rounded-xl border-slate-200 bg-white pl-10 text-sm shadow-sm"
           />
         </div>
 
         <Button 
           variant={showInactive ? "secondary" : "outline"} 
           onClick={() => setShowInactive(!showInactive)}
-          className="gap-2 h-11 text-sm"
+          className="gap-2 h-11 rounded-xl border-slate-200 bg-white text-sm shadow-sm"
         >
-          {showInactive ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+          {showInactive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           {showInactive ? 'Mostrando inativos' : 'Mostrar inativos'}
         </Button>
 
         {canExport && (
-          <Button variant="outline" onClick={exportToCSV} className="gap-2 h-11 text-sm">
-            <Download className="h-5 w-5" />
+          <Button variant="outline" onClick={exportToCSV} className="gap-2 h-11 rounded-xl border-slate-200 bg-white text-sm shadow-sm">
+            <Download className="h-4 w-4" />
             Exportar CSV
           </Button>
         )}
@@ -493,9 +490,9 @@ export function PipelineSpreadsheet({
         <Button 
           variant="outline" 
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="gap-2 h-11 text-sm"
+          className="gap-2 h-11 rounded-xl border-slate-200 bg-white text-sm shadow-sm"
         >
-          {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           {isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
         </Button>
       </div>
@@ -513,7 +510,7 @@ export function PipelineSpreadsheet({
           }}
         />
         <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
-          <SelectTrigger className="w-[150px] h-10 text-sm">
+          <SelectTrigger className="h-10 w-[170px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
             <SelectValue placeholder="Vendedor" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
@@ -525,12 +522,24 @@ export function PipelineSpreadsheet({
         </Select>
 
         <Select value={equipeFilter} onValueChange={setEquipeFilter}>
-          <SelectTrigger className="w-[160px] h-10 text-sm">
+          <SelectTrigger className="h-10 w-[160px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
             <SelectValue placeholder="Equipe" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
             <SelectItem value="all">Todas equipes</SelectItem>
             {EQUIPE_OPTIONS.map(opt => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={periodoFilter} onValueChange={setPeriodoFilter}>
+          <SelectTrigger className="w-[150px] h-10 text-sm">
+            <SelectValue placeholder="PerÃ­odo" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover">
+            <SelectItem value="all">Todos perÃ­odos</SelectItem>
+            {PERIODO_OPTIONS.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
           </SelectContent>
@@ -548,20 +557,8 @@ export function PipelineSpreadsheet({
           </SelectContent>
         </Select>
 
-        <Select value={periodoFilter} onValueChange={setPeriodoFilter}>
-          <SelectTrigger className="w-[150px] h-10 text-sm">
-            <SelectValue placeholder="Período" />
-          </SelectTrigger>
-          <SelectContent className="bg-popover">
-            <SelectItem value="all">Todos períodos</SelectItem>
-            {PERIODO_OPTIONS.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select value={stageFilter} onValueChange={setStageFilter}>
-          <SelectTrigger className="w-[150px] h-10 text-sm">
+          <SelectTrigger className="h-10 w-[150px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
@@ -573,20 +570,20 @@ export function PipelineSpreadsheet({
         </Select>
 
         {hasActiveFilters && (
-          <Button variant="ghost" onClick={clearFilters} className="h-10 text-sm">
+          <Button variant="ghost" onClick={clearFilters} className="h-10 rounded-xl border border-slate-200 bg-white text-sm shadow-sm">
             Limpar filtros
           </Button>
         )}
       </div>
 
       {/* Spreadsheet Table */}
-      <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-sm">
-        <div className="overflow-x-auto max-h-[75vh]">
-          <Table className="text-base">
-            <TableHeader className="sticky top-0 z-10 bg-surface-2">
-              <TableRow className="bg-surface-2 hover:bg-surface-2 h-14">
-                <TableHead className="w-[100px] text-sm font-semibold">ATIVO</TableHead>
-                <TableHead className="min-w-[200px] text-sm font-semibold">
+      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-[0_20px_50px_-30px_rgba(15,23,42,0.2)]">
+        <div className="overflow-hidden">
+          <Table className="w-full table-fixed text-[12px]">
+            <TableHeader className="sticky top-0 z-10 bg-white">
+              <TableRow className="h-14 border-b border-slate-200 bg-white hover:bg-white">
+                <TableHead className="w-[72px] text-[11px] font-semibold uppercase tracking-wide text-slate-500">ATIVO</TableHead>
+                <TableHead className="w-[150px] text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   <button 
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                     onClick={() => handleSort('clientName')}
@@ -594,7 +591,7 @@ export function PipelineSpreadsheet({
                     CLIENTE <SortIcon field="clientName" />
                   </button>
                 </TableHead>
-                <TableHead className="w-[130px] text-sm font-semibold">
+                <TableHead className="w-[92px] text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   <button 
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                     onClick={() => handleSort('vendedor')}
@@ -602,8 +599,8 @@ export function PipelineSpreadsheet({
                     VENDEDOR <SortIcon field="vendedor" />
                   </button>
                 </TableHead>
-                <TableHead className="w-[150px] text-sm font-semibold">CRIATIVO</TableHead>
-                <TableHead className="w-[150px] text-sm font-semibold">
+                <TableHead className="w-[110px] text-[11px] font-semibold uppercase tracking-wide text-slate-500">CRIATIVO</TableHead>
+                <TableHead className="w-[110px] text-xs font-semibold">
                   <button 
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                     onClick={() => handleSort('equipe')}
@@ -611,20 +608,20 @@ export function PipelineSpreadsheet({
                     EQUIPE <SortIcon field="equipe" />
                   </button>
                 </TableHead>
-                <TableHead className="w-[150px] text-sm font-semibold">FATURAMENTO</TableHead>
-                <TableHead className="w-[160px] text-sm font-semibold">PACOTE</TableHead>
-                <TableHead className="w-[130px] text-sm font-semibold">PERÍODO</TableHead>
-                <TableHead className="w-[110px] text-sm font-semibold">INDICAÇÃO</TableHead>
-                <TableHead className="w-[130px] text-sm font-semibold">AGENDADO POR</TableHead>
-                <TableHead className="w-[130px] text-sm font-semibold text-right">
-                  <button 
-                    className="flex items-center gap-2 hover:text-foreground transition-colors ml-auto"
-                    onClick={() => handleSort('entrada')}
-                  >
-                    ENTRADA <SortIcon field="entrada" />
-                  </button>
-                </TableHead>
-                <TableHead className="w-[120px] text-sm font-semibold">
+                  <TableHead className="w-[110px] text-[11px] font-semibold uppercase tracking-wide text-slate-500">FATURAMENTO</TableHead>
+                  <TableHead className="w-[160px] text-sm font-semibold">PACOTE</TableHead>
+                  <TableHead className="w-[130px] text-sm font-semibold">PERÍODO</TableHead>
+                  <TableHead className="w-[110px] text-sm font-semibold">INDICAÇÃO</TableHead>
+                  <TableHead className="w-[130px] text-sm font-semibold">AGENDADO POR</TableHead>
+                  <TableHead className="w-[130px] text-sm font-semibold text-right">
+                    <button 
+                      className="flex items-center gap-2 hover:text-foreground transition-colors ml-auto"
+                      onClick={() => handleSort('entrada')}
+                    >
+                      ENTRADA <SortIcon field="entrada" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="w-[84px] text-xs font-semibold">
                   <button 
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                     onClick={() => handleSort('dataEntrada')}
@@ -632,15 +629,15 @@ export function PipelineSpreadsheet({
                     DATA <SortIcon field="dataEntrada" />
                   </button>
                 </TableHead>
-                <TableHead className="w-[140px] text-sm font-semibold">STATUS</TableHead>
-                {showInactive && <TableHead className="w-[150px] text-sm font-semibold">MOTIVO</TableHead>}
-                <TableHead className="w-[100px] text-sm font-semibold text-center">AÇÕES</TableHead>
+                <TableHead className="w-[92px] text-xs font-semibold">STATUS</TableHead>
+                {showInactive && <TableHead className="w-[110px] text-xs font-semibold">MOTIVO</TableHead>}
+                <TableHead className="w-[68px] text-xs font-semibold text-center">AÃ‡Ã•ES</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={showInactive ? 15 : 14} className="text-center text-muted-foreground py-12 text-base">
+                  <TableCell colSpan={showInactive ? 15 : 14} className="text-center text-muted-foreground py-12 text-sm">
                     Nenhum lead encontrado
                   </TableCell>
                 </TableRow>
@@ -657,13 +654,13 @@ export function PipelineSpreadsheet({
                       )}
                     >
                       {/* ATIVO */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.ativo ? 'ATIVO' : 'INATIVO'}
                           onValueChange={(value) => handleInlineEdit(client.id, 'ativo', value === 'ATIVO')}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', ATIVO_COLORS[String(client.ativo) as keyof typeof ATIVO_COLORS])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', ATIVO_COLORS[String(client.ativo) as keyof typeof ATIVO_COLORS])}>
                               {client.ativo ? 'ATIVO' : 'INATIVO'}
                             </Badge>
                           </SelectTrigger>
@@ -675,19 +672,19 @@ export function PipelineSpreadsheet({
                       </TableCell>
 
                       {/* CLIENTE */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         {editingCell?.id === client.id && editingCell?.field === 'clientName' ? (
                           <Input
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             onBlur={() => handleTextEditSave(client.id, 'clientName')}
                             onKeyDown={(e) => e.key === 'Enter' && handleTextEditSave(client.id, 'clientName')}
-                            className="h-9 text-sm"
+                            className="h-8 text-xs"
                             autoFocus
                           />
                         ) : (
                           <span 
-                            className="text-sm font-medium cursor-pointer hover:text-primary"
+                            className="text-xs font-medium cursor-pointer hover:text-primary truncate block"
                             onClick={() => handleTextEdit(client, 'clientName')}
                           >
                             {client.clientName}
@@ -696,20 +693,20 @@ export function PipelineSpreadsheet({
                       </TableCell>
 
                       {/* VENDEDOR */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.vendedor}
                           onValueChange={(value) => handleInlineEdit(client.id, 'vendedor', value as Vendedor)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', VENDEDOR_COLORS[client.vendedor])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', VENDEDOR_COLORS[client.vendedor])}>
                               {VENDEDOR_OPTIONS.find(v => v.value === client.vendedor)?.label}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
                             {VENDEDOR_OPTIONS.map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>
-                                <Badge className={cn('text-xs px-3 py-1', VENDEDOR_COLORS[opt.value])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', VENDEDOR_COLORS[opt.value])}>
                                   {opt.label}
                                 </Badge>
                               </SelectItem>
@@ -719,13 +716,13 @@ export function PipelineSpreadsheet({
                       </TableCell>
 
                       {/* CRIATIVO */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.criativo}
                           onValueChange={(value) => handleInlineEdit(client.id, 'criativo', value)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className="text-xs px-3 py-1 bg-rose-500/20 text-rose-400 border-rose-500/30">
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className="text-[11px] px-2.5 py-0.5 bg-slate-100 text-slate-700 border-slate-200">
                               {client.criativo}
                             </Badge>
                           </SelectTrigger>
@@ -741,7 +738,7 @@ export function PipelineSpreadsheet({
                                   placeholder="Novo criativo..."
                                   value={newCriativo}
                                   onChange={(e) => setNewCriativo(e.target.value)}
-                                  className="h-9 text-sm"
+                                  className="h-8 text-xs"
                                   onClick={(e) => e.stopPropagation()}
                                 />
                                 <Button 
@@ -761,20 +758,20 @@ export function PipelineSpreadsheet({
                       </TableCell>
 
                       {/* EQUIPE */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.equipe}
                           onValueChange={(value) => handleInlineEdit(client.id, 'equipe', value as Equipe)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', EQUIPE_COLORS[client.equipe])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', EQUIPE_COLORS[client.equipe])}>
                               {EQUIPE_OPTIONS.find(e => e.value === client.equipe)?.label}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
                             {EQUIPE_OPTIONS.map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>
-                                <Badge className={cn('text-xs px-3 py-1', EQUIPE_COLORS[opt.value])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', EQUIPE_COLORS[opt.value])}>
                                   {opt.label}
                                 </Badge>
                               </SelectItem>
@@ -784,13 +781,13 @@ export function PipelineSpreadsheet({
                       </TableCell>
 
                       {/* FATURAMENTO */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.faturamento}
                           onValueChange={(value) => handleInlineEdit(client.id, 'faturamento', value as Faturamento)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1 truncate max-w-[130px]', FATURAMENTO_COLORS[client.faturamento])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full truncate max-w-[130px]', FATURAMENTO_COLORS[client.faturamento])}>
                               {client.faturamento === 'PERSONALIZADO' && client.faturamentoPersonalizado
                                 ? client.faturamentoPersonalizado
                                 : FATURAMENTO_OPTIONS.find(f => f.value === client.faturamento)?.label}
@@ -799,7 +796,7 @@ export function PipelineSpreadsheet({
                           <SelectContent className="bg-popover">
                             {FATURAMENTO_OPTIONS.map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>
-                                <Badge className={cn('text-xs px-3 py-1', FATURAMENTO_COLORS[opt.value])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', FATURAMENTO_COLORS[opt.value])}>
                                   {opt.label}
                                 </Badge>
                               </SelectItem>
@@ -808,21 +805,22 @@ export function PipelineSpreadsheet({
                         </Select>
                       </TableCell>
 
+
                       {/* PACOTE */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.pacote}
                           onValueChange={(value) => handleInlineEdit(client.id, 'pacote', value as Pacote)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', PACOTE_COLORS[client.pacote])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', PACOTE_COLORS[client.pacote])}>
                               {PACOTE_OPTIONS.find(p => p.value === client.pacote)?.label}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
                             {PACOTE_OPTIONS.map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>
-                                <Badge className={cn('text-xs px-3 py-1', PACOTE_COLORS[opt.value])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', PACOTE_COLORS[opt.value])}>
                                   {opt.label}
                                 </Badge>
                               </SelectItem>
@@ -830,22 +828,21 @@ export function PipelineSpreadsheet({
                           </SelectContent>
                         </Select>
                       </TableCell>
-
-                      {/* PERÍODO */}
-                      <TableCell className="p-3">
+                      {/* PERÃODO */}
+                      <TableCell className="p-2">
                         <Select
                           value={client.periodo}
                           onValueChange={(value) => handleInlineEdit(client.id, 'periodo', value as Periodo)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', PERIODO_COLORS[client.periodo])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', PERIODO_COLORS[client.periodo])}>
                               {PERIODO_OPTIONS.find(p => p.value === client.periodo)?.label}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
                             {PERIODO_OPTIONS.map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>
-                                <Badge className={cn('text-xs px-3 py-1', PERIODO_COLORS[opt.value])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', PERIODO_COLORS[opt.value])}>
                                   {opt.label}
                                 </Badge>
                               </SelectItem>
@@ -854,15 +851,17 @@ export function PipelineSpreadsheet({
                         </Select>
                       </TableCell>
 
-                      {/* INDICAÇÃO */}
-                      <TableCell className="p-3">
+
+                      {/* AGENDADO POR */}
+                      {/* INDICA��O */}
+                      <TableCell className="p-2">
                         <Select
                           value={client.indicacao || 'NAO'}
                           onValueChange={(value) => handleInlineEdit(client.id, 'indicacao', value)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', client.indicacao === 'SIM' ? 'bg-success/20 text-success border-success/30' : 'bg-muted text-muted-foreground border-border')}>
-                              {client.indicacao || 'Não'}
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', client.indicacao === 'SIM' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200')}>
+                              {client.indicacao || 'N�o'}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
@@ -872,16 +871,14 @@ export function PipelineSpreadsheet({
                           </SelectContent>
                         </Select>
                       </TableCell>
-
-                      {/* AGENDADO POR */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.agendadoPor || ''}
                           onValueChange={(value) => handleInlineEdit(client.id, 'agendadoPor', value as Agendador)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
                             {client.agendadoPor ? (
-                              <Badge className={cn('text-xs px-3 py-1', AGENDADOR_COLORS[client.agendadoPor])}>
+                              <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', AGENDADOR_COLORS[client.agendadoPor])}>
                                 {AGENDADOR_OPTIONS.find(a => a.value === client.agendadoPor)?.label}
                               </Badge>
                             ) : (
@@ -891,7 +888,7 @@ export function PipelineSpreadsheet({
                           <SelectContent className="bg-popover">
                             {AGENDADOR_OPTIONS.map(opt => (
                               <SelectItem key={opt.value} value={opt.value}>
-                                <Badge className={cn('text-xs px-3 py-1', AGENDADOR_COLORS[opt.value])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', AGENDADOR_COLORS[opt.value])}>
                                   {opt.label}
                                 </Badge>
                               </SelectItem>
@@ -900,20 +897,21 @@ export function PipelineSpreadsheet({
                         </Select>
                       </TableCell>
 
+
                       {/* ENTRADA */}
-                      <TableCell className="p-3 text-right">
+                      <TableCell className="p-2 text-right">
                         {editingCell?.id === client.id && editingCell?.field === 'entrada' ? (
                           <Input
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             onBlur={() => handleTextEditSave(client.id, 'entrada')}
                             onKeyDown={(e) => e.key === 'Enter' && handleTextEditSave(client.id, 'entrada')}
-                            className="h-9 text-sm text-right"
+                            className="h-8 text-xs text-right"
                             autoFocus
                           />
                         ) : (
                           <span 
-                            className="text-sm font-semibold tabular-nums cursor-pointer hover:text-primary"
+                            className="text-xs font-semibold tabular-nums cursor-pointer hover:text-primary"
                             onClick={() => {
                               setEditingCell({ id: client.id, field: 'entrada' });
                               setEditValue(client.entrada.toString());
@@ -923,43 +921,27 @@ export function PipelineSpreadsheet({
                           </span>
                         )}
                       </TableCell>
-
                       {/* DATA */}
-                      <TableCell className="p-3">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" className="h-9 px-3 text-sm font-normal">
-                              {format(new Date(client.dataEntrada), 'dd/MM/yy', { locale: ptBR })}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 bg-popover" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={new Date(client.dataEntrada)}
-                              onSelect={(date) => date && handleInlineEdit(client.id, 'dataEntrada', date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                      <TableCell className="p-2">
+                        <span className="text-xs font-medium text-slate-700">
+                          {format(parseLocalDateValue(client.createdAt || client.dataEntrada || client.entryDate) || new Date(), 'dd/MM/yy', { locale: ptBR })}
+                        </span>
                       </TableCell>
-
-
-
                       {/* STATUS */}
-                      <TableCell className="p-3">
+                      <TableCell className="p-2">
                         <Select
                           value={client.stage}
                           onValueChange={(value) => handleStageChange(client, value as PipelineStage)}
                         >
-                          <SelectTrigger className="h-9 w-full border-0 p-0">
-                            <Badge className={cn('text-xs px-3 py-1', STAGE_COLORS[client.stage])}>
+                          <SelectTrigger className="h-8 w-full border-0 p-0">
+                            <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', STAGE_COLORS[client.stage])}>
                               {STAGE_LABELS[client.stage]}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
                             {Object.entries(STAGE_LABELS).map(([value, label]) => (
                               <SelectItem key={value} value={value}>
-                                <Badge className={cn('text-xs px-3 py-1', STAGE_COLORS[value as PipelineStage])}>
+                                <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', STAGE_COLORS[value as PipelineStage])}>
                                   {label}
                                 </Badge>
                               </SelectItem>
@@ -970,14 +952,14 @@ export function PipelineSpreadsheet({
 
                       {/* MOTIVO (only when showing inactive) */}
                       {showInactive && (
-                        <TableCell className="p-3">
+                        <TableCell className="p-2">
                           <span className="text-sm text-muted-foreground">
                             {client.lostReason || '-'}
                           </span>
                         </TableCell>
                       )}
 
-                      {/* AÇÕES */}
+                      {/* AÃ‡Ã•ES */}
                       <TableCell className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Button
@@ -1017,7 +999,7 @@ export function PipelineSpreadsheet({
       <div className="flex items-center justify-between text-base text-muted-foreground px-3 py-2">
         <span>{filteredClients.length} leads {showInactive ? '(incluindo inativos)' : ''}</span>
         <span>
-          Total: <strong className="text-foreground text-lg">R$ {filteredClients.reduce((sum, c) => sum + c.entrada, 0).toLocaleString('pt-BR')}</strong>
+          Total: <strong className="text-foreground text-base">R$ {filteredClients.reduce((sum, c) => sum + c.entrada, 0).toLocaleString('pt-BR')}</strong>
         </span>
       </div>
 
@@ -1064,10 +1046,14 @@ export function PipelineSpreadsheet({
       <CelebrationAnimation
         show={showCelebration}
         type="sale"
-        title={celebrationData ? `🎉 ${celebrationData.clientName} fechou!` : undefined}
+        title={celebrationData ? `ðŸŽ‰ ${celebrationData.clientName} fechou!` : undefined}
         subtitle={celebrationData ? `Valor: ${formatBRL(celebrationData.value)}` : undefined}
         onComplete={() => setShowCelebration(false)}
       />
     </div>
   );
 }
+
+
+
+

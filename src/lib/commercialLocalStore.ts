@@ -147,6 +147,27 @@ function peopleMatch(recordPhone: string | null | undefined, recordName: string 
   return Boolean(recordName && targetName && matchMeetingName(recordName) === matchMeetingName(targetName));
 }
 
+type AgendaEventLike = {
+  event_date?: string | null;
+  event_time?: string | null;
+  client_phone?: string | null;
+  client_name?: string | null;
+};
+
+function sameAgendaSlot(event: AgendaEventLike, date?: string | null, time?: string | null) {
+  if (!date || !time) return false;
+  return String(event?.event_date || '') === String(date) && toTime(event?.event_time) === toTime(time);
+}
+
+function findAgendaEventForSync(events: AgendaEventLike[], phone: string, name: string, date?: string | null, time?: string | null) {
+  const exactMatch = events.find((event) =>
+    sameAgendaSlot(event, date, time) && peopleMatch(event.client_phone, event.client_name, phone, name)
+  );
+
+  if (exactMatch) return exactMatch;
+  return null;
+}
+
 function toLocalIsoDate(value?: string | Date | null) {
   if (!value) return '';
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -244,7 +265,7 @@ function getStoredLeadOrigin(input: { creative_source?: string | null; criativo?
 }
 
 function agendaColorForStage(stage?: string | null) {
-  if (stage === 'NO_SHOW' || stage === 'PERDIDO') return '#FF0000';
+  if (stage === 'NO_SHOW') return '#FF0000';
   if (stage === 'FECHADO' || stage === 'NEGOCIACAO' || stage === 'TAXA_INTERESSE') return '#66FF00';
   return '#3B82F6';
 }
@@ -261,9 +282,7 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
     return current;
   }
 
-  const existingEvent = current.agendaEvents.find((event: any) =>
-    peopleMatch(event.client_phone, event.client_name, phone, clientName)
-  );
+  const existingEvent = findAgendaEventForSync(current.agendaEvents, phone, clientName, meetingDate, meetingTime);
 
   const agendaEvent = {
     ...(existingEvent || {}),
@@ -329,7 +348,13 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
   };
 }
 
-export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lead: any, fallbackPipelineClient?: any): CommercialLocalData {
+export function syncAgendamentoLeadAutomations(
+  current: CommercialLocalData,
+  lead: any,
+  fallbackPipelineClient?: any,
+  agendaEventId?: string | null,
+  options?: { allowPersonMatch?: boolean }
+): CommercialLocalData {
   const phone = normalizePhone(lead.telefone);
   const clientName = normalizeMeetingClientName(lead.nome || fallbackPipelineClient?.clientName || 'Lead sem nome') || 'Lead sem nome';
   const clinicName = lead.clinic_name || fallbackPipelineClient?.clinicName || fallbackPipelineClient?.clinic_name || clientName;
@@ -338,14 +363,15 @@ export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lea
   const meetingTime = agendaTime.slice(0, 5);
   const agendaStage = AGENDAMENTO_STATUS_TO_STAGE[lead.status] || fallbackPipelineClient?.stage || 'NOVO';
   const now = new Date().toISOString();
+  const allowPersonMatch = options?.allowPersonMatch !== false;
 
   if (!meetingDate || !agendaTime) {
     return current;
   }
 
-  const existingEvent = current.agendaEvents.find((event: any) =>
-    peopleMatch(event.client_phone, event.client_name, phone, clientName)
-  );
+  const existingEvent = agendaEventId
+    ? current.agendaEvents.find((event: any) => event.id === agendaEventId)
+    : findAgendaEventForSync(current.agendaEvents, phone, clientName, meetingDate, meetingTime);
 
   const agendaEvent = {
     ...(existingEvent || {}),
@@ -378,7 +404,12 @@ export function syncAgendamentoLeadAutomations(current: CommercialLocalData, lea
       ? current.agendaEvents.map((event: any) => event.id === existingEvent.id ? agendaEvent : event)
       : [agendaEvent, ...current.agendaEvents],
     pipelineClients: current.pipelineClients.map((client: any) => {
-      if (!peopleMatch(client.telefone, client.clientName, phone, clientName)) return client;
+      const targetPipelineClientId = lead.pipeline_client_id || fallbackPipelineClient?.id || null;
+      if (targetPipelineClientId) {
+        if (client.id !== targetPipelineClientId) return client;
+      } else if (!allowPersonMatch || !peopleMatch(client.telefone, client.clientName, phone, clientName)) {
+        return client;
+      }
 
       return {
         ...client,

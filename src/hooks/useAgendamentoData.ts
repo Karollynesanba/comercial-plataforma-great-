@@ -21,6 +21,8 @@ function normalizeAgendamentoLeadAnswers(lead: AgendamentoLead): AgendamentoLead
 
 export interface AgendamentoLead {
   id: string;
+  pipeline_client_id?: string | null;
+  agenda_event_id?: string | null;
   data: string;
   nome: string;
   telefone: string;
@@ -62,7 +64,9 @@ export interface AgendamentoLead {
 }
 
 export type AgendamentoLeadInsert = Omit<AgendamentoLead, 'id' | 'created_at' | 'updated_at' | 'created_by_user_id'> & { horario_especifico?: string; pode_investir?: 'SIM' | 'NAO' | null };
-export type AgendamentoLeadUpdate = Partial<AgendamentoLeadInsert>;
+export type AgendamentoLeadUpdate = Partial<AgendamentoLeadInsert> & {
+  agenda_event_id?: string | null;
+};
 
 export const HORARIO_OPTIONS = [
   { value: 'MANHA', label: 'MANHA' },
@@ -178,11 +182,27 @@ export const PIPELINE_STAGE_TO_STATUS: Record<string, AgendamentoStatus> = {
 };
 
 function buildLeadWithAgenda(lead: any, agendaEvents: any[]): AgendamentoLead {
-  const agendaEvent = agendaEvents.find((event: any) => {
-    const leadPhone = lead.telefone?.replace(/\D/g, '');
-    const eventPhone = event.client_phone?.replace(/\D/g, '');
-    return leadPhone && eventPhone && leadPhone === eventPhone;
-  });
+  const leadPhone = lead.telefone?.replace(/\D/g, '');
+  const leadName = matchMeetingName(lead.nome || '');
+  const agendaDate = lead.agenda_event_date || null;
+  const agendaTime = lead.agenda_event_time || null;
+
+  const agendaEvent =
+    (lead.agenda_event_id && agendaEvents.find((event: any) => event.id === lead.agenda_event_id)) ||
+    agendaEvents.find((event: any) => {
+      const eventPhone = event.client_phone?.replace(/\D/g, '');
+      const eventName = matchMeetingName(event.client_name || event.title || '');
+      return (
+        agendaDate &&
+        agendaTime &&
+        String(event?.event_date || '') === String(agendaDate) &&
+        normalizeAgendaTime(event?.event_time) === normalizeAgendaTime(agendaTime) &&
+        (
+          (leadPhone && eventPhone && leadPhone === eventPhone) ||
+          (leadName && eventName && leadName === eventName)
+        )
+      );
+    });
 
   return {
     ...lead,
@@ -193,6 +213,60 @@ function buildLeadWithAgenda(lead: any, agendaEvents: any[]): AgendamentoLead {
 
 function normalizePhoneDigits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
+}
+
+type AgendaEventLike = {
+  event_date?: string | null;
+  event_time?: string | null;
+  client_phone?: string | null;
+  client_name?: string | null;
+  title?: string | null;
+  pipeline_client_id?: string | null;
+};
+
+function normalizeAgendaTime(value?: string | null) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '';
+}
+
+function matchesAgendaSlot(event: AgendaEventLike, date?: string | null, time?: string | null) {
+  if (!date || !time) return false;
+  return String(event?.event_date || '') === String(date)
+    && normalizeAgendaTime(event?.event_time) === normalizeAgendaTime(time);
+}
+
+function findMatchingAgendaEvent(agendaEvents: AgendaEventLike[], target: {
+  phoneDigits: string;
+  leadName: string;
+  previousPhoneDigits: string;
+  previousLeadName: string;
+  agendaDate?: string | null;
+  agendaTime?: string | null;
+  agendaEventId?: string | null;
+}) {
+  if (target.agendaEventId) {
+    const byId = agendaEvents.find((event: any) => event.id === target.agendaEventId);
+    if (byId) return byId;
+  }
+
+  const exactMatch = agendaEvents.find((event) => {
+    const eventPhoneDigits = normalizePhoneDigits(event.client_phone);
+    const eventName = matchMeetingName(event.client_name || event.title || '');
+    return (
+      matchesAgendaSlot(event, target.agendaDate, target.agendaTime) &&
+      (
+        (target.phoneDigits && eventPhoneDigits && target.phoneDigits === eventPhoneDigits) ||
+        (target.previousPhoneDigits && eventPhoneDigits && target.previousPhoneDigits === eventPhoneDigits) ||
+        (target.leadName && eventName && target.leadName.toLowerCase() === eventName) ||
+        (target.previousLeadName && eventName && target.previousLeadName === eventName)
+      )
+    );
+  });
+
+  if (exactMatch) return exactMatch;
+
+  return null;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -320,30 +394,32 @@ export function useAgendamentoData() {
 
   const updateLead = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & AgendamentoLeadUpdate) => {
-      const { agenda_event_date, agenda_event_time, agenda_event_title, ...dbUpdates } = updates as AgendamentoLeadUpdate & {
+      const { agenda_event_date, agenda_event_time, agenda_event_title, agenda_event_id, ...dbUpdates } = updates as AgendamentoLeadUpdate & {
         agenda_event_date?: string | null;
         agenda_event_time?: string | null;
         agenda_event_title?: string | null;
+        agenda_event_id?: string | null;
       };
 
       if (!isSupabaseConfigured) {
-        const formattedPhone = dbUpdates.telefone ? formatPhoneForWhatsApp(dbUpdates.telefone) : undefined;
+        const { agenda_event_id, ...safeDbUpdates } = dbUpdates as AgendamentoLeadUpdate & { agenda_event_id?: string | null };
+        const formattedPhone = safeDbUpdates.telefone ? formatPhoneForWhatsApp(safeDbUpdates.telefone) : undefined;
         updateCommercialLocalData((current) => {
           const nextLeads = current.agendamentoLeads.map((item: any) =>
             item.id === id
               ? {
                   ...item,
-                  ...dbUpdates,
+                  ...safeDbUpdates,
                   ...(formattedPhone ? { telefone: formattedPhone } : {}),
                   updated_at: new Date().toISOString(),
                 }
               : item
           );
           const updatedLead = nextLeads.find((item: any) => item.id === id);
-          const fallbackPipelineClient = current.pipelineClients.find((client: any) =>
-            String(client.telefone || '').replace(/\D/g, '') === String(updatedLead?.telefone || '').replace(/\D/g, '') ||
-            client.clientName === updatedLead?.nome
-          );
+          const fallbackPipelineClientId = (updatedLead as any)?.pipeline_client_id || (nextLeads.find((item: any) => item.id === id) as any)?.pipeline_client_id || null;
+          const fallbackPipelineClient = fallbackPipelineClientId
+            ? current.pipelineClients.find((client: any) => client.id === fallbackPipelineClientId)
+            : null;
           const synced = updatedLead
             ? syncAgendamentoLeadAutomations(
                 {
@@ -351,13 +427,15 @@ export function useAgendamentoData() {
                   agendamentoLeads: nextLeads,
                 },
                 updatedLead,
-                fallbackPipelineClient
+                fallbackPipelineClient,
+                agenda_event_id || (updatedLead as any)?.agenda_event_id || null,
+                { allowPersonMatch: false }
               )
             : { ...current, agendamentoLeads: nextLeads };
           return synced;
         });
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
-        return { id, ...dbUpdates } as AgendamentoLead;
+        return { id, ...safeDbUpdates } as AgendamentoLead;
       }
       const { data: previousLead } = await supabase.from('agendamento_leads').select('*').eq('id', id).single();
 
@@ -374,6 +452,7 @@ export function useAgendamentoData() {
       const leadName = normalizeMeetingClientName(updatedLead.nome || '');
       const previousLeadPhoneDigits = normalizePhoneDigits(previousLead?.telefone);
       const previousLeadName = matchMeetingName(previousLead?.nome || '');
+      const linkedAgendaEventId = agenda_event_id || (previousLead as any)?.agenda_event_id || (updatedLead as any)?.agenda_event_id || null;
       const agendaDate = agenda_event_date || updatedLead.data || null;
       const agendaTime = agenda_event_time || updatedLead.horario_especifico || null;
 
@@ -382,24 +461,25 @@ export function useAgendamentoData() {
           const { data: agendaEvents, error: agendaError } = await supabase.from('agenda_events').select('*').limit(1000);
           if (agendaError) throw agendaError;
 
-          const matchingEvent = (agendaEvents || []).find((event: any) => {
-            const eventPhoneDigits = normalizePhoneDigits(event.client_phone);
-            const eventName = matchMeetingName(event.client_name || event.title || '');
-            return (
-              (leadPhoneDigits && eventPhoneDigits && leadPhoneDigits === eventPhoneDigits) ||
-              (previousLeadPhoneDigits && eventPhoneDigits && previousLeadPhoneDigits === eventPhoneDigits) ||
-              (leadName && eventName && leadName.toLowerCase() === eventName) ||
-              (previousLeadName && eventName && previousLeadName === eventName)
-            );
+          const matchingEvent = findMatchingAgendaEvent(agendaEvents || [], {
+            phoneDigits: leadPhoneDigits,
+            leadName,
+            previousPhoneDigits: previousLeadPhoneDigits,
+            previousLeadName,
+            agendaDate,
+            agendaTime,
+            agendaEventId: linkedAgendaEventId,
           });
 
           const explicitAgendaTitle = normalizeMeetingTitle(agenda_event_title || '') || '';
           const existingAgendaTitle = String(matchingEvent?.title || '').trim();
           const defaultAgendaTitle = normalizeMeetingTitle(leadName || updatedLead.nome || 'Lead') || `Reuniao com ${leadName || updatedLead.nome || 'Lead'}`;
           const nextAgendaTitle = explicitAgendaTitle || existingAgendaTitle || defaultAgendaTitle;
+          const nextAgendaPipelineClientId = matchingEvent?.pipeline_client_id || (linkedAgendaEventId ? (updatedLead as any)?.pipeline_client_id || null : null);
 
           const agendaPayload = {
             ...(matchingEvent || {}),
+            pipeline_client_id: nextAgendaPipelineClientId,
             title: nextAgendaTitle,
             description: matchingEvent?.description || (updatedLead.funil ? `Lead de Agendamento - ${updatedLead.funil}` : 'Lead de Agendamento'),
             notes: matchingEvent?.notes ?? updatedLead.notes ?? null,
@@ -431,10 +511,10 @@ export function useAgendamentoData() {
           }
         }
 
-        const linkedPipelineClient = commercial?.pipelineClients.find((client) =>
-          normalizePhoneDigits(client.telefone) === leadPhoneDigits ||
-          matchMeetingName(client.clientName || '') === leadName.toLowerCase()
-        );
+        const linkedPipelineClientId = (updatedLead as any)?.pipeline_client_id || (previousLead as any)?.pipeline_client_id || null;
+        const linkedPipelineClient = linkedPipelineClientId
+          ? commercial?.pipelineClients.find((client) => client.id === linkedPipelineClientId)
+          : null;
 
         if (linkedPipelineClient && commercial?.updatePipelineClient) {
           commercial.updatePipelineClient(linkedPipelineClient.id, {
@@ -508,7 +588,18 @@ export function useAgendamentoData() {
   const duplicateLead = useMutation({
     mutationFn: async (lead: AgendamentoLead) => {
       if (!isSupabaseConfigured) {
-        const { id, created_at, updated_at, created_by_user_id, ...leadData } = lead;
+        const {
+          id,
+          created_at,
+          updated_at,
+          created_by_user_id,
+          pipeline_client_id,
+          agenda_event_id,
+          agenda_event_date,
+          agenda_event_time,
+          agenda_event_title,
+          ...leadData
+        } = lead as AgendamentoLead & Record<string, any>;
         const duplicated: AgendamentoLead = {
           ...leadData,
           id: `agendamento-${crypto.randomUUID()}`,
@@ -525,7 +616,18 @@ export function useAgendamentoData() {
 
         return duplicated;
       }
-      const { id, created_at, updated_at, created_by_user_id, ...leadData } = lead;
+      const {
+        id,
+        created_at,
+        updated_at,
+        created_by_user_id,
+        pipeline_client_id,
+        agenda_event_id,
+        agenda_event_date,
+        agenda_event_time,
+        agenda_event_title,
+        ...leadData
+      } = lead as AgendamentoLead & Record<string, any>;
       const payload = {
         ...leadData,
         created_by_user_id: user?.id || null,

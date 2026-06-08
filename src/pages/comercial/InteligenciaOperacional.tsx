@@ -11,13 +11,20 @@ import { formatBRL } from '@/lib/utils';
 import { getArea, getHour, getHourLabel, getScheduleDate, getTurn, groupPreVenda, parseCalendarDate, summarizePreVenda, type PreVendaGroupStats } from '@/lib/preVendaAnalytics';
 import { CLOSERS_FROM_CALLS_SHEET, isCloserName, normalizeCloserName, type CloserCallMetrics, type CloserName } from '@/lib/callsRealizadas2026';
 import { getClientRevenue, isRealContract } from '@/lib/commercialMetrics';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 const COLORS = ['#e10600', '#fb7185', '#f97316', '#f59e0b', '#10b981', '#0ea5e9', '#6366f1', '#8b5cf6'];
 const CLOSER_ORDER = new Map<CloserName, number>(CLOSERS_FROM_CALLS_SHEET.map((closer, index) => [closer, index]));
 const SPECIALIST_LABELS: Record<string, string> = {
   CAETANO: 'Bruno',
-HEBERT: 'Herbert',
+  HEBERT: 'Herbert',
+  ALAN: 'Alan',
 };
+
+function getSpecialistDisplayName(value?: string | null) {
+  if (!value) return 'Sem closer';
+  return SPECIALIST_LABELS[value] || value;
+}
 export default function InteligenciaOperacional() {
   const { pipelineClients, closerDailyLogs } = useCommercial();
   const [filter, setFilter] = useState<RaioXFilterState>(() => ({ ...getDefaultRaioXFilter(), mode: 'all' }));
@@ -34,10 +41,12 @@ export default function InteligenciaOperacional() {
     [filter, realPipelineClients]
   );
 
-  const specialistOptions = useMemo(() => ['Todos', ...CLOSERS_FROM_CALLS_SHEET], []);
+  const specialistOptions = useMemo(() => ['Todos', ...CLOSERS_FROM_CALLS_SHEET, 'ALAN'], []);
   const specialistClients = useMemo(() => (
     specialistFilter === 'Todos'
       ? clients
+      : specialistFilter === 'ALAN'
+        ? clients.filter((client) => client.agendadoPor === 'ALAN' || client.assignedSDR === 'ALAN')
       : clients.filter((client) => normalizeCloserName(client.assignedCloser || client.vendedor) === specialistFilter)
   ), [clients, specialistFilter]);
   const specialistScopedClients = useMemo(() => specialistClients.filter((client) => client.stage !== 'NOVO'), [specialistClients]);
@@ -58,13 +67,14 @@ export default function InteligenciaOperacional() {
   const callSheet = useMemo(() => buildCallsFromEditableSheet(closerDailyLogs, filter), [closerDailyLogs, filter]);
   const callCloserRows = useMemo(() => {
     const rows = callSheet.rows;
+    if (specialistFilter === 'ALAN') return rows;
     return isCloserName(specialistFilter)
       ? rows.filter((row) => row.closer === specialistFilter)
       : rows;
   }, [callSheet.rows, specialistFilter]);
   const callSheetStats = useMemo(() => summarizeCloserRows(callCloserRows), [callCloserRows]);
 
-  const creativeStats = useMemo(() => groupPreVenda(clients, (client) => client.criativo || 'Nao identificado').slice(0, 12), [clients]);
+  const creativeStats = useMemo(() => groupPreVenda(clients, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).slice(0, 12), [clients]);
   const bestCreative = useMemo(
     () => [...creativeStats].sort((a, b) => b.conversionRate - a.conversionRate || b.closed - a.closed || b.revenue - a.revenue)[0],
     [creativeStats]
@@ -80,7 +90,7 @@ export default function InteligenciaOperacional() {
   const packageStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.pacote)), [clients]);
   const periodStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.periodo || client.plan || 'Nao informado')), [clients]);
   const leadFunnelStats = useMemo(() => summarizePreVenda('Métricas Leads', clients), [clients]);
-  const leadCreativeStats = useMemo(() => groupPreVenda(clients, (client) => client.criativo || 'Nao identificado').slice(0, 12), [clients]);
+  const leadCreativeStats = useMemo(() => groupPreVenda(clients, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).slice(0, 12), [clients]);
   const leadCloserHourStats = useMemo(() => buildCloserBreakdownStats(specialistScopedClients, (client) => getHourLabel(getHour(client))).slice(0, 18), [specialistScopedClients]);
   const leadCloserAreaStats = useMemo(() => buildCloserBreakdownStats(specialistScopedClients, getArea).slice(0, 18), [specialistScopedClients]);
   const perfectCloserScenarios = useMemo(() => buildPerfectCloserScenarios(specialistScopedClients), [specialistScopedClients]);
@@ -301,7 +311,7 @@ const hourChart = hourStats.map((item) => ({
                     ? 'rounded-full bg-slate-950 px-4 py-2 text-xs font-bold text-white'
                     : 'rounded-full border border-slate-100 bg-white px-4 py-2 text-xs font-semibold text-slate-500 transition hover:text-slate-950'}
                 >
-                  {SPECIALIST_LABELS[option] || option}
+                  {getSpecialistDisplayName(option)}
                 </button>
               ))}
             </div>
@@ -374,7 +384,7 @@ const hourChart = hourStats.map((item) => ({
               <InsightCard label="Horario com mais No Show" value={worstHourByNoShow?.name || 'Sem dados'} detail={worstHourByNoShow ? `${worstHourByNoShow.noShow} no show (${worstHourByNoShow.noShowRate.toFixed(1)}%)` : 'Sem registros de No Show no periodo'} />
               <InsightCard label="Melhor criativo/funil" value={bestCreative?.name || 'Sem dados'} detail={bestCreative ? `${bestCreative.conversionRate.toFixed(1)}% de conversao com ${bestCreative.closed} fechado(s)` : 'Sem dados de criativo'} />
               <InsightCard label="Ticket medio global" value={formatBRL(globalTicketAverage)} detail={overview.closed > 0 ? `${overview.closed} fechamento(s) no recorte` : 'Sem fechamentos no periodo'} />
-              <InsightCard label="Melhor closer x criativo" value={bestCloserCreative ? `${bestCloserCreative.closer} x ${bestCloserCreative.creative}` : 'Sem dados'} detail={bestCloserCreative ? `${bestCloserCreative.conversionRate.toFixed(1)}% de conversao e ${formatBRL(bestCloserCreative.revenue)}` : 'Sem fechamento por closer'} />
+              <InsightCard label="Melhor closer x criativo" value={bestCloserCreative ? `${getSpecialistDisplayName(bestCloserCreative.closer)} x ${bestCloserCreative.creative}` : 'Sem dados'} detail={bestCloserCreative ? `${bestCloserCreative.conversionRate.toFixed(1)}% de conversao e ${formatBRL(bestCloserCreative.revenue)}` : 'Sem fechamento por closer'} />
             </CardContent>
           </Card>
           </div>
@@ -668,7 +678,7 @@ function buildCloserCreativeStats(clients: PipelineClient[]): CloserCreativeStat
     const closer = normalizeCloserName(client.assignedCloser || client.vendedor);
     if (!closer) return;
 
-    const creative = readableValue(client.criativo || 'Nao identificado');
+    const creative = readableValue(getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource }));
     const key = `${closer}__${creative}`;
     grouped.set(key, [...(grouped.get(key) || []), client]);
   });
@@ -681,7 +691,7 @@ function buildCloserCreativeStats(clients: PipelineClient[]): CloserCreativeStat
       return {
         key,
         closer: normalizeCloserName(rows[0]?.assignedCloser || rows[0]?.vendedor) as CloserName,
-        creative: readableValue(rows[0]?.criativo || 'Nao identificado'),
+        creative: readableValue(getCommercialLeadOrigin({ criativo: rows[0]?.criativo, funil: rows[0]?.funil, creativeSource: rows[0]?.creativeSource })),
         total: rows.length,
         closed: closedRows.length,
         revenue,
@@ -741,7 +751,7 @@ function buildCloserDeepDiveSummary(clients: PipelineClient[], closer: CloserNam
   )[0] || null;
   const bestScenarioRows = bestScenarioEntry?.rows || [];
   const bestScenario = bestScenarioEntry?.scenario || null;
-  const bestCreative = bestScenarioRows.length > 0 ? groupPreVenda(bestScenarioRows, (client) => client.criativo || 'Nao identificado')[0] || null : null;
+  const bestCreative = bestScenarioRows.length > 0 ? groupPreVenda(bestScenarioRows, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource }))[0] || null : null;
   const bestHour = bestScenarioRows.length > 0 ? groupPreVenda(bestScenarioRows, (client) => getHourLabel(getHour(client)))[0] || null : null;
   const bestArea = bestScenarioRows.length > 0 ? groupPreVenda(bestScenarioRows, getArea)[0] || null : null;
   const bestFaturamento = bestScenarioRows.length > 0 ? groupPreVenda(bestScenarioRows, (client) => readableFaturamento(client.faturamento))[0] || null : null;
@@ -1059,7 +1069,7 @@ function PerfectScenarioCards({ rows }: { rows: PerfectCloserScenario[] }) {
             {rows.map((row) => (
               <div key={row.closer} className="rounded-[1.5rem] border border-slate-100 bg-[#f7f7f8] p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">{row.closer}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">{getSpecialistDisplayName(row.closer)}</p>
                   <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
                     {row.conversionRate.toFixed(1)}%
                   </Badge>
@@ -1114,7 +1124,7 @@ function CloserDeepDiveCard({ summary }: { summary: CloserDeepDiveSummary }) {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <div className="rounded-[1.5rem] border border-slate-100 bg-white p-5">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">{summary.closer}</p>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">{getSpecialistDisplayName(summary.closer)}</p>
               <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
                 {summary.conversionRate.toFixed(1)}%
               </Badge>
@@ -1247,7 +1257,7 @@ function CloserBreakdownTable({ title, rows, secondColumn }: { title: string; ro
               <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Sem dados para o periodo selecionado.</TableCell></TableRow>
             ) : rows.map((item) => (
               <TableRow key={item.key}>
-                <TableCell className="font-bold text-slate-950">{item.closer}</TableCell>
+                <TableCell className="font-bold text-slate-950">{getSpecialistDisplayName(item.closer)}</TableCell>
                 <TableCell className="max-w-[220px] truncate font-semibold text-slate-800">{item.segment}</TableCell>
                 <TableCell className="text-center">{item.total}</TableCell>
                 <TableCell className="text-center">{item.attendanceRate.toFixed(1)}%</TableCell>
@@ -1300,7 +1310,7 @@ function CloserCreativeConversionTable({ rows }: { rows: CloserCreativeStats[] }
               </TableRow>
             ) : rows.slice(0, 8).map((row) => (
               <TableRow key={row.key}>
-                <TableCell className="font-bold text-slate-950">{row.closer}</TableCell>
+                <TableCell className="font-bold text-slate-950">{getSpecialistDisplayName(row.closer)}</TableCell>
                 <TableCell className="max-w-[240px] truncate font-semibold text-slate-800">{row.creative}</TableCell>
                 <TableCell className="text-center">{row.total}</TableCell>
                 <TableCell className="text-center font-bold text-emerald-700">{row.closed}</TableCell>
@@ -1392,7 +1402,7 @@ function CloserCreativeTable({ rows }: { rows: CloserCreativeStats[] }) {
             ) : (
               rows.map((row) => (
                 <TableRow key={row.key}>
-                  <TableCell className="font-bold text-slate-950">{row.closer}</TableCell>
+                  <TableCell className="font-bold text-slate-950">{getSpecialistDisplayName(row.closer)}</TableCell>
                   <TableCell className="max-w-[320px] truncate font-semibold text-slate-800">{row.creative}</TableCell>
                   <TableCell className="text-center">{row.total}</TableCell>
                   <TableCell className="text-center font-bold text-emerald-700">{row.closed}</TableCell>
@@ -1438,7 +1448,7 @@ function CallsCloserTable({ rows, title }: { rows: CloserCallMetrics[]; title: s
           <TableBody>
             {rows.map((row) => (
               <TableRow key={row.closer}>
-                <TableCell className="font-semibold text-slate-900">{row.closer}</TableCell>
+                <TableCell className="font-semibold text-slate-900">{getSpecialistDisplayName(row.closer)}</TableCell>
                 <TableCell className="text-center">{row.agendada}</TableCell>
                 <TableCell className="text-center">{row.realizada}</TableCell>
                 <TableCell className="text-center">{row.pitch}</TableCell>

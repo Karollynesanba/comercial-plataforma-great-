@@ -40,7 +40,7 @@ export type TemSocio = CommercialYesNoMaybe;
 export type TemMkt = CommercialYesNoMaybe;
 export type TemSecretaria = CommercialYesNoMaybe;
 export type SalaoOuClinica = string;
-export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'CLED' | 'CAETANO';
+export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'ALAN' | 'CLED' | 'CAETANO';
 export type PodeInvestir = 'SIM' | 'NAO';
 export type Funil = string;
 
@@ -78,11 +78,13 @@ export const AGENDADOR_OPTIONS = [
   { value: 'PEDRO_H' as Agendador, label: 'Pedro Henrique' },
   { value: 'CLED' as Agendador, label: 'Cled' },
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
+  { value: 'ALAN' as Agendador, label: 'Alan' },
   { value: 'CAETANO' as Agendador, label: 'Bruno' },
 ];
 
 export const OFFICIAL_SDR_OPTIONS = [
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
+  { value: 'ALAN' as Agendador, label: 'Alan' },
 ];
 
 export const OFFICIAL_SDR_VALUES = OFFICIAL_SDR_OPTIONS.map((option) => option.value);

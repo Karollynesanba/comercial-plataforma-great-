@@ -17,7 +17,7 @@ export function CommercialAnswerGroup({ name, value, onValueChange, options, cla
       name={name}
       value={value}
       onValueChange={onValueChange}
-      className={cn('grid gap-2', className)}
+      className={cn('flex flex-wrap gap-2', className)}
     >
       {options.map((option) => {
         const optionId = `${name}-${option.value}`;
@@ -28,10 +28,11 @@ export function CommercialAnswerGroup({ name, value, onValueChange, options, cla
             <Label
               htmlFor={optionId}
               className={cn(
-                'flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/60 hover:bg-accent',
-                'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary peer-data-[state=checked]:text-primary-foreground'
+                'inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md',
+                'peer-data-[state=checked]:border-red-500 peer-data-[state=checked]:bg-red-50 peer-data-[state=checked]:text-red-700 peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-red-500/15'
               )}
             >
+              <span className="mr-2 h-2.5 w-2.5 rounded-full bg-slate-300 ring-2 ring-white" />
               {option.label}
             </Label>
           </div>

@@ -9,6 +9,7 @@ import { Building2, GripVertical, Clock, AlertTriangle, Pencil, Trash2, User, St
 import { cn, formatBRL } from '@/lib/utils';
 import { differenceInDays, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 interface PipelineCardProps {
   client: PipelineClient;
@@ -150,6 +151,11 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
       : client.agendadoVia === 'CALENDLY'
         ? 'Calendly'
         : client.agendadoVia;
+  const clientOrigin = getCommercialLeadOrigin({
+    creativeSource: client.creativeSource,
+    criativo: client.criativo,
+    funil: client.funil,
+  });
 
   const handleCheckbox = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -252,7 +258,7 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
         {/* Criativo and Agendador */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span className="bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded text-[10px]">
-            {client.criativo}
+            {clientOrigin}
           </span>
           {agendadorLabel && (
             <span className="flex items-center gap-1 bg-sky-500/20 text-sky-400 px-2 py-0.5 rounded text-[10px]">

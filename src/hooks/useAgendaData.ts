@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
+import { isCustomMeetingTitle, matchMeetingName, normalizeMeetingTitle } from '@/lib/agendaTitle';
 
 export interface AgendaEvent {
   id: string;
@@ -45,6 +46,7 @@ export type AgendaEventInsert = Omit<
   scheduled_by?: string | null;
   lead_stage?: string | null;
   creative_source?: string | null;
+  skip_related_sync?: boolean;
 };
 export type AgendaEventUpdate = Partial<Omit<AgendaEventInsert, 'created_by_user_id'>>;
 
@@ -65,6 +67,7 @@ const LOCAL_TEAMS = [
 function enrichEvent(event: any): AgendaEvent {
   return {
     ...event,
+    title: normalizeMeetingTitle(event.title || event.client_name || '') || event.title,
     clinic_name: event.clinic_name || event.client_name || null,
     scheduled_by: event.scheduled_by || null,
     lead_stage: event.lead_stage || null,
@@ -111,21 +114,30 @@ async function syncRelatedRecords(event: AgendaEvent) {
   const target = samePersonFilter(event.client_name, event.client_phone);
   const eventPipelineClientId = (event as any).pipeline_client_id || null;
   const { data: clients } = await supabase.from('pipeline_clients').select('id, client_name, telefone').limit(1000);
+  const { data: linkedEvents } = await supabase
+    .from('agenda_events')
+    .select('id, pipeline_client_id')
+    .eq('pipeline_client_id', eventPipelineClientId || '')
+    .limit(10);
 
   const matchingClients = (clients || []).filter((client) => {
     const clientDigits = String(client.telefone || '').replace(/\D/g, '');
-    return client.client_name === target.name || (target.digits && clientDigits === target.digits);
+    return matchMeetingName(client.client_name || '') === matchMeetingName(target.name || '') || (target.digits && clientDigits === target.digits);
   });
   const selectedClient =
     (eventPipelineClientId
       ? matchingClients.find((client) => client.id === eventPipelineClientId) || null
       : null) ||
     matchingClients.find((client) => String(client.telefone || '').replace(/\D/g, '') === target.digits) ||
-    matchingClients.find((client) => client.client_name === target.name) ||
+    matchingClients.find((client) => matchMeetingName(client.client_name || '') === matchMeetingName(target.name || '')) ||
     null;
   const linkedPipelineClientId = selectedClient?.id || eventPipelineClientId || null;
 
   if (linkedPipelineClientId) {
+    const anotherLinkedEvent = (linkedEvents || []).find((item) => item.id !== event.id);
+    if (anotherLinkedEvent) {
+      return;
+    }
     await supabase.from('agenda_events').update({
       pipeline_client_id: linkedPipelineClientId,
       updated_at: new Date().toISOString(),
@@ -158,11 +170,14 @@ export function useAgendaData() {
 
   const createEvent = useMutation({
     mutationFn: async (event: AgendaEventInsert) => {
+      const { skip_related_sync, ...payloadBase } = event as AgendaEventInsert & { skip_related_sync?: boolean };
       if (!isSupabaseConfigured) {
         const payload = {
-          ...event,
+          ...payloadBase,
+          title: normalizeMeetingTitle(payloadBase.title || payloadBase.client_name || '') || payloadBase.title,
+          title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
           id: `agenda-${crypto.randomUUID()}`,
-          client_phone: formatPhoneForWhatsApp(event.client_phone),
+          client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
           reminder_2h_sent: false,
           reminder_30min_sent: false,
           created_at: new Date().toISOString(),
@@ -178,8 +193,10 @@ export function useAgendaData() {
       }
 
       const payload = {
-        ...event,
-        client_phone: formatPhoneForWhatsApp(event.client_phone),
+        ...payloadBase,
+        title: normalizeMeetingTitle(payloadBase.title || payloadBase.client_name || '') || payloadBase.title,
+        title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
+        client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
         reminder_2h_sent: false,
         reminder_30min_sent: false,
         updated_at: new Date().toISOString(),
@@ -189,7 +206,9 @@ export function useAgendaData() {
       if (error) throw error;
 
       const newEvent = enrichEvent(data);
-      await syncRelatedRecords(newEvent);
+      if (!skip_related_sync) {
+        await syncRelatedRecords(newEvent);
+      }
       return newEvent;
     },
     onSuccess: () => {
@@ -212,6 +231,13 @@ export function useAgendaData() {
             updated = enrichEvent({
               ...item,
               ...updates,
+              title: normalizeMeetingTitle(updates.title || item.title || item.client_name || ''),
+              title_locked:
+                Boolean((item as any).title_locked) ||
+                isCustomMeetingTitle(
+                  normalizeMeetingTitle(updates.title || item.title || item.client_name || '') || item.title,
+                  updates.client_name || item.client_name,
+                ),
               client_phone: updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : item.client_phone,
               updated_at: new Date().toISOString(),
             });
@@ -230,9 +256,21 @@ export function useAgendaData() {
         throw new Error('Evento nao encontrado');
       }
 
+      const previousTitle = String(previous.title || '').trim();
+      const previousClientName = String(previous.client_name || '').trim();
+      const explicitTitle = typeof updates.title === 'string' ? String(updates.title).trim() : '';
+      const resolvedTitle = explicitTitle
+        ? normalizeMeetingTitle(explicitTitle) || previousTitle || normalizeMeetingTitle(previousClientName) || `Reuniao com ${previousClientName || 'Lead sem nome'}`
+        : previousTitle || normalizeMeetingTitle(previousClientName) || `Reuniao com ${previousClientName || 'Lead sem nome'}`;
+      const currentDefaultTitle = `Reuniao com ${String(updates.client_name || previous.client_name || 'Lead sem nome').trim()}`;
+
       const payload = {
         ...previous,
         ...updates,
+        title: resolvedTitle,
+        title_locked:
+          Boolean((previous as any).title_locked) ||
+          resolvedTitle !== currentDefaultTitle,
         client_phone: updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : previous.client_phone,
         updated_at: new Date().toISOString(),
       };

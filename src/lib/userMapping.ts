@@ -4,7 +4,7 @@ export interface UserMapping {
   email: string;
   role: 'ADMIN' | 'COORDENADOR_COMERCIAL' | 'CLOSER' | 'SDR';
   vendedorKey?: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDRO_JUAN' | 'CAETANO';
-  agendadorKey?: 'FELIPE' | 'HERBERT';
+  agendadorKey?: 'FELIPE' | 'HERBERT' | 'ALAN';
 }
 
 export const COMMERCIAL_LOGIN_PASSWORD = 'Great2026!';
@@ -12,11 +12,10 @@ export const COMMERCIAL_LOGIN_PASSWORD = 'Great2026!';
 export const COMMERCIAL_LOGIN_EMAILS = [
   'pedro.henrique.56789@gmail.com',
   'joseherbert103@gmail.com',
+  'alanribeiropessoal@gmail.com',
   'pedroojuann1@gmail.com',
   'brunogomrdtjf@gmail.com',
   'cledinhosport10@gmail.com',
-  'feliperangel.rego03@gmail.com',
-  'cadulucena6@gmail.com',
 ] as const;
 
 export function isCommercialLoginEmail(email: string): boolean {
@@ -25,52 +24,41 @@ export function isCommercialLoginEmail(email: string): boolean {
 }
 
 export const TEAM_USERS: Record<string, UserMapping> = {
-  // Closer
-  BRUNO: {
-    name: 'Bruno',
-    email: 'brunogomrdtjf@gmail.com',
-    role: 'CLOSER',
-  },
-  // Closer
-  CLED: {
-    name: 'Cled',
-    email: 'cledinhosport10@gmail.com',
-    role: 'CLOSER',
-    vendedorKey: 'CLED',
-  },
-  // SDR
-  HERBERT: {
-    name: 'Herbert',
-    email: 'joseherbert103@gmail.com',
-    agendadorKey: 'HERBERT',
-    role: 'SDR',
-  },
-  // Closer
   PEDRO_H: {
     name: 'Pedro Henrique',
     email: 'pedro.henrique.56789@gmail.com',
     role: 'CLOSER',
     vendedorKey: 'PEDRO_H',
   },
-  // SDRs
-  FELIPE: {
-    name: 'Felipe',
-    email: 'feliperangel.rego03@gmail.com',
+  HERBERT: {
+    name: 'Jose Herbert',
+    email: 'joseherbert103@gmail.com',
+    agendadorKey: 'HERBERT',
     role: 'SDR',
-    agendadorKey: 'FELIPE',
   },
-  // Additional Closers
+  ALAN: {
+    name: 'Alan',
+    email: 'alanribeiropessoal@gmail.com',
+    agendadorKey: 'ALAN',
+    role: 'SDR',
+  },
   PEDRO_JUAN: {
     name: 'Pedro Juan',
     email: 'pedroojuann1@gmail.com',
     role: 'CLOSER',
     vendedorKey: 'PEDRO_JUAN',
   },
-  CAETANO: {
-    name: 'Caetano',
-    email: 'cadulucena6@gmail.com',
+  BRUNO: {
+    name: 'Bruno',
+    email: 'brunogomrdtjf@gmail.com',
     role: 'CLOSER',
     vendedorKey: 'CAETANO',
+  },
+  CLED: {
+    name: 'Cled',
+    email: 'cledinhosport10@gmail.com',
+    role: 'CLOSER',
+    vendedorKey: 'CLED',
   },
 };
 
@@ -95,7 +83,7 @@ export function getUserByVendedorKey(key: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDR
 }
 
 // Get user mapping by agendador key
-export function getUserByAgendadorKey(key: 'FELIPE' | 'HERBERT'): UserMapping | undefined {
+export function getUserByAgendadorKey(key: 'FELIPE' | 'HERBERT' | 'ALAN'): UserMapping | undefined {
   return Object.values(TEAM_USERS).find(u => u.agendadorKey === key);
 }
 
@@ -149,7 +137,7 @@ export function getVendedorDisplayName(key: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PE
 }
 
 // Get display name for agendador key
-export function getAgendadorDisplayName(key: 'FELIPE' | 'HERBERT'): string {
+export function getAgendadorDisplayName(key: 'FELIPE' | 'HERBERT' | 'ALAN'): string {
   const user = getUserByAgendadorKey(key);
   return user?.name || key;
 }

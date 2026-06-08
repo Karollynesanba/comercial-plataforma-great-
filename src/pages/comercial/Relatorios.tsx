@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { format, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import {
   BarChart,
   Bar,
@@ -193,7 +194,7 @@ export default function RelatoriosPage() {
       client.lostReason || 'Não informado',
       client.entrada?.toFixed(2) || '0',
       format(new Date(client.dataEntrada), 'dd/MM/yyyy'),
-      client.criativo,
+      getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource }),
     ]);
 
     const csvContent = [headers, ...rows]
@@ -583,7 +584,7 @@ export default function RelatoriosPage() {
                         <TableCell className="text-slate-700">{format(new Date(client.dataEntrada), 'dd/MM/yyyy')}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="rounded-full bg-slate-100 text-slate-700">
-                            {client.criativo}
+                            {getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })}
                           </Badge>
                         </TableCell>
                       </TableRow>

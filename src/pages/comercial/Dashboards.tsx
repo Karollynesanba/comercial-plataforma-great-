@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { cn, formatBRL, formatBRLShort } from '@/lib/utils';
 import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/comercial/PeriodFilter';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 const CATEGORY_COLORS: Record<string, string> = {
@@ -116,7 +117,7 @@ export default function ComercialDashboards() {
 
     // Vendas por criativo
     const byCreative = closedClients.reduce((acc, c) => {
-      const creative = c.criativo || 'Desconhecido';
+      const creative = getCommercialLeadOrigin({ criativo: c.criativo, funil: c.funil, creativeSource: c.creativeSource });
       if (!acc[creative]) acc[creative] = { count: 0, value: 0 };
       acc[creative].count++;
       acc[creative].value += c.entrada || c.dealValue || 0;
@@ -354,11 +355,11 @@ export default function ComercialDashboards() {
     };
 
     appointmentRows.forEach((client) => {
-      ensureRow(client.criativo).appointments += 1;
+      ensureRow(getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).appointments += 1;
     });
 
     closedRows.forEach((client) => {
-      const row = ensureRow(client.criativo);
+      const row = ensureRow(getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource }));
       row.sales += 1;
       row.revenue += getCreativeRevenue(client);
     });

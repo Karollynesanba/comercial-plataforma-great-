@@ -22,7 +22,7 @@ const persistedPipelineClient = {
   lastStageChange: new Date().toISOString(),
   notes: 'Seed persistente para teste',
   agendadoPor: 'HEBERT',
-  agendadoVia: 'INSTAGRAM',
+  agendadoVia: 'MENSAGEM',
   pagadorAnuncio: 'CLIENTE',
   temSocio: 'SIM',
   temMkt: 'SIM',
@@ -34,28 +34,28 @@ const persistedPipelineClient = {
 };
 
 describe('Persistencia global', () => {
-  it('mantem dados apos reload sem voltar para zero', () => {
-    visitCommercial(cy, '/comercial/pipeline', {
+  it('mantem o lead salvo apos reload no CRM', () => {
+    visitCommercial(cy, '/comercial/dashboards', {
       localData: {
         pipelineClients: [persistedPipelineClient],
       },
     });
 
-    cy.contains('Cliente Persistente Seed').should('exist');
+    cy.contains('R$ 1.500,00').should('exist');
 
     cy.reload();
 
-    cy.contains('Cliente Persistente Seed').should('exist');
+    cy.contains('R$ 1.500,00').should('exist');
   });
 
-  it('mostra valor vendido diferente de zero quando existe lead fechado salvo', () => {
+  it('reflete o valor vendido na tela de metas', () => {
     visitCommercial(cy, '/comercial/metas', {
       localData: {
         pipelineClients: [persistedPipelineClient],
       },
     });
 
-    cy.get('body').should('contain.text', 'Total Vendido');
-    cy.get('body').should('contain.text', 'R$ 1.500,00');
+    cy.contains('p', 'Total Vendido').should('exist');
+    cy.contains('body', 'R$ 1.500,00').should('exist');
   });
 });

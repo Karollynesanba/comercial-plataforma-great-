@@ -17,6 +17,26 @@ export interface MonthOption {
   endDate: Date;
 }
 
+export function parseLocalDateValue(value: unknown): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === 'string') {
+    const localDateOnly = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (localDateOnly) {
+      const [, year, month, day] = localDateOnly;
+      const localDate = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+      return Number.isNaN(localDate.getTime()) ? null : localDate;
+    }
+  }
+
+  const date = new Date(value as any);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 interface MonthPeriodFilterProps {
   value: string;
   onChange: (value: string) => void;
@@ -57,15 +77,15 @@ export function useMonthFilter(monthsToShow: number = 12) {
     return options;
   }, [monthsToShow]);
 
-  const filterByMonth = (date: Date | undefined, selectedMonth: string): boolean => {
+  const filterByMonth = (date: Date | string | undefined, selectedMonth: string): boolean => {
     if (selectedMonth === 'all') return true;
     if (!date) return false;
     
     const option = monthOptions.find(o => o.value === selectedMonth);
     if (!option) return true;
     
-    // Parse the date and compare in local timezone
-    const dateToCheck = date instanceof Date ? date : new Date(date);
+    const dateToCheck = parseLocalDateValue(date);
+    if (!dateToCheck) return false;
     return dateToCheck >= option.startDate && dateToCheck <= option.endDate;
   };
 

@@ -2,7 +2,8 @@ import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { DEFAULT_COMERCIAL_CRIATIVOS, DEFAULT_COMERCIAL_FUNIS, DEFAULT_COMMERCIAL_LOCAL_DATA, clearCommercialLocalData, readCommercialLocalData, type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
 import type { Agendador, Equipe, Faturamento, Pacote, PagadorAnuncio, PaymentReminder, Periodo, PipelineClient, PipelineStage, PodeInvestir, SalaoOuClinica, SDRGoal, TemMkt, TemSecretaria, TemSocio, Vendedor } from '@/contexts/CommercialContext';
 import type { SalesGoal } from '@/types';
-import { coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { commercialAnswerToDb, coerceCommercialAnswer } from '@/lib/commercialAnswer';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 export interface CommercialCloudState {
   pipelineClients: PipelineClient[];
@@ -214,7 +215,7 @@ function dbPipelineToLocal(row: any): PipelineClient {
     clinicName: row.clinic_name || row.client_name,
     telefone: row.telefone || undefined,
     vendedor: row.vendedor as Vendedor | undefined,
-    criativo: row.criativo || 'NAO IDENTIFICADO',
+    criativo: getCommercialLeadOrigin({ criativo: row.criativo, funil: row.funil }),
     funil: row.funil || row.criativo || 'NAO IDENTIFICADO',
     equipe: (row.equipe || 'team-equipe-7') as Equipe,
     faturamento: normalizePipelineFaturamento(row.faturamento),
@@ -236,21 +237,21 @@ function dbPipelineToLocal(row: any): PipelineClient {
     agendadoPor: row.agendado_por as Agendador | undefined,
     agendadoVia: row.agendado_via || undefined,
     pagadorAnuncio: row.pagador_anuncio as PagadorAnuncio | undefined,
-    temSocio: coerceCommercialAnswer(row.tem_socio) as TemSocio | undefined,
-    temMkt: coerceCommercialAnswer(row.tem_mkt) as TemMkt | undefined,
+    temSocio: coerceCommercialAnswer(row.tem_socio, 'NAO') as TemSocio | undefined,
+    temMkt: coerceCommercialAnswer(row.tem_mkt, 'NAO') as TemMkt | undefined,
     temSecretaria: coerceCommercialAnswer(row.tem_secretaria) as TemSecretaria | undefined,
     salaoOuClinica: row.salao_ou_clinica as SalaoOuClinica | undefined,
     createdByUserId: row.created_by_user_id || 'cloud-user',
     dealValue: Number(row.entrada || 0),
     plan: row.periodo || undefined,
-    creativeSource: row.criativo || undefined,
+    creativeSource: getCommercialLeadOrigin({ criativo: row.criativo, funil: row.funil }),
     entryDate: row.data_entrada ? asDate(row.data_entrada) : undefined,
     meetingDate: row.meeting_date || undefined,
     meetingTime: row.meeting_time ? toTime(row.meeting_time) || undefined : undefined,
     assignedSDR: row.agendado_por || undefined,
     assignedCloser: row.vendedor || undefined,
     followupDone: row.followup_done ?? false,
-    createdAt: asDate(row.created_at),
+    createdAt: asDate(row.created_at || row.data_entrada || row.entryDate),
   };
 }
 
@@ -261,7 +262,7 @@ function localPipelineToDb(client: Partial<PipelineClient>, userId?: string | nu
     clinic_name: client.clinicName || client.clientName || null,
     telefone: client.telefone || null,
     vendedor: client.vendedor || null,
-    criativo: client.criativo || null,
+    criativo: getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
     funil: client.funil || null,
     equipe: client.equipe || null,
     faturamento: normalizePipelineFaturamento(client.faturamento),
@@ -275,6 +276,7 @@ function localPipelineToDb(client: Partial<PipelineClient>, userId?: string | nu
     mrr_entrada: Number(client.mrrEntrada || client.entrada || 0),
     mrr_remaining: Number(client.mrrRemaining || 0),
     data_entrada: dateOnly(client.dataEntrada || client.entryDate) || dateOnly(new Date()),
+    created_at: client.createdAt ? asDate(client.createdAt).toISOString() : dateOnly(client.dataEntrada || client.entryDate) ? new Date(dateOnly(client.dataEntrada || client.entryDate) + 'T00:00:00-03:00').toISOString() : new Date().toISOString(),
     stage: client.stage || 'NOVO',
     last_stage_change: client.lastStageChange ? asDate(client.lastStageChange).toISOString() : null,
     lost_reason: client.lostReason || null,
@@ -283,9 +285,9 @@ function localPipelineToDb(client: Partial<PipelineClient>, userId?: string | nu
     agendado_por: client.agendadoPor || client.assignedSDR || null,
     agendado_via: client.agendadoVia || null,
     pagador_anuncio: client.pagadorAnuncio || null,
-    tem_socio: coerceCommercialAnswer(client.temSocio) || null,
-    tem_mkt: coerceCommercialAnswer(client.temMkt) || null,
-    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || null,
+    tem_socio: commercialAnswerToDb(client.temSocio),
+    tem_mkt: commercialAnswerToDb(client.temMkt),
+    tem_secretaria: commercialAnswerToDb(client.temSecretaria),
     salao_ou_clinica: client.salaoOuClinica || null,
     meeting_date: client.meetingDate || null,
     meeting_time: client.meetingTime ? toTime(client.meetingTime) : null,
@@ -302,7 +304,7 @@ function dbGoalToLocal(row: any): SalesGoal {
     goalValue: Number(row.goal_value || 0),
     currentValue: 0,
     createdByUserId: row.created_by_user_id || 'cloud-user',
-    createdAt: asDate(row.created_at),
+    createdAt: asDate(row.created_at || row.data_entrada || row.entryDate),
   };
 }
 
@@ -312,7 +314,7 @@ function dbSdrGoalToLocal(row: any): SDRGoal {
     agendador: row.agendador as Agendador,
     month: row.month,
     goalCount: Number(row.goal_count || 0),
-    createdAt: asDate(row.created_at),
+    createdAt: asDate(row.created_at || row.data_entrada || row.entryDate),
   };
 }
 
@@ -369,7 +371,9 @@ function settingsToFunis(rows: any[]): string[] {
 }
 
 function settingsToCriativos(rows: any[], cloudCriativos: string[]) {
-  if (cloudCriativos.length > 0) return cloudCriativos;
+  if (cloudCriativos.length > 0) {
+    return Array.from(new Set(cloudCriativos.map((item) => String(item || '').trim().toUpperCase()).filter(Boolean))).sort();
+  }
 
   const persisted = rows
     .filter((row) => String(row.setting_key || '').startsWith('commercial_creative:'))
@@ -520,7 +524,7 @@ function dbReminderToLocal(row: any): PaymentReminder {
     dealValue: Number(row.deal_value || 0),
     paymentDeadline: asDate(row.payment_deadline),
     dismissed: row.dismissed ?? false,
-    createdAt: asDate(row.created_at),
+    createdAt: asDate(row.created_at || row.data_entrada || row.entryDate),
   };
 }
 
@@ -553,26 +557,10 @@ function dbCloserLogToLocal(row: any): CloserDailyLog {
 }
 
 async function ensureSeedAgendaEventsFromPipeline(pipelineClients: PipelineClient[], userId?: string | null) {
-  const seedClients = pipelineClients.filter((client) =>
-    String(client.notes || '').includes(TEST_PIPELINE_SEED_MARKER)
-  );
-
-  if (!seedClients.length) return;
-
-  const { data: existingEvents } = await supabase
-    .from('agenda_events')
-    .select('id, client_name, client_phone')
-    .limit(1000);
-
-  const existingKeys = new Set(
-    (existingEvents || []).map((event: any) => `${normalizePhone(event.client_phone)}::${String(event.client_name || '').trim().toLowerCase()}`)
-  );
-
-  for (const client of seedClients) {
-    const key = `${normalizePhone(client.telefone)}::${String(client.clientName || '').trim().toLowerCase()}`;
-    if (existingKeys.has(key)) continue;
-    await syncPipelineAutomationsToCloud(client, userId);
-  }
+  // Agenda projections are now handled by database triggers.
+  // Keep this helper as a no-op so older call sites do not break.
+  void pipelineClients;
+  void userId;
 }
 
 async function getSetting(key: string) {
@@ -639,160 +627,121 @@ async function migrateLocalDataIfNeeded(userId?: string | null) {
     const localPipelineKey = (client: any) =>
       `${normalizePhone(client.telefone)}::${String(client.clientName || '').trim().toLowerCase()}`;
     const pipelineIdMap = new Map<string, string>();
-    const localPipelineRows = local.pipelineClients.map((client) => localPipelineToDb(client, userId));
-
     if (local.pipelineClients.length) {
-      const { data: insertedPipelineClients, error: pipelineInsertError } = await supabase
-        .from('pipeline_clients')
-        .insert(localPipelineRows)
-        .select('id, client_name, telefone');
-
-      if (pipelineInsertError) throw pipelineInsertError;
-
-      (insertedPipelineClients || []).forEach((row: any, index: number) => {
-        const localClient = local.pipelineClients[index];
-        if (!localClient) return;
-        pipelineIdMap.set(localClient.id, row.id);
-        pipelineIdMap.set(localPipelineKey(localClient), row.id);
-      });
+      for (const localClient of local.pipelineClients) {
+        try {
+          const saved = await savePipelineClientToCloud(localClient as any, userId);
+          if (!saved) continue;
+          pipelineIdMap.set(localClient.id, saved.id);
+          pipelineIdMap.set(localPipelineKey(localClient), saved.id);
+        } catch (pipelineInsertError) {
+          console.warn('Could not migrate a local pipeline client to cloud.', pipelineInsertError);
+        }
+      }
     }
 
     if (local.salesGoals.length) {
-      await supabase.from('commercial_goals').insert(
-        local.salesGoals.map((goal: any) => ({
-          month: goal.month,
-          goal_value: Number(goal.goalValue || 0),
-          created_by_user_id: toDbUserId(userId),
-        }))
-      );
+      try {
+        await supabase.from('commercial_goals').insert(
+          local.salesGoals.map((goal: any) => ({
+            month: goal.month,
+            goal_value: Number(goal.goalValue || 0),
+            created_by_user_id: toDbUserId(userId),
+          }))
+        );
+      } catch (goalError) {
+        console.warn('Could not migrate commercial goals to cloud.', goalError);
+      }
     }
 
     if (local.sdrGoals.length) {
-      await supabase.from('sdr_goals').insert(
-        local.sdrGoals.map((goal: any) => ({
-          agendador: goal.agendador,
-          month: goal.month,
-          goal_count: Number(goal.goalCount || 0),
-          created_by_user_id: toDbUserId(userId),
-        }))
-      );
+      try {
+        await supabase.from('sdr_goals').insert(
+          local.sdrGoals.map((goal: any) => ({
+            agendador: goal.agendador,
+            month: goal.month,
+            goal_count: Number(goal.goalCount || 0),
+            created_by_user_id: toDbUserId(userId),
+          }))
+        );
+      } catch (goalError) {
+        console.warn('Could not migrate SDR goals to cloud.', goalError);
+      }
     }
 
     if (local.preSalesDailyLogs.length) {
-      await (supabase as any).from('pre_sales_daily_logs').upsert(
-        local.preSalesDailyLogs.map((log) => ({
-          date: log.date,
-          sdr: log.sdr,
-          contacts: Number(log.contacts || 0),
-          qualified: Number(log.qualified || 0),
-          scheduled: Number(log.scheduled || 0),
-          no_show_calls: Number(log.noShowCalls || 0),
-          updated_by_user_id: toDbUserId(userId),
-        })),
-        { onConflict: 'date,sdr' }
-      );
+      try {
+        await (supabase as any).from('pre_sales_daily_logs').upsert(
+          local.preSalesDailyLogs.map((log) => ({
+            date: log.date,
+            sdr: log.sdr,
+            contacts: Number(log.contacts || 0),
+            qualified: Number(log.qualified || 0),
+            scheduled: Number(log.scheduled || 0),
+            no_show_calls: Number(log.noShowCalls || 0),
+            updated_by_user_id: toDbUserId(userId),
+          })),
+          { onConflict: 'date,sdr' }
+        );
+      } catch (logError) {
+        console.warn('Could not migrate pre-sales logs to cloud.', logError);
+      }
     }
 
     if (local.closerDailyLogs.length) {
-      await (supabase as any).from('closer_daily_logs').upsert(
-        local.closerDailyLogs.map((log) => ({
-          date: log.date,
-          closer: log.closer,
-          agendada: Number(log.agendada || 0),
-          realizada: Number(log.realizada || 0),
-          pitch: Number(log.pitch || 0),
-          vendas: Number(log.vendas || 0),
-          valor: Number(log.valor || 0),
-          primeira_parcela: Number(log.primeiraParcela || 0),
-          updated_by_user_id: toDbUserId(userId),
-        })),
-        { onConflict: 'date,closer' }
-      );
+      try {
+        await (supabase as any).from('closer_daily_logs').upsert(
+          local.closerDailyLogs.map((log) => ({
+            date: log.date,
+            closer: log.closer,
+            agendada: Number(log.agendada || 0),
+            realizada: Number(log.realizada || 0),
+            pitch: Number(log.pitch || 0),
+            vendas: Number(log.vendas || 0),
+            valor: Number(log.valor || 0),
+            primeira_parcela: Number(log.primeiraParcela || 0),
+            updated_by_user_id: toDbUserId(userId),
+          })),
+          { onConflict: 'date,closer' }
+        );
+      } catch (logError) {
+        console.warn('Could not migrate closer logs to cloud.', logError);
+      }
     }
 
     if (local.paymentReminders.length) {
-      await supabase.from('payment_reminders').insert(
-        local.paymentReminders.map((reminder: any) => ({
-          id: reminder.id,
-          client_id: pipelineIdMap.get(reminder.clientId) || pipelineIdMap.get(localPipelineKey(local.pipelineClients.find((client: any) => client.id === reminder.clientId) || {})) || reminder.clientId,
-          client_name: reminder.clientName,
-          clinic_name: reminder.clinicName || null,
-          deal_value: Number(reminder.dealValue || 0),
-          payment_deadline: new Date(reminder.paymentDeadline || new Date()).toISOString(),
-          dismissed: Boolean(reminder.dismissed),
-          created_at: new Date(reminder.createdAt || new Date()).toISOString(),
-          updated_at: new Date(reminder.updatedAt || reminder.createdAt || new Date()).toISOString(),
-        }))
-      );
-    }
-
-    if (local.agendaEvents?.length) {
-      await supabase.from('agenda_events').insert(
-        local.agendaEvents.map((event: any) => ({
-          id: event.id,
-          title: event.title || `Reuniao com ${event.client_name || 'Lead sem nome'}`,
-          description: event.description || null,
-          notes: event.notes || null,
-          client_name: event.client_name || 'Lead sem nome',
-          client_phone: event.client_phone || '',
-          clinic_name: event.clinic_name || event.client_name || 'Lead sem nome',
-          scheduled_by: event.scheduled_by || null,
-          lead_stage: event.lead_stage || null,
-          creative_source: event.creative_source || null,
-          event_date: event.event_date || new Date().toISOString().slice(0, 10),
-          event_time: event.event_time || '09:00:00',
-          duration_minutes: Number(event.duration_minutes || 60),
-          meeting_link: event.meeting_link || null,
-          color: event.color || '#3B82F6',
-          reminder_2h_sent: Boolean(event.reminder_2h_sent),
-          reminder_30min_sent: Boolean(event.reminder_30min_sent),
-          created_by_user_id: toDbUserId(event.created_by_user_id || userId),
-          assigned_closer_id: event.assigned_closer_id || null,
-          team_id: event.team_id || null,
-          created_at: event.created_at || new Date().toISOString(),
-          updated_at: event.updated_at || new Date().toISOString(),
-          pipeline_client_id: pipelineIdMap.get(event.pipeline_client_id) || event.pipeline_client_id || null,
-        }))
-      );
-    }
-
-    if (local.agendamentoLeads?.length) {
-      await supabase.from('agendamento_leads').insert(
-        local.agendamentoLeads.map((lead: any) => ({
-          id: lead.id,
-          data: lead.data || '',
-          nome: lead.nome || 'Lead sem nome',
-          telefone: lead.telefone || '',
-          horario: lead.horario || 'MANHA',
-          horario_especifico: lead.horario_especifico || null,
-          tem_socio: lead.tem_socio || 'NAO_SEI',
-          tem_mkt: lead.tem_mkt || 'NAO_SEI',
-          tem_secretaria: lead.tem_secretaria || 'NAO_SEI',
-          salao_ou_clinica: lead.salao_ou_clinica || 'NAO_INFORMADO',
-          faturamento: lead.faturamento || 'NAO_INFORMADO',
-          pode_investir: lead.pode_investir || null,
-          agendado_via: lead.agendado_via || null,
-          funil: lead.funil || 'NAO IDENTIFICADO',
-          status: lead.status || 'NOVO_LEAD',
-          created_by_user_id: toDbUserId(lead.created_by_user_id || userId),
-          created_at: lead.created_at || new Date().toISOString(),
-          updated_at: lead.updated_at || new Date().toISOString(),
-          pipeline_client_id: pipelineIdMap.get(lead.pipeline_client_id) || lead.pipeline_client_id || null,
-          agenda_event_date: lead.agenda_event_date || null,
-          agenda_event_time: lead.agenda_event_time || null,
-        }))
-      );
+      try {
+        await supabase.from('payment_reminders').insert(
+          local.paymentReminders.map((reminder: any) => ({
+            id: reminder.id,
+            client_id: pipelineIdMap.get(reminder.clientId) || pipelineIdMap.get(localPipelineKey(local.pipelineClients.find((client: any) => client.id === reminder.clientId) || {})) || reminder.clientId,
+            client_name: reminder.clientName,
+            clinic_name: reminder.clinicName || null,
+            deal_value: Number(reminder.dealValue || 0),
+            payment_deadline: new Date(reminder.paymentDeadline || new Date()).toISOString(),
+            dismissed: Boolean(reminder.dismissed),
+            created_at: new Date(reminder.createdAt || new Date()).toISOString(),
+            updated_at: new Date(reminder.updatedAt || reminder.createdAt || new Date()).toISOString(),
+          }))
+        );
+      } catch (reminderError) {
+        console.warn('Could not migrate payment reminders to cloud.', reminderError);
+      }
     }
 
     if (local.criativos.length) {
-      await supabase.from('criativos').upsert(
-        local.criativos.map((name) => ({
-          name,
-          is_active: true,
-          created_by_user_id: toDbUserId(userId),
-        })),
-        { onConflict: 'name' }
-      );
+      try {
+        await supabase.from('criativos').upsert(
+          local.criativos.map((name) => ({
+            name,
+            is_active: true,
+            created_by_user_id: toDbUserId(userId),
+          })),
+          { onConflict: 'name' }
+        );
+      } catch (creativeError) {
+        console.warn('Could not migrate criativos to cloud.', creativeError);
+      }
     }
 
     if (local.funis.length) {
@@ -901,20 +850,39 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
 
   const payload = localPipelineToDb(client, userId);
   const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
+  console.info('[commercial-cloud] pipeline save requested', {
+    hasCloudId,
+    userId: toDbUserId(userId),
+    clientName: client.clientName,
+    stage: client.stage,
+    meetingDate: client.meetingDate,
+    meetingTime: client.meetingTime,
+    payload,
+  });
 
   const query = hasCloudId
     ? supabase.from('pipeline_clients').update(payload).eq('id', client.id!).select('*').single()
     : supabase.from('pipeline_clients').insert(payload).select('*').single();
 
   const { data, error } = await query;
-  if (error) throw error;
+
+  if (error) {
+    console.error('[commercial-cloud] pipeline save failed', {
+      error,
+      payload,
+      userId: toDbUserId(userId),
+    });
+    throw error;
+  }
+
+  console.info('[commercial-cloud] pipeline save succeeded', {
+    id: data?.id,
+    client_name: data?.client_name,
+    created_by_user_id: data?.created_by_user_id,
+  });
 
   const savedClient = dbPipelineToLocal(data);
-  try {
-    await syncPipelineAutomationsToCloud(savedClient, userId);
-  } catch (automationError) {
-    console.warn('Pipeline saved, but agenda projection sync failed. Database trigger should keep projections aligned after migration.', automationError);
-  }
+  await syncPipelineAutomationsToCloud(savedClient, userId);
   return savedClient;
 }
 
@@ -1043,73 +1011,9 @@ export async function archiveCriativoInCloud(name: string) {
 
 export async function syncPipelineAutomationsToCloud(client: PipelineClient, userId?: string | null) {
   if (!isSupabaseConfigured) return;
-
-  const meetingDate = dateOnly(client.meetingDate) || dateOnly(client.entryDate) || dateOnly(client.dataEntrada) || dateOnly(new Date());
-  const meetingTime = toTime(client.meetingTime) || '09:00';
-
-  const phone = normalizePhone(client.telefone);
-  const clinicName = client.clinicName || client.clientName;
-  const agendaPayload = {
-    title: `Reuniao com ${client.clientName}`,
-    description: client.criativo ? `Lead do Pipeline - ${client.criativo}` : 'Lead do Pipeline',
-    notes: client.notes || null,
-    client_name: client.clientName,
-    client_phone: phone,
-    clinic_name: clinicName,
-    event_date: meetingDate,
-    event_time: toAgendaTime(meetingTime),
-    duration_minutes: 60,
-    meeting_link: null,
-    scheduled_by: client.agendadoPor || client.assignedSDR || null,
-    lead_stage: client.stage || 'NOVO',
-    creative_source: client.criativo || null,
-    color: client.stage === 'NO_SHOW' || client.stage === 'PERDIDO' ? '#FF0000' : client.stage === 'FECHADO' || client.stage === 'NEGOCIACAO' || client.stage === 'TAXA_INTERESSE' ? '#66FF00' : '#3B82F6',
-    reminder_2h_sent: false,
-    reminder_30min_sent: false,
-    created_by_user_id: null,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data: existingEvents } = await supabase
-    .from('agenda_events')
-    .select('id, client_name, client_phone')
-    .limit(500);
-  const existingEvent = (existingEvents || []).find((event) => matchPerson(event.client_phone, event.client_name, phone, client.clientName));
-
-  if (existingEvent) {
-    await supabase.from('agenda_events').update(agendaPayload).eq('id', existingEvent.id);
-  } else {
-    await supabase.from('agenda_events').insert(agendaPayload);
-  }
-
-  const leadPayload = {
-    data: isoToBrazilianDate(meetingDate),
-    nome: client.clientName,
-    telefone: phone,
-    horario: timeToPeriod(meetingTime),
-    horario_especifico: meetingTime,
-    tem_socio: coerceCommercialAnswer(client.temSocio) || 'NAO_SEI',
-    tem_mkt: coerceCommercialAnswer(client.temMkt) || 'NAO_SEI',
-    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
-    salao_ou_clinica: client.salaoOuClinica || 'NAO_INFORMADO',
-    faturamento: normalizePipelineFaturamento(client.faturamento),
-    pode_investir: client.podeInvestir || null,
-    agendado_via: client.agendadoVia || null,
-    funil: client.funil || client.criativo || 'NAO IDENTIFICADO',
-    status: STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
-    created_by_user_id: toDbUserId(client.createdByUserId) || toDbUserId(userId) || null,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data: existingLeads } = await supabase
-    .from('agendamento_leads')
-    .select('id, nome, telefone')
-    .limit(1000);
-  const existingLead = (existingLeads || []).find((lead) => matchPerson(lead.telefone, lead.nome, phone, client.clientName));
-
-  if (existingLead) {
-    await supabase.from('agendamento_leads').update(leadPayload).eq('id', existingLead.id);
-  } else {
-    await supabase.from('agendamento_leads').insert(leadPayload);
-  }
+  console.info('[commercial-cloud] agenda sync delegated to database trigger', {
+    clientName: client.clientName,
+    userId: toDbUserId(userId),
+  });
 }
+

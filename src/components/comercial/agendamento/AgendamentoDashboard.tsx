@@ -2,18 +2,22 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Building2, Clock, DollarSign, Target, TrendingUp, UserCheck, Users, UserX } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
+import { eachDayOfInterval, endOfWeek, format, startOfWeek, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { type PipelineClient, AGENDADOR_OPTIONS, FATURAMENTO_OPTIONS, OFFICIAL_SDR_VALUES, SALAO_OU_CLINICA_OPTIONS, useCommercial } from '@/contexts/CommercialContext';
 import { getClientRevenue } from '@/lib/commercialMetrics';
 import { HORARIO_OPTIONS } from '@/hooks/useAgendamentoData';
 import { getScheduleDate, getHour, getTurn } from '@/lib/preVendaAnalytics';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
+import { usePeriodFilter } from '@/components/comercial/PeriodFilter';
+import type { PeriodFilterValue } from '@/components/comercial/PeriodFilter';
 
 interface AgendamentoDashboardProps {
   leads: any[];
   selectedDay?: Date;
   selectedMonth?: string;
   selectedMonthRange?: { startDate: Date; endDate: Date } | null;
+  period?: PeriodFilterValue;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
@@ -95,9 +99,20 @@ function getPipelineAreaLabel(area: PipelineClient['salaoOuClinica']) {
   return SALAO_OU_CLINICA_OPTIONS.find((option) => option.value === area)?.label || 'NÃ£o informado';
 }
 
-export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, selectedMonthRange }: AgendamentoDashboardProps) {
+export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, selectedMonthRange, period }: AgendamentoDashboardProps) {
   const { pipelineClients } = useCommercial();
+  const { filterByPeriod } = usePeriodFilter();
   const sourceClients = pipelineClients.length > 0 ? pipelineClients : leads;
+  const isWeeklyFilter = period === 'current_week' || period === 'last_week';
+  const periodCardLabel = period === 'current_day' || period === 'day'
+    ? 'Hoje'
+    : isWeeklyFilter
+      ? 'Semana'
+      : period === 'current_month'
+        ? 'Mês'
+        : period === 'custom'
+          ? 'Período'
+          : 'Total';
 
   const filteredClients = useMemo(() => {
     return sourceClients.filter((client) => {
@@ -117,9 +132,9 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
         return formatPipelineMonth(date) === selectedMonth;
       }
 
-      return true;
+      return filterByPeriod(date, period || 'all_time');
     });
-  }, [leads, selectedDay, selectedMonth, selectedMonthRange, sourceClients]);
+  }, [filterByPeriod, leads, period, selectedDay, selectedMonth, selectedMonthRange, sourceClients]);
 
   const evolutionData = useMemo(() => {
     if (selectedDay) {
@@ -128,6 +143,25 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
         'No Show': filteredClients.filter((lead) => lead.stage === 'NO_SHOW' || lead.status === 'NO_SHOW').length,
         Realizados: filteredClients.filter((lead) => COMPLETED_STATUSES.includes(lead.stage || lead.status)).length,
       }];
+    }
+
+    if (isWeeklyFilter) {
+      const baseDate = period === 'last_week' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) : new Date();
+      const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(baseDate, { weekStartsOn: 1 });
+
+      return eachDayOfInterval({ start: weekStart, end: weekEnd }).map((date) => {
+        const dayLeads = filteredClients.filter((lead) => {
+          const leadDate = toLocalDate(getScheduleDate(lead as PipelineClient) as string | Date | null | undefined);
+          return leadDate ? isSameLocalDay(leadDate, date) : false;
+        });
+
+        return {
+          month: format(date, 'EEE dd/MM', { locale: ptBR }),
+          'No Show': dayLeads.filter((lead) => lead.stage === 'NO_SHOW' || lead.status === 'NO_SHOW').length,
+          Realizados: dayLeads.filter((lead) => COMPLETED_STATUSES.includes(lead.stage || lead.status)).length,
+        };
+      });
     }
 
     if (selectedMonth && selectedMonth !== 'all' && selectedMonthRange) {
@@ -151,7 +185,7 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
         Realizados: monthLeads.filter((lead) => COMPLETED_STATUSES.includes(lead.stage || lead.status)).length,
       };
     });
-  }, [filteredClients, selectedDay, selectedMonth, selectedMonthRange]);
+  }, [filteredClients, isWeeklyFilter, period, selectedDay, selectedMonth, selectedMonthRange]);
 
   const sdrPerformanceData = useMemo(() => {
     return SDRS.map((sdr) => {
@@ -182,7 +216,12 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
     );
 
     const criativoMap = filteredClients.reduce((acc, lead) => {
-      const key = lead.creativeSource || lead.creative_source || lead.criativo || lead.funil || 'NAO IDENTIFICADO';
+      const key = getCommercialLeadOrigin({
+        creativeSource: lead.creativeSource,
+        creative_source: lead.creative_source,
+        criativo: lead.criativo,
+        funil: lead.funil,
+      });
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -236,9 +275,9 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
             <div className="flex items-center gap-3">
               <Clock className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Hoje</p>
-                <p className="text-2xl font-bold">{metrics.todayAppointments}</p>
-                <p className="text-xs text-muted-foreground">Agendamentos marcados para o dia atual</p>
+                <p className="text-sm text-muted-foreground">{periodCardLabel}</p>
+                <p className="text-2xl font-bold">{metrics.total}</p>
+                <p className="text-xs text-muted-foreground">Agendamentos dentro do filtro selecionado</p>
               </div>
             </div>
           </CardContent>

@@ -25,6 +25,7 @@ export function normalizeCommercialAnswer(value?: string | null): CommercialYesN
     case 'SIM':
       return 'SIM';
     case 'NAO':
+      return 'NAO';
     case 'NAO_PERGUNTADO':
     case 'NAO_SEI':
       return 'NAO_SEI';
@@ -35,6 +36,10 @@ export function normalizeCommercialAnswer(value?: string | null): CommercialYesN
 
 export function coerceCommercialAnswer(value?: string | null, fallback: CommercialYesNoMaybe = 'NAO_SEI'): CommercialYesNoMaybe {
   return normalizeCommercialAnswer(value) ?? fallback;
+}
+
+export function commercialAnswerToDb(value?: string | null): 'SIM' | 'NAO' {
+  return normalizeCommercialAnswer(value) === 'SIM' ? 'SIM' : 'NAO';
 }
 
 export function formatCommercialAnswerLabel(value?: string | null) {

@@ -18,7 +18,6 @@ import {
   FormDescription,
   FormMessage,
 } from '@/components/ui/form';
-import { CommercialAnswerGroup } from '@/components/comercial/CommercialAnswerGroup';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,11 +29,10 @@ import {
 } from '@/components/ui/select';
 import {
   AGENDADOR_OPTIONS,
+  CRIATIVO_REQUIRED_FUNIS,
   FUNIL_OPTIONS,
+  getFunilLabel,
   FATURAMENTO_OPTIONS,
-  TEM_SOCIO_OPTIONS,
-  TEM_MKT_OPTIONS,
-  TEM_SECRETARIA_OPTIONS,
   type Agendador,
   type Faturamento,
   type PipelineStage,
@@ -45,6 +43,7 @@ import {
 } from '@/contexts/CommercialContext';
 import { toast } from 'sonner';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 const formSchema = z.object({
   clientName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -55,20 +54,20 @@ const formSchema = z.object({
     required_error: 'Faturamento e obrigatorio',
   }),
   podeInvestir: z.enum(['SIM', 'NAO'] as const).optional(),
-  agendadoPor: z.enum(['MIGUEL', 'PEDRO', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'CLED', 'CAETANO'] as const, {
+  agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'CLED', 'CAETANO'] as const, {
     required_error: 'Informe quem agendou',
   }),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
-  temSocio: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem socio' }),
-  temMkt: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem marketing' }),
+  temSocio: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem socio' }),
+  temMkt: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem marketing' }),
   temSecretaria: z.enum(['SIM', 'NAO', 'NAO_SEI'] as const, { required_error: 'Informe se tem secretaria' }),
   meetingDate: z.string().min(1, 'Data da reuniao e obrigatoria'),
   meetingTime: z.string().min(1, 'Horario da reuniao e obrigatorio'),
 }).refine((data) => {
-  if (data.funil === 'INSTAGRAM') return true;
+  if (!CRIATIVO_REQUIRED_FUNIS.includes(data.funil as (typeof CRIATIVO_REQUIRED_FUNIS)[number])) return true;
   return Boolean(data.criativo?.trim());
 }, {
-  message: 'Informe o criativo quando o funil nao for Instagram',
+  message: 'Informe o criativo quando o funil for WhatsApp ou Forms',
   path: ['criativo'],
 }).refine((data) => data.faturamento !== '0_A_10K' || Boolean(data.podeInvestir), {
   message: 'Informe se o lead pode investir',
@@ -83,7 +82,7 @@ interface CreateClientDialogProps {
 }
 
 export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogProps) {
-  const { addPipelineClient, criativos, funis } = useCommercial();
+  const { addPipelineClient, criativos } = useCommercial();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -91,7 +90,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     defaultValues: {
       clientName: '',
       telefone: '',
-      funil: 'INSTAGRAM',
+      funil: '',
       criativo: '',
       faturamento: undefined,
       podeInvestir: undefined,
@@ -106,14 +105,13 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
   });
 
   const watchFunil = form.watch('funil');
-  const shouldRequireCriativo = watchFunil !== 'INSTAGRAM';
-  const funnelOptions = funis.length > 0 ? funis : [...FUNIL_OPTIONS];
+  const shouldRequireCriativo = CRIATIVO_REQUIRED_FUNIS.includes(watchFunil as (typeof CRIATIVO_REQUIRED_FUNIS)[number]);
   const showLowRevenueOptions = form.watch('faturamento') === '0_A_10K';
 
   const handleFunilChange = (value: string) => {
     form.setValue('funil', value, { shouldDirty: true, shouldTouch: true });
 
-    if (value === 'INSTAGRAM') {
+    if (!CRIATIVO_REQUIRED_FUNIS.includes(value as (typeof CRIATIVO_REQUIRED_FUNIS)[number])) {
       form.setValue('criativo', '', { shouldDirty: true, shouldTouch: true });
       form.clearErrors('criativo');
     }
@@ -123,6 +121,18 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     setIsSubmitting(true);
     try {
       const formattedPhone = formatPhoneForWhatsApp(data.telefone);
+      console.info('[commercial:create-lead] form submit', {
+        clientName: data.clientName,
+        telefone: data.telefone,
+        formattedPhone,
+        funil: data.funil,
+        criativo: data.criativo || null,
+        faturamento: data.faturamento,
+        agendadoPor: data.agendadoPor,
+        agendadoVia: data.agendadoVia,
+        meetingDate: data.meetingDate,
+        meetingTime: data.meetingTime,
+      });
 
       await addPipelineClient({
         ativo: true,
@@ -131,7 +141,12 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         telefone: formattedPhone,
         vendedor: undefined,
         funil: data.funil,
-        criativo: data.funil === 'INSTAGRAM' ? 'NAO IDENTIFICADO' : (data.criativo || 'NAO IDENTIFICADO'),
+        criativo: getCommercialLeadOrigin({
+          funil: data.funil,
+          criativo: CRIATIVO_REQUIRED_FUNIS.includes(data.funil as (typeof CRIATIVO_REQUIRED_FUNIS)[number])
+            ? data.criativo
+            : undefined,
+        }),
         equipe: undefined,
         faturamento: data.faturamento as Faturamento,
         faturamentoPersonalizado: undefined,
@@ -153,6 +168,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         meetingDate: data.meetingDate,
         meetingTime: data.meetingTime,
       });
+      console.info('[commercial:create-lead] lead creation completed');
       toast.success('Cliente adicionado ao pipeline!');
       form.reset();
       onOpenChange(false);
@@ -219,9 +235,9 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-popover z-[9999]">
-                      {funnelOptions.map((funil) => (
+                      {FUNIL_OPTIONS.map((funil) => (
                         <SelectItem key={funil} value={funil}>
-                          {funil}
+                          {getFunilLabel(funil)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -231,41 +247,41 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="criativo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Criativo {shouldRequireCriativo ? '*' : '(opcional com Instagram)'}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o criativo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-popover z-[9999]">
-                      {criativos.length === 0 ? (
-                        <SelectItem value="_empty" disabled>
-                          Nenhum criativo cadastrado. Use o botão Criativos.
-                        </SelectItem>
-                      ) : (
-                        criativos.map((criativo) => (
-                          <SelectItem key={criativo} value={criativo}>
-                            {criativo}
+            {shouldRequireCriativo ? (
+              <FormField
+                control={form.control}
+                name="criativo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Criativo *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o criativo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-popover z-[9999]">
+                        {criativos.length === 0 ? (
+                          <SelectItem value="_empty" disabled>
+                            Nenhum criativo cadastrado. Use o botão Criativos.
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {shouldRequireCriativo
-                      ? 'Obrigatório para funis diferentes de Instagram.'
-                      : 'Para Instagram, não é necessário informar criativo.'}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                        ) : (
+                          criativos.map((criativo) => (
+                            <SelectItem key={criativo} value={criativo}>
+                              {criativo}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Escolha o criativo depois de confirmar o funil.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             <FormField
               control={form.control}
@@ -324,13 +340,15 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                   <FormItem>
                     <FormLabel>Tem sócio?</FormLabel>
                     <FormControl>
-                      <CommercialAnswerGroup
-                        name="temSocio"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        options={TEM_SOCIO_OPTIONS}
-                        className="grid-cols-3"
-                      />
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value || ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          <SelectItem value="SIM">Sim</SelectItem>
+                          <SelectItem value="NAO">Nao</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -344,13 +362,15 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                   <FormItem>
                     <FormLabel>Tem MKT?</FormLabel>
                     <FormControl>
-                      <CommercialAnswerGroup
-                        name="temMkt"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        options={TEM_MKT_OPTIONS}
-                        className="grid-cols-3"
-                      />
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value || ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          <SelectItem value="SIM">Sim</SelectItem>
+                          <SelectItem value="NAO">Nao</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -364,13 +384,16 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                   <FormItem>
                     <FormLabel>Tem secretária?</FormLabel>
                     <FormControl>
-                      <CommercialAnswerGroup
-                        name="temSecretaria"
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        options={TEM_SECRETARIA_OPTIONS}
-                        className="grid-cols-3"
-                      />
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value || ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          <SelectItem value="SIM">Sim</SelectItem>
+                          <SelectItem value="NAO">Nao</SelectItem>
+                          <SelectItem value="NAO_SEI">Nao sei</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

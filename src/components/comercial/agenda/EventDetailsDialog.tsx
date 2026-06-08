@@ -83,15 +83,32 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   const eventPhoneDigits = useMemo(() => (event?.client_phone || '').replace(/\D/g, ''), [event?.client_phone]);
   const eventTimeLabel = event?.event_time?.slice(0, 5) || '--:--';
   const eventDateLabel = event?.event_date || '--/--/----';
+  const eventSlotTime = event?.event_time?.slice(0, 5) || '';
 
   const leadData = useMemo(() => {
     if (!event) return null;
-    return leads.find((lead) => lead.telefone.replace(/\D/g, '') === eventPhoneDigits) || null;
+    return leads.find((lead) => {
+      const leadPhoneDigits = lead.telefone.replace(/\D/g, '');
+      const leadSlotTime = (lead.agenda_event_time || lead.horario_especifico || '').slice(0, 5);
+      return (
+        leadPhoneDigits === eventPhoneDigits &&
+        lead.agenda_event_date === event.event_date &&
+        (!eventSlotTime || leadSlotTime === eventSlotTime)
+      );
+    }) || null;
   }, [event, eventPhoneDigits, leads]);
 
   const pipelineClient = useMemo(() => {
     if (!event) return null;
-    return pipelineClients.find((client) => client.telefone?.replace(/\D/g, '') === eventPhoneDigits) || null;
+    return pipelineClients.find((client) => {
+      const clientPhoneDigits = client.telefone?.replace(/\D/g, '') || '';
+      const clientMeetingTime = (client.meetingTime || '').slice(0, 5);
+      return (
+        clientPhoneDigits === eventPhoneDigits &&
+        client.meetingDate === event.event_date &&
+        (!eventSlotTime || clientMeetingTime === eventSlotTime)
+      );
+    }) || null;
   }, [event, eventPhoneDigits, pipelineClients]);
 
   const [eventForm, setEventForm] = useState({
@@ -164,12 +181,26 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   const recoveredStatus = leadForm.status === 'NO_SHOW' ? 'NOVO_LEAD' : leadForm.status;
   const recoveredStatusOption = STATUS_OPTIONS.find((option) => option.value === recoveredStatus);
   const recoveredPipelineStage = recoveredStatusOption?.pipelineStage || 'NOVO';
+  if (!event) return null;
+
+  const originalEventTitle = event.title?.trim() || '';
+  const originalClientName = event.client_name?.trim() || '';
+  const originalPhone = formatPhoneForWhatsApp(event.client_phone);
+  const nextClientName = normalizeMeetingClientName(eventForm.client_name || '') || originalClientName;
+  const titleWasEdited = (eventForm.title || '').trim() !== originalEventTitle;
+  const nextEventTitle = titleWasEdited
+    ? normalizeMeetingTitle(eventForm.title || originalEventTitle || event.client_name || '') || originalEventTitle
+    : originalEventTitle;
+  const eventClientChanged = nextClientName !== originalClientName;
+  const eventPhoneChanged = formatPhoneForWhatsApp(eventForm.client_phone) !== originalPhone;
+
+  const isLostLeadContext = pipelineClient?.stage === 'PERDIDO' || leadForm.status === 'PERDIDO';
 
   const syncNoShowToCrm = async (input: { color?: string; force?: boolean } = {}, options?: { skipPipeline?: boolean }) => {
     if (!input.force && !input.color) return;
     if (!input.force && !isNoShowColor(input.color || '')) return;
 
-    const shouldUpdatePipeline = !options?.skipPipeline && !!pipelineClient && pipelineClient.stage !== 'NO_SHOW';
+    const shouldUpdatePipeline = !options?.skipPipeline && !!pipelineClient && pipelineClient.stage !== 'NO_SHOW' && pipelineClient.stage !== 'PERDIDO';
     if (!shouldUpdatePipeline) return;
 
     const noShowReason = pipelineClient?.noShowReason || leadForm.notes || 'Marcado como no show pela agenda';
@@ -181,101 +212,127 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     }
   };
 
-  if (!event) return null;
-
   const handleSaveEvent = async () => {
-    const canonicalTitle = normalizeMeetingTitle(eventForm.title || eventForm.client_name || event.title) || event.title;
-    const canonicalClientName = normalizeMeetingClientName(eventForm.client_name || eventForm.title || event.client_name || event.title) || event.client_name;
-    const shouldBeNoShow = isNoShowColor(eventForm.color);
-    const resolvedLeadStatus = shouldBeNoShow
+    const canonicalClientName = nextClientName;
+    const shouldBeNoShow = !isLostLeadContext && isNoShowColor(eventForm.color);
+    const resolvedLeadStatus = isLostLeadContext
+      ? 'PERDIDO'
+      : shouldBeNoShow
       ? 'NO_SHOW'
       : leadForm.status === 'NO_SHOW'
         ? 'NOVO_LEAD'
         : leadForm.status;
-    const leadUpdates = {
-      nome: canonicalClientName,
-      faturamento: leadForm.faturamento as any,
-      tem_socio: leadForm.tem_socio as any,
-      tem_mkt: leadForm.tem_mkt as any,
-      tem_secretaria: leadForm.tem_secretaria as any,
-      salao_ou_clinica: leadForm.salao_ou_clinica as any,
-      agenda_event_date: eventForm.event_date,
-      agenda_event_time: eventForm.event_time,
-      agenda_event_title: canonicalTitle,
-      status: resolvedLeadStatus,
-    };
 
-    const pipelineUpdates = {
-      clientName: canonicalClientName,
-      temSocio: leadForm.tem_socio as any,
-      temMkt: leadForm.tem_mkt as any,
-      temSecretaria: leadForm.tem_secretaria as any,
-      meetingDate: eventForm.event_date,
-      meetingTime: eventForm.event_time,
-    };
+    const eventPatch: Record<string, any> = {};
+    if (titleWasEdited) {
+      eventPatch.title = nextEventTitle;
+    }
+    if (eventClientChanged) {
+      eventPatch.client_name = canonicalClientName;
+    }
+    if (eventPhoneChanged) {
+      eventPatch.client_phone = formatPhoneForWhatsApp(eventForm.client_phone);
+    }
+    if (eventForm.event_date !== event.event_date) {
+      eventPatch.event_date = eventForm.event_date;
+    }
+    if ((eventForm.event_time || '').slice(0, 5) !== (event.event_time || '').slice(0, 5)) {
+      eventPatch.event_time = eventForm.event_time;
+    }
+    if (eventForm.color !== event.color) {
+      eventPatch.color = eventForm.color;
+    }
+    if (eventForm.description !== (event.description || '')) {
+      eventPatch.description = eventForm.description || null;
+    }
+    if (eventForm.notes !== (event.notes || '')) {
+      eventPatch.notes = eventForm.notes || null;
+    }
+    if (eventForm.meeting_link !== (event.meeting_link || '')) {
+      eventPatch.meeting_link = eventForm.meeting_link || null;
+    }
 
     if (leadData) {
-      await updateLead.mutateAsync({
-        id: leadData.id,
-        ...leadUpdates,
-      });
+      const leadPatch: Record<string, any> = {};
+
+      if (leadForm.faturamento !== leadData.faturamento) leadPatch.faturamento = leadForm.faturamento;
+      if (leadForm.tem_socio !== leadData.tem_socio) leadPatch.tem_socio = leadForm.tem_socio;
+      if (leadForm.tem_mkt !== leadData.tem_mkt) leadPatch.tem_mkt = leadForm.tem_mkt;
+      if (leadForm.tem_secretaria !== leadData.tem_secretaria) leadPatch.tem_secretaria = leadForm.tem_secretaria;
+      if (leadForm.salao_ou_clinica !== leadData.salao_ou_clinica) leadPatch.salao_ou_clinica = leadForm.salao_ou_clinica;
+      if (leadForm.notes !== (leadData.notes || '')) leadPatch.notes = leadForm.notes || null;
+      if (eventForm.event_date !== leadData.agenda_event_date) leadPatch.agenda_event_date = eventForm.event_date;
+      if (eventForm.event_time !== leadData.agenda_event_time) leadPatch.agenda_event_time = eventForm.event_time;
+      if (titleWasEdited) leadPatch.agenda_event_title = nextEventTitle;
+      if (resolvedLeadStatus !== leadData.status) leadPatch.status = resolvedLeadStatus;
+
+      if (Object.keys(leadPatch).length > 0) {
+        await updateLead.mutateAsync({
+          id: leadData.id,
+          agenda_event_id: event.id,
+          ...leadPatch,
+        });
+      }
     }
 
     if (pipelineClient) {
       if (shouldBeNoShow) {
         await syncNoShowToCrm({ color: eventForm.color, force: true });
-      } else if (pipelineClient.stage === 'NO_SHOW') {
+      } else if (pipelineClient.stage === 'NO_SHOW' && !isLostLeadContext) {
         commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
-          ...pipelineUpdates,
+          clientName: canonicalClientName,
           clinicName: pipelineClient.clinicName || canonicalClientName,
           meetingDate: eventForm.event_date,
           meetingTime: eventForm.event_time,
+          temSocio: leadForm.tem_socio as any,
+          temMkt: leadForm.tem_mkt as any,
+          temSecretaria: leadForm.tem_secretaria as any,
         });
       } else {
-        updatePipelineClient(pipelineClient.id, {
-          ...pipelineUpdates,
-          clinicName: pipelineClient.clinicName || canonicalClientName,
-        });
+        const pipelinePatch: Record<string, any> = {};
+        if (eventClientChanged) {
+          pipelinePatch.clientName = canonicalClientName;
+          pipelinePatch.clinicName = pipelineClient.clinicName || canonicalClientName;
+        }
+        if (leadForm.tem_socio !== pipelineClient.temSocio) pipelinePatch.temSocio = leadForm.tem_socio as any;
+        if (leadForm.tem_mkt !== pipelineClient.temMkt) pipelinePatch.temMkt = leadForm.tem_mkt as any;
+        if (leadForm.tem_secretaria !== pipelineClient.temSecretaria) pipelinePatch.temSecretaria = leadForm.tem_secretaria as any;
+        if (eventForm.event_date !== pipelineClient.meetingDate) pipelinePatch.meetingDate = eventForm.event_date;
+        if (eventForm.event_time !== pipelineClient.meetingTime) pipelinePatch.meetingTime = eventForm.event_time;
+
+        if (Object.keys(pipelinePatch).length > 0) {
+          updatePipelineClient(pipelineClient.id, pipelinePatch);
+        }
       }
     }
 
-    await updateEvent.mutateAsync({
-      id: event.id,
-      ...eventForm,
-      title: canonicalTitle,
-      client_name: canonicalClientName,
-      client_phone: formatPhoneForWhatsApp(eventForm.client_phone),
-      meeting_link: eventForm.meeting_link || null,
-      description: eventForm.description || null,
-      notes: eventForm.notes || null,
-    });
+    if (Object.keys(eventPatch).length > 0) {
+      await updateEvent.mutateAsync({
+        id: event.id,
+        ...eventPatch,
+      });
+    }
 
     setIsEditingEvent(false);
   };
 
   const handleColorChange = async (color: string) => {
     const previousColor = eventForm.color;
-    const canonicalClientName = normalizeMeetingClientName(eventForm.client_name || eventForm.title || event.client_name || event.title) || event.client_name;
     setEventForm((current) => ({ ...current, color }));
 
     await updateEvent.mutateAsync({
       id: event.id,
-      ...eventForm,
       color,
-      client_phone: formatPhoneForWhatsApp(eventForm.client_phone),
-      meeting_link: eventForm.meeting_link || null,
-      description: eventForm.description || null,
-      notes: eventForm.notes || null,
     });
 
-    if (!isNoShowColor(previousColor) && isNoShowColor(color)) {
+    if (!isLostLeadContext && !isNoShowColor(previousColor) && isNoShowColor(color)) {
       await syncNoShowToCrm({ color, force: true });
     }
 
-    if (isNoShowColor(previousColor) && !isNoShowColor(color) && pipelineClient) {
+    if (!isLostLeadContext && isNoShowColor(previousColor) && !isNoShowColor(color) && pipelineClient) {
       commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
-        clientName: canonicalClientName,
-        clinicName: pipelineClient.clinicName || canonicalClientName,
+        clientName: nextClientName,
+        clinicName: pipelineClient.clinicName || nextClientName,
         meetingDate: eventForm.event_date,
         meetingTime: eventForm.event_time,
       });
@@ -284,59 +341,58 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   };
 
   const handleSaveLead = async () => {
-    const canonicalTitle = normalizeMeetingTitle(eventForm.title || eventForm.client_name || event.title) || event.title;
-    const canonicalClientName = normalizeMeetingClientName(eventForm.client_name || eventForm.title || event.client_name || event.title) || event.client_name;
-    const shouldBeNoShow = isNoShowColor(eventForm.color);
-    const resolvedLeadStatus = shouldBeNoShow
+    const shouldBeNoShow = !isLostLeadContext && isNoShowColor(eventForm.color);
+    const resolvedLeadStatus = isLostLeadContext
+      ? 'PERDIDO'
+      : shouldBeNoShow
       ? 'NO_SHOW'
       : leadForm.status === 'NO_SHOW'
         ? 'NOVO_LEAD'
-        : leadForm.status;
-    const leadUpdates = {
-      faturamento: leadForm.faturamento as any,
-      tem_socio: leadForm.tem_socio as any,
-      tem_mkt: leadForm.tem_mkt as any,
-      tem_secretaria: leadForm.tem_secretaria as any,
-      salao_ou_clinica: leadForm.salao_ou_clinica as any,
-      agenda_event_title: canonicalTitle,
-      status: resolvedLeadStatus,
-    };
-
-    const pipelineUpdates = {
-      temSocio: leadForm.tem_socio as any,
-      temMkt: leadForm.tem_mkt as any,
-      temSecretaria: leadForm.tem_secretaria as any,
-    };
+      : leadForm.status;
 
     if (leadData) {
-      await updateLead.mutateAsync({
-        id: leadData.id,
-        ...leadUpdates,
-      });
+      const leadPatch: Record<string, any> = {};
+      if (leadForm.faturamento !== leadData.faturamento) leadPatch.faturamento = leadForm.faturamento;
+      if (leadForm.tem_socio !== leadData.tem_socio) leadPatch.tem_socio = leadForm.tem_socio;
+      if (leadForm.tem_mkt !== leadData.tem_mkt) leadPatch.tem_mkt = leadForm.tem_mkt;
+      if (leadForm.tem_secretaria !== leadData.tem_secretaria) leadPatch.tem_secretaria = leadForm.tem_secretaria;
+      if (leadForm.salao_ou_clinica !== leadData.salao_ou_clinica) leadPatch.salao_ou_clinica = leadForm.salao_ou_clinica;
+      if (leadForm.notes !== (leadData.notes || '')) leadPatch.notes = leadForm.notes || null;
+      if (resolvedLeadStatus !== leadData.status) leadPatch.status = resolvedLeadStatus;
+
+      if (Object.keys(leadPatch).length > 0) {
+        await updateLead.mutateAsync({
+          id: leadData.id,
+          agenda_event_id: event.id,
+          ...leadPatch,
+        });
+      }
     }
 
     if (pipelineClient) {
       if (shouldBeNoShow) {
         await syncNoShowToCrm({ color: eventForm.color, force: true });
-      } else if (pipelineClient.stage === 'NO_SHOW') {
+      } else if (pipelineClient.stage === 'NO_SHOW' && !isLostLeadContext) {
         commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
-          ...pipelineUpdates,
-          clientName: canonicalClientName,
-          clinicName: pipelineClient.clinicName || canonicalClientName,
+          clientName: nextClientName,
+          clinicName: pipelineClient.clinicName || nextClientName,
           meetingDate: eventForm.event_date,
           meetingTime: eventForm.event_time,
+          temSocio: leadForm.tem_socio as any,
+          temMkt: leadForm.tem_mkt as any,
+          temSecretaria: leadForm.tem_secretaria as any,
         });
       } else {
-        updatePipelineClient(pipelineClient.id, pipelineUpdates);
+        const pipelinePatch: Record<string, any> = {};
+        if (leadForm.tem_socio !== pipelineClient.temSocio) pipelinePatch.temSocio = leadForm.tem_socio as any;
+        if (leadForm.tem_mkt !== pipelineClient.temMkt) pipelinePatch.temMkt = leadForm.tem_mkt as any;
+        if (leadForm.tem_secretaria !== pipelineClient.temSecretaria) pipelinePatch.temSecretaria = leadForm.tem_secretaria as any;
+
+        if (Object.keys(pipelinePatch).length > 0) {
+          updatePipelineClient(pipelineClient.id, pipelinePatch);
+        }
       }
     }
-
-    await updateEvent.mutateAsync({
-      id: event.id,
-      notes: leadForm.notes || null,
-      title: canonicalTitle,
-      client_name: canonicalClientName,
-    });
 
     setIsEditingLead(false);
     toast.success('Informações do lead atualizadas!');

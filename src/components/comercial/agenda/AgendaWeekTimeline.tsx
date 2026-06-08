@@ -15,6 +15,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
+import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaWeekTimelineProps {
@@ -38,6 +39,11 @@ interface PositionedEvent {
 
 export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaWeekTimelineProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const getScheduledByLabel = (event: AgendaEvent) =>
+    event.scheduled_by
+      ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
+      : null;
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -273,6 +279,7 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
                   {positionedEvents.map(({ event, column, totalColumns, top, height }) => {
                     const width = `calc((100% - 8px) / ${totalColumns})`;
                     const left = `calc(4px + (100% - 8px) / ${totalColumns} * ${column})`;
+                    const scheduledByLabel = getScheduledByLabel(event);
 
                     return (
                       <EventCardTooltip key={event.id} event={event}>
@@ -298,6 +305,11 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
                             {height >= 30 && (
                               <p className="text-[10px] font-medium opacity-90">
                                 {event.event_time.slice(0, 5)}
+                              </p>
+                            )}
+                            {height >= 36 && scheduledByLabel && (
+                              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
+                                {scheduledByLabel}
                               </p>
                             )}
                           </div>

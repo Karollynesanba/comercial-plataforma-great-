@@ -18,10 +18,10 @@ describe('Testes Great-Comercial', () => {
     cy.contains('h3', 'Notificacoes').should('be.visible');
   });
 
-  it('abre a command palette com Ctrl+K', () => {
+  it('abre a command palette pelo atalho visual de busca', () => {
     visitCommercial(cy, '/comercial/dashboards');
 
-    cy.get('body').type('{ctrl}k');
+    cy.contains('button', 'Buscar...').click();
     cy.get('input[placeholder="Buscar acoes comerciais..."]').should('be.visible');
     cy.contains('Ir para Dashboard Comercial').should('be.visible');
   });

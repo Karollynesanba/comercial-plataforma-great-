@@ -221,6 +221,7 @@ export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime,
         team_id: mapPipelineTeamToAgenda(formData.team_id) || null,
         created_by_user_id: null,
         assigned_closer_id: null,
+        skip_related_sync: !!duplicateFrom,
       });
     }
     

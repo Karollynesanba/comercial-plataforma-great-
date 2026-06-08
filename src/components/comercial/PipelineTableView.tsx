@@ -45,6 +45,7 @@ import {
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn, formatBRL } from '@/lib/utils';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
 interface PipelineTableViewProps {
   clients: PipelineClient[];
@@ -93,7 +94,11 @@ export function PipelineTableView({
 
   const getClientEntryDate = (client: PipelineClient) => client.entryDate || client.dataEntrada || client.createdAt;
   const getClientValue = (client: PipelineClient) => client.dealValue ?? client.entrada ?? 0;
-  const getClientOrigin = (client: PipelineClient) => client.creativeSource || client.criativo || '-';
+  const getClientOrigin = (client: PipelineClient) => getCommercialLeadOrigin({
+    creativeSource: client.creativeSource,
+    criativo: client.criativo,
+    funil: client.funil,
+  });
   const getClientSdr = (client: PipelineClient) => client.assignedSDR || client.agendadoPor || '-';
   const getClientCloser = (client: PipelineClient) => client.assignedCloser || client.vendedor || '-';
   const getPlan = (client: PipelineClient) => client.plan || client.periodo || 'MENSAL';

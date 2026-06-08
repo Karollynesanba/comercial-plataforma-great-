@@ -24,6 +24,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { cn, formatBRL, formatBRLShort } from '@/lib/utils';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import { 
   LineChart, 
   Line, 
@@ -147,7 +148,7 @@ export default function MetasPage() {
   const closedClients = periodFilteredClients.filter(c => c.stage === 'FECHADO');
   
   const salesBySourceMap = closedClients.reduce((acc, client) => {
-    const source = client.criativo || 'NÃO IDENTIFICADO';
+    const source = getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource });
     const value = client.entrada || 0;
     acc[source] = (acc[source] || 0) + value;
     return acc;

@@ -26,13 +26,14 @@ import { ManageCriativosDialog } from '@/components/comercial/ManageCriativosDia
 import { ManageFunisDialog } from '@/components/comercial/ManageFunisDialog';
 import { CelebrationAnimation } from '@/components/comercial/CelebrationAnimation';
 import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/comercial/PeriodFilter';
-import { MonthPeriodFilter, useMonthFilter } from '@/components/comercial/MonthPeriodFilter';
+import { MonthPeriodFilter, useMonthFilter, parseLocalDateValue } from '@/components/comercial/MonthPeriodFilter';
 import { DayPeriodFilter, useDayFilter } from '@/components/comercial/DayPeriodFilter';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatBRL } from '@/lib/utils';
 import { getClientRevenue } from '@/lib/commercialMetrics';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import {
   Select,
   SelectContent,
@@ -123,9 +124,13 @@ export default function PipelinePage() {
   const getClientDate = (client: PipelineClient) => {
     // For FECHADO/TAXA_INTERESSE, use closing date (lastStageChange)
     if (client.stage === 'FECHADO' || client.stage === 'TAXA_INTERESSE') {
-      return client.lastStageChange ? new Date(client.lastStageChange) : undefined;
+      return parseLocalDateValue(client.lastStageChange) || undefined;
     }
-    return client.meetingDate || client.dataEntrada || client.entryDate || client.createdAt;
+    return parseLocalDateValue(client.meetingDate)
+      || parseLocalDateValue(client.dataEntrada)
+      || parseLocalDateValue(client.entryDate)
+      || parseLocalDateValue(client.createdAt)
+      || undefined;
   };
 
   // Filter clients by period AND day for stats
@@ -156,7 +161,7 @@ export default function PipelinePage() {
       const clientDate = getClientDate(client);
 
       if (monthFilter !== 'all') {
-        if (!filterByMonth(clientDate ? new Date(clientDate as any) : undefined, monthFilter)) return false;
+        if (!filterByMonth(clientDate, monthFilter)) return false;
       }
 
       if (searchQuery) {
@@ -165,7 +170,7 @@ export default function PipelinePage() {
         const matchesSearch =
           client.clientName.toLowerCase().includes(query) ||
           client.clinicName.toLowerCase().includes(query) ||
-          client.criativo.toLowerCase().includes(query) ||
+          getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource }).toLowerCase().includes(query) ||
           (normalizedQuery.length > 0 && client.telefone && client.telefone.replace(/\D/g, '').includes(normalizedQuery));
         if (!matchesSearch) return false;
       }
