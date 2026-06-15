@@ -119,6 +119,7 @@ export default function InteligenciaOperacional() {
     groupPreVenda(specialistScopedClients, (client) => normalizeCloserName(client.assignedCloser || client.vendedor) || 'Sem closer oficial')
       .sort((a, b) => compareCloserLabels(a.name, b.name))
   ), [specialistScopedClients]);
+  const sellerPerformanceStats = useMemo(() => buildSellerPerformanceStats(specialistScopedClients), [specialistScopedClients]);
   const teamStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.equipe || 'Sem equipe')), [specialistClients]);
   const indicationStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.indicacao || 'Nao informado')), [specialistClients]);
   const adPayerStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.pagadorAnuncio || 'Nao informado')), [specialistClients]);
@@ -265,6 +266,15 @@ export default function InteligenciaOperacional() {
     conversao: Number(item.conversionRate.toFixed(1)),
   }));
 
+  const sellerPerformanceChart = sellerPerformanceStats.map((item) => ({
+    name: getSpecialistDisplayName(item.closer),
+    receita: item.revenue,
+    fechados: item.closed,
+    conversao: Number(item.conversionRate.toFixed(1)),
+    melhorHorario: item.bestHour,
+    melhorHorarioQtd: item.bestHourClosed,
+  }));
+
 const hourChart = hourStats.map((item) => ({
     name: item.name,
     agendamentos: item.total,
@@ -390,6 +400,69 @@ const hourChart = hourStats.map((item) => ({
           </div>
 
           <CloserCreativeTable rows={closerCreativeStats} />
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <ChartPanel
+              title="Performance por vendedor"
+              subtitle="Receita e quantidade de fechamentos por vendedor, com o horário em que cada um mais converte."
+              icon={<BarChart3 className="h-5 w-5 text-primary" />}
+            >
+              <ResponsiveContainer width="100%" height={340}>
+                <BarChart data={sellerPerformanceChart} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
+                  <XAxis dataKey="name" />
+                  <YAxis yAxisId="left" />
+                  <YAxis yAxisId="right" orientation="right" tickFormatter={(value) => `R$ ${Math.round(Number(value) / 1000)}k`} />
+                  <Tooltip
+                    formatter={(value, name, props) => {
+                      if (name === 'receita') return [formatBRL(Number(value)), 'Receita'];
+                      if (name === 'fechados') return [value, 'Fechamentos'];
+                      return [value, name];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      const item = payload?.[0]?.payload as typeof sellerPerformanceChart[number] | undefined;
+                      if (!item) return label;
+                      return `${label} | Melhor horário: ${item.melhorHorario} (${item.melhorHorarioQtd} fechamentos)`;
+                    }}
+                  />
+                  <Legend />
+                  <Bar yAxisId="right" dataKey="receita" name="Receita" radius={[8, 8, 0, 0]} fill="#16a34a">
+                    {sellerPerformanceChart.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                  </Bar>
+                  <Bar yAxisId="left" dataKey="fechados" name="Fechamentos" radius={[8, 8, 0, 0]} fill="#111827" />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <Card className="rounded-[2rem] border-slate-100 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg">Melhor horário por vendedor</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {sellerPerformanceChart.map((seller) => (
+                  <div key={seller.name} className="rounded-[1.1rem] border border-slate-100 bg-[#f7f7f8] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-slate-950">{seller.name}</p>
+                        <p className="text-xs text-slate-500">{seller.fechados} fechamento(s)</p>
+                      </div>
+                      <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+                        {seller.melhorHorario}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Receita</span>
+                      <span className="font-bold text-slate-950">{formatBRL(seller.receita)}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Conversão</span>
+                      <span className="font-bold text-slate-950">{seller.conversao.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="calls" className="mt-0 space-y-6">
@@ -590,6 +663,16 @@ type CloserDeepDiveSummary = {
   bestScenario: PerfectCloserScenario | null;
 };
 
+type SellerPerformanceStats = {
+  closer: CloserName;
+  total: number;
+  closed: number;
+  revenue: number;
+  conversionRate: number;
+  bestHour: string;
+  bestHourClosed: number;
+};
+
 function buildCloserBreakdownStats(clients: PipelineClient[], getSegment: (client: PipelineClient) => string): CloserBreakdownStats[] {
   const grouped = new Map<string, PipelineClient[]>();
 
@@ -771,6 +854,52 @@ function buildCloserDeepDiveSummary(clients: PipelineClient[], closer: CloserNam
     bestFaturamento,
     bestScenario,
   };
+}
+
+function buildSellerPerformanceStats(clients: PipelineClient[]): SellerPerformanceStats[] {
+  const grouped = new Map<CloserName, PipelineClient[]>();
+
+  clients.forEach((client) => {
+    const closer = normalizeCloserName(client.assignedCloser || client.vendedor);
+    if (!closer) return;
+    grouped.set(closer, [...(grouped.get(closer) || []), client]);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([closer, closerClients]) => {
+      const closedClients = closerClients.filter((client) => client.stage === 'FECHADO');
+      const revenue = closedClients.reduce((sum, client) => sum + getClientRevenue(client), 0);
+
+      const hourGrouped = new Map<string, PipelineClient[]>();
+      closerClients.forEach((client) => {
+        const hour = getHourLabel(getHour(client));
+        hourGrouped.set(hour, [...(hourGrouped.get(hour) || []), client]);
+      });
+
+      const bestHourEntry = Array.from(hourGrouped.entries())
+        .map(([hour, rows]) => {
+          const closedRows = rows.filter((client) => client.stage === 'FECHADO');
+          const revenueRows = closedRows.reduce((sum, client) => sum + getClientRevenue(client), 0);
+          return {
+            hour,
+            closed: closedRows.length,
+            revenue: revenueRows,
+            total: rows.length,
+          };
+        })
+        .sort((a, b) => b.closed - a.closed || b.revenue - a.revenue || b.total - a.total)[0];
+
+      return {
+        closer,
+        total: closerClients.length,
+        closed: closedClients.length,
+        revenue,
+        conversionRate: safeRate(closedClients.length, closerClients.length) * 100,
+        bestHour: bestHourEntry?.hour || 'Sem horario',
+        bestHourClosed: bestHourEntry?.closed || 0,
+      };
+    })
+    .sort((a, b) => compareCloserLabels(a.closer, b.closer));
 }
 
 function DashboardGrid({ children }: { children: ReactNode }) {
