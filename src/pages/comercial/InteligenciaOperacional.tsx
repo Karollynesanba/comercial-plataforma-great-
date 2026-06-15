@@ -67,7 +67,7 @@ export default function InteligenciaOperacional() {
   const callSheet = useMemo(() => buildCallsFromEditableSheet(closerDailyLogs, filter), [closerDailyLogs, filter]);
   const callCloserRows = useMemo(() => {
     const rows = callSheet.rows;
-    if (specialistFilter === 'ALAN') return rows;
+    if (specialistFilter === 'ALAN') return [];
     return isCloserName(specialistFilter)
       ? rows.filter((row) => row.closer === specialistFilter)
       : rows;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -58,7 +58,7 @@ export function filterClientByRaioX(
       return d >= ws && d <= we;
     }
     case 'day': {
-      return d.getTime() === ref.getTime();
+      return isSameDay(d, ref);
     }
     default:
       return true;
