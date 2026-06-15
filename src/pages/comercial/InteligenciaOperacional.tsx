@@ -422,6 +422,7 @@ const hourChart = hourStats.map((item) => ({
                     labelFormatter={(label, payload) => {
                       const item = payload?.[0]?.payload as typeof sellerPerformanceChart[number] | undefined;
                       if (!item) return label;
+                      if (!item.melhorHorario) return `${label} | Melhor horário: sem dados`;
                       return `${label} | Melhor horário: ${item.melhorHorario} (${item.melhorHorarioQtd} fechamentos)`;
                     }}
                   />
@@ -447,7 +448,7 @@ const hourChart = hourStats.map((item) => ({
                         <p className="text-xs text-slate-500">{seller.fechados} fechamento(s)</p>
                       </div>
                       <Badge variant="outline" className="border-emerald-200 text-emerald-700">
-                        {seller.melhorHorario}
+                        {seller.melhorHorario || 'Sem dados'}
                       </Badge>
                     </div>
                     <div className="mt-3 flex items-center justify-between text-sm">
@@ -669,7 +670,7 @@ type SellerPerformanceStats = {
   closed: number;
   revenue: number;
   conversionRate: number;
-  bestHour: string;
+  bestHour: string | null;
   bestHourClosed: number;
 };
 
@@ -870,19 +871,19 @@ function buildSellerPerformanceStats(clients: PipelineClient[]): SellerPerforman
       const closedClients = closerClients.filter((client) => client.stage === 'FECHADO');
       const revenue = closedClients.reduce((sum, client) => sum + getClientRevenue(client), 0);
 
-      const hourGrouped = new Map<string, PipelineClient[]>();
-      closerClients.forEach((client) => {
+      const closedHourGrouped = new Map<string, PipelineClient[]>();
+      closedClients.forEach((client) => {
         const hour = getHourLabel(getHour(client));
-        hourGrouped.set(hour, [...(hourGrouped.get(hour) || []), client]);
+        if (hour === 'Sem horario') return;
+        closedHourGrouped.set(hour, [...(closedHourGrouped.get(hour) || []), client]);
       });
 
-      const bestHourEntry = Array.from(hourGrouped.entries())
+      const bestHourEntry = Array.from(closedHourGrouped.entries())
         .map(([hour, rows]) => {
-          const closedRows = rows.filter((client) => client.stage === 'FECHADO');
-          const revenueRows = closedRows.reduce((sum, client) => sum + getClientRevenue(client), 0);
+          const revenueRows = rows.reduce((sum, client) => sum + getClientRevenue(client), 0);
           return {
             hour,
-            closed: closedRows.length,
+            closed: rows.length,
             revenue: revenueRows,
             total: rows.length,
           };
@@ -895,7 +896,7 @@ function buildSellerPerformanceStats(clients: PipelineClient[]): SellerPerforman
         closed: closedClients.length,
         revenue,
         conversionRate: safeRate(closedClients.length, closerClients.length) * 100,
-        bestHour: bestHourEntry?.hour || 'Sem horario',
+        bestHour: bestHourEntry?.hour || null,
         bestHourClosed: bestHourEntry?.closed || 0,
       };
     })
