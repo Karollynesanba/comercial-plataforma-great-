@@ -428,16 +428,16 @@ export function visitCommercial(
     }
   );
 
-  cy.visit('/login', {
-    onBeforeLoad(win) {
-      seedCommercialAuth(win, options);
-      if (options.localData) {
-        seedCommercialLocalData(win, options.localData);
-      }
-    },
+  cy.visit('/login');
+  cy.window().then((win) => {
+    seedCommercialAuth(win, options);
+    if (options.localData) {
+      seedCommercialLocalData(win, options.localData);
+    }
   });
+  cy.reload();
 
-  cy.location('pathname', { timeout: 10000 }).should((pathname) => {
+  cy.location('pathname', { timeout: 20000 }).should((pathname) => {
     expect(normalizePathname(pathname)).to.eq('/comercial/dashboards');
   });
 

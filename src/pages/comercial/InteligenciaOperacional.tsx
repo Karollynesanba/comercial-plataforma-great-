@@ -51,19 +51,19 @@ export default function InteligenciaOperacional() {
   ), [clients, specialistFilter]);
   const specialistScopedClients = useMemo(() => specialistClients.filter((client) => client.stage !== 'NOVO'), [specialistClients]);
 
-  const overview = useMemo(() => summarizePreVenda('Geral', clients), [clients]);
-  const overviewScheduledTotal = clients.length;
-  const overviewOpenLeads = clients.filter((client) => client.stage === 'NOVO').length;
-  const overviewCompletedClients = clients.filter((client) => client.stage !== 'NOVO');
+  const overview = useMemo(() => summarizePreVenda('Geral', specialistClients), [specialistClients]);
+  const overviewScheduledTotal = specialistClients.length;
+  const overviewOpenLeads = specialistClients.filter((client) => client.stage === 'NOVO').length;
+  const overviewCompletedClients = specialistClients.filter((client) => client.stage !== 'NOVO');
   const overviewCompletedTotal = overviewCompletedClients.length;
   const overviewStageBreakdown = useMemo(() => {
     const stageOrder: PipelineClient['stage'][] = ['NO_SHOW', 'TAXA_INTERESSE', 'NEGOCIACAO', 'PERDIDO', 'FECHADO'];
     return stageOrder.map((stage) => ({
       stage,
       label: STAGE_LABELS[stage],
-      count: clients.filter((client) => client.stage === stage).length,
+      count: specialistClients.filter((client) => client.stage === stage).length,
     }));
-  }, [clients]);
+  }, [specialistClients]);
   const callSheet = useMemo(() => buildCallsFromEditableSheet(closerDailyLogs, filter), [closerDailyLogs, filter]);
   const callCloserRows = useMemo(() => {
     const rows = callSheet.rows;
@@ -74,23 +74,23 @@ export default function InteligenciaOperacional() {
   }, [callSheet.rows, specialistFilter]);
   const callSheetStats = useMemo(() => summarizeCloserRows(callCloserRows), [callCloserRows]);
 
-  const creativeStats = useMemo(() => groupPreVenda(clients, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).slice(0, 12), [clients]);
+  const creativeStats = useMemo(() => groupPreVenda(specialistClients, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).slice(0, 12), [specialistClients]);
   const bestCreative = useMemo(
     () => [...creativeStats].sort((a, b) => b.conversionRate - a.conversionRate || b.closed - a.closed || b.revenue - a.revenue)[0],
     [creativeStats]
   );
-  const closerAnalysisClients = useMemo(() => clients.filter((client) => client.stage !== 'NOVO'), [clients]);
+  const closerAnalysisClients = useMemo(() => specialistClients.filter((client) => client.stage !== 'NOVO'), [specialistClients]);
   const closerCreativeStats = useMemo(() => buildCloserCreativeStats(closerAnalysisClients), [closerAnalysisClients]);
   const bestCloserCreative = closerCreativeStats[0];
-  const hourStats = useMemo(() => groupPreVenda(clients, (client) => getHourLabel(getHour(client))).sort((a, b) => Number(a.name.replace(/\D/g, '') || 99) - Number(b.name.replace(/\D/g, '') || 99)), [clients]);
-  const turnStats = useMemo(() => groupPreVenda(clients, (client) => getTurn(getHour(client))), [clients]);
-  const areaStats = useMemo(() => groupPreVenda(clients, getArea), [clients]);
-  const areaHourStats = useMemo(() => groupPreVenda(clients, (client) => `${getArea(client)} - ${getHourLabel(getHour(client))}`).slice(0, 12), [clients]);
-  const stageStats = useMemo(() => groupPreVenda(clients, (client) => STAGE_LABELS[client.stage]), [clients]);
-  const packageStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.pacote)), [clients]);
-  const periodStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.periodo || client.plan || 'Nao informado')), [clients]);
-  const leadFunnelStats = useMemo(() => summarizePreVenda('Métricas Leads', clients), [clients]);
-  const leadCreativeStats = useMemo(() => groupPreVenda(clients, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).slice(0, 12), [clients]);
+  const hourStats = useMemo(() => groupPreVenda(specialistClients, (client) => getHourLabel(getHour(client))).sort((a, b) => Number(a.name.replace(/\D/g, '') || 99) - Number(b.name.replace(/\D/g, '') || 99)), [specialistClients]);
+  const turnStats = useMemo(() => groupPreVenda(specialistClients, (client) => getTurn(getHour(client))), [specialistClients]);
+  const areaStats = useMemo(() => groupPreVenda(specialistClients, getArea), [specialistClients]);
+  const areaHourStats = useMemo(() => groupPreVenda(specialistClients, (client) => `${getArea(client)} - ${getHourLabel(getHour(client))}`).slice(0, 12), [specialistClients]);
+  const stageStats = useMemo(() => groupPreVenda(specialistClients, (client) => STAGE_LABELS[client.stage]), [specialistClients]);
+  const packageStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.pacote)), [specialistClients]);
+  const periodStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.periodo || client.plan || 'Nao informado')), [specialistClients]);
+  const leadFunnelStats = useMemo(() => summarizePreVenda('Métricas Leads', specialistClients), [specialistClients]);
+  const leadCreativeStats = useMemo(() => groupPreVenda(specialistClients, (client) => getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil, creativeSource: client.creativeSource })).slice(0, 12), [specialistClients]);
   const leadCloserHourStats = useMemo(() => buildCloserBreakdownStats(specialistScopedClients, (client) => getHourLabel(getHour(client))).slice(0, 18), [specialistScopedClients]);
   const leadCloserAreaStats = useMemo(() => buildCloserBreakdownStats(specialistScopedClients, getArea).slice(0, 18), [specialistScopedClients]);
   const perfectCloserScenarios = useMemo(() => buildPerfectCloserScenarios(specialistScopedClients), [specialistScopedClients]);
@@ -119,23 +119,23 @@ export default function InteligenciaOperacional() {
     groupPreVenda(specialistScopedClients, (client) => normalizeCloserName(client.assignedCloser || client.vendedor) || 'Sem closer oficial')
       .sort((a, b) => compareCloserLabels(a.name, b.name))
   ), [specialistScopedClients]);
-  const teamStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.equipe || 'Sem equipe')), [clients]);
-  const indicationStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.indicacao || 'Nao informado')), [clients]);
-  const adPayerStats = useMemo(() => groupPreVenda(clients, (client) => readableValue(client.pagadorAnuncio || 'Nao informado')), [clients]);
-  const investIntentStats = useMemo(() => groupPreVenda(clients, (client) => client.podeInvestir === 'SIM' ? 'Pode investir' : client.podeInvestir === 'NAO' ? 'Nao pode investir' : 'Nao informado'), [clients]);
+  const teamStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.equipe || 'Sem equipe')), [specialistClients]);
+  const indicationStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.indicacao || 'Nao informado')), [specialistClients]);
+  const adPayerStats = useMemo(() => groupPreVenda(specialistClients, (client) => readableValue(client.pagadorAnuncio || 'Nao informado')), [specialistClients]);
+  const investIntentStats = useMemo(() => groupPreVenda(specialistClients, (client) => client.podeInvestir === 'SIM' ? 'Pode investir' : client.podeInvestir === 'NAO' ? 'Nao pode investir' : 'Nao informado'), [specialistClients]);
 
   const mrrStats = useMemo(() => {
     const forecastDate = filter.mode === 'all' ? new Date() : filter.date;
-    const mrrDeals = clients.filter((client) => client.stage === 'FECHADO' && client.isMrr);
+    const mrrDeals = specialistClients.filter((client) => client.stage === 'FECHADO' && client.isMrr);
     const entradaColetada = mrrDeals.reduce((sum, client) => sum + Number(client.mrrEntrada || client.entrada || 0), 0);
     const mrrTotalRestante = mrrDeals.reduce((sum, client) => sum + getMrrRemainingTotal(client), 0);
-    const mrrPlanejadoFuturo = realPipelineClients.reduce(
+    const mrrPlanejadoFuturo = specialistClients.reduce(
       (sum, client) => sum + getPlannedMrrForMonth(client, forecastDate),
       0
     );
     const ticketMrr = mrrDeals.length > 0 ? (entradaColetada + mrrTotalRestante) / mrrDeals.length : 0;
     return { deals: mrrDeals.length, entradaColetada, mrrTotalRestante, mrrPlanejadoFuturo, ticketMrr };
-  }, [clients, filter.date, filter.mode, realPipelineClients]);
+  }, [filter.date, filter.mode, specialistClients]);
 
   const bestHourByConversion = useMemo(() => [...hourStats].sort((a, b) => b.conversionRate - a.conversionRate || b.closed - a.closed)[0], [hourStats]);
   const busiestHour = useMemo(() => [...hourStats].sort((a, b) => b.total - a.total)[0], [hourStats]);
@@ -160,13 +160,13 @@ export default function InteligenciaOperacional() {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const rangeStart = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
       const rangeEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
-      const monthClients = realPipelineClients.filter((client) => {
+      const monthClients = specialistClients.filter((client) => {
         const scheduleDate = getScheduleDate(client);
         const parsed = parseCalendarDate(scheduleDate);
         return !!parsed && parsed >= rangeStart && parsed <= rangeEnd;
       });
       const operationalMonthClients = monthClients.filter((client) => client.stage !== 'NOVO');
-      const closedInMonth = realPipelineClients.filter((client) => {
+      const closedInMonth = specialistClients.filter((client) => {
         if (client.stage !== 'FECHADO') return false;
         const closeDate = client.lastStageChange ? new Date(client.lastStageChange) : null;
         return closeDate && !Number.isNaN(closeDate.getTime()) && closeDate >= rangeStart && closeDate <= rangeEnd;
@@ -190,7 +190,7 @@ export default function InteligenciaOperacional() {
     }
 
     return months;
-  }, [realPipelineClients]);
+  }, [specialistClients]);
 
   const evolutionGrowth = useMemo(() => {
     if (monthlyEvolution.length < 2) return { revenue: 0, deals: 0, avgTicket: 0 };
@@ -205,7 +205,7 @@ export default function InteligenciaOperacional() {
   }, [monthlyEvolution]);
 
   const evolutionConversionRate = monthlyEvolution[monthlyEvolution.length - 1]?.conversionRate || 0;
-  const globalTicketAverage = overview.closed > 0 ? overview.revenue / overview.closed : 0;
+  const selectedTicketAverage = overview.closed > 0 ? overview.revenue / overview.closed : 0;
 
   const investmentRecommendations = useMemo(() => {
     const recommendations: { title: string; description: string; priority: 'Alta' | 'Media' | 'Info'; icon: ReactNode }[] = [];
@@ -222,8 +222,8 @@ export default function InteligenciaOperacional() {
 
     if (overview.closed > 0) {
       recommendations.push({
-        title: 'Ticket medio global dos fechados',
-        description: `Media de ${formatBRL(globalTicketAverage)} considerando ${overview.closed} fechamento(s) no recorte filtrado.`,
+        title: 'Ticket medio no recorte dos fechados',
+        description: `Media de ${formatBRL(selectedTicketAverage)} considerando ${overview.closed} fechamento(s) no recorte selecionado.`,
         priority: 'Alta',
         icon: <Target className="h-5 w-5 text-emerald-600" />,
       });
@@ -257,7 +257,7 @@ export default function InteligenciaOperacional() {
     }
 
     return recommendations;
-  }, [creativeStats, evolutionConversionRate, evolutionGrowth.revenue, globalTicketAverage, overview.closed]);
+  }, [creativeStats, evolutionConversionRate, evolutionGrowth.revenue, overview.closed, selectedTicketAverage]);
 
   const creativeChart = creativeStats.map((item) => ({
     name: item.name,
@@ -383,7 +383,7 @@ const hourChart = hourStats.map((item) => ({
               <InsightCard label="Horario com mais agendamento" value={busiestHour?.name || 'Sem dados'} detail={busiestHour ? `${busiestHour.total} agendamento(s)` : 'Sem agendamentos no periodo'} />
               <InsightCard label="Horario com mais No Show" value={worstHourByNoShow?.name || 'Sem dados'} detail={worstHourByNoShow ? `${worstHourByNoShow.noShow} no show (${worstHourByNoShow.noShowRate.toFixed(1)}%)` : 'Sem registros de No Show no periodo'} />
               <InsightCard label="Melhor criativo/funil" value={bestCreative?.name || 'Sem dados'} detail={bestCreative ? `${bestCreative.conversionRate.toFixed(1)}% de conversao com ${bestCreative.closed} fechado(s)` : 'Sem dados de criativo'} />
-              <InsightCard label="Ticket medio global" value={formatBRL(globalTicketAverage)} detail={overview.closed > 0 ? `${overview.closed} fechamento(s) no recorte` : 'Sem fechamentos no periodo'} />
+              <InsightCard label="Ticket medio no recorte" value={formatBRL(selectedTicketAverage)} detail={overview.closed > 0 ? `${overview.closed} fechamento(s) no recorte` : 'Sem fechamentos no periodo'} />
               <InsightCard label="Melhor closer x criativo" value={bestCloserCreative ? `${getSpecialistDisplayName(bestCloserCreative.closer)} x ${bestCloserCreative.creative}` : 'Sem dados'} detail={bestCloserCreative ? `${bestCloserCreative.conversionRate.toFixed(1)}% de conversao e ${formatBRL(bestCloserCreative.revenue)}` : 'Sem fechamento por closer'} />
             </CardContent>
           </Card>
@@ -885,7 +885,8 @@ function getCallSheetLabel(filter: RaioXFilterState) {
   return filter.date.toLocaleDateString('pt-BR');
 }
 
-function readableValue(value: string) {
+function readableValue(value?: string | null) {
+  if (!value) return 'Nao informado';
   return value
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
