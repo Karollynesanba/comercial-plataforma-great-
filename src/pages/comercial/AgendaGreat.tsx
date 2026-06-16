@@ -21,6 +21,7 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
   '#FF0000': 'Call Não Comparecida',
   '#B000FF': 'Recontato',
   '#FFA500': 'Ficou de Confirmar',
+  '#C8A27A': 'No Show Remarcado',
   '#808080': 'Reuniões - Great',
 };
 
