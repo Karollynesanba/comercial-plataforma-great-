@@ -148,7 +148,7 @@ const AGENDADOR_COLORS: Record<Agendador, string> = {
   'MIGUEL': 'bg-blue-50 text-blue-700 border-blue-100',
   'PEDRO': 'bg-red-50 text-red-700 border-red-100',
   'HEBERT': 'bg-blue-50 text-blue-700 border-blue-100',
-  'ALAN': 'bg-blue-50 text-blue-700 border-blue-100',
+  'ALAN': 'bg-violet-50 text-violet-700 border-violet-100',
   'CLED': 'bg-orange-50 text-orange-700 border-orange-100',
   'CAETANO': 'bg-emerald-50 text-emerald-700 border-emerald-100',
 };
