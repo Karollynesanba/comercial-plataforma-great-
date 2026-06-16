@@ -56,7 +56,7 @@ export const EVENT_COLORS = [
   { label: 'Call Nao Comparecida', value: '#FF0000', emoji: 'vermelho' },
   { label: 'Recontato', value: '#B000FF', emoji: 'roxo' },
   { label: 'Ficou de Confirmar', value: '#FFA500', emoji: 'laranja' },
-  { label: 'No Show Remarcado', value: '#C8A27A', emoji: 'marrom' },
+  { label: 'No Show Remarcado', value: '#8B5A2B', emoji: 'marrom' },
   { label: 'Reunioes - Great', value: '#808080', emoji: 'cinza' },
 ];
 
