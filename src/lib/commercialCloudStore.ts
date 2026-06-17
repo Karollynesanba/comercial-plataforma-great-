@@ -4,6 +4,7 @@ import type { Agendador, Equipe, Faturamento, Pacote, PagadorAnuncio, PaymentRem
 import type { SalesGoal } from '@/types';
 import { commercialAnswerToDb, coerceCommercialAnswer } from '@/lib/commercialAnswer';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
+import { normalizeMeetingClientName } from '@/lib/agendaTitle';
 
 export interface CommercialCloudState {
   pipelineClients: PipelineClient[];
@@ -157,6 +158,46 @@ function normalizePhone(value?: string | null) {
   const digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
   return digits.startsWith('55') ? digits : `55${digits}`;
+}
+
+function normalizeLeadDateKey(value?: string | null) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parts = value.split('/');
+  if (parts.length === 3) {
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeLeadTimeKey(value?: string | null) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '';
+}
+
+function peopleMatch(recordPhone: string | null | undefined, recordName: string | null | undefined, targetPhone: string, targetName: string) {
+  const recordDigits = normalizePhone(recordPhone);
+  if (recordDigits && targetPhone && recordDigits === targetPhone) return true;
+  return Boolean(recordName && targetName && normalizeMeetingClientName(recordName) === normalizeMeetingClientName(targetName));
+}
+
+function agendaColorForStage(stage?: string | null) {
+  if (stage === 'NO_SHOW') return '#FF0000';
+  if (stage === 'FECHADO' || stage === 'NEGOCIACAO' || stage === 'TAXA_INTERESSE') return '#66FF00';
+  return '#3B82F6';
+}
+
+function pipelineToAgendamentoStatus(stage?: string | null) {
+  if (stage === 'NO_SHOW') return 'NO_SHOW';
+  if (stage === 'FECHADO') return 'FECHADO';
+  if (stage === 'NEGOCIACAO') return 'NEGOCIACAO';
+  if (stage === 'TAXA_INTERESSE') return 'TAXA_INTERESSE';
+  if (stage === 'PERDIDO') return 'PERDIDO';
+  return 'NOVO_LEAD';
 }
 
 function normalizePipelineFaturamento(faturamento?: string | null): Faturamento {
@@ -1011,7 +1052,106 @@ export async function archiveCriativoInCloud(name: string) {
 
 export async function syncPipelineAutomationsToCloud(client: PipelineClient, userId?: string | null) {
   if (!isSupabaseConfigured) return;
-  console.info('[commercial-cloud] agenda sync delegated to database trigger', {
+
+  if (!client.meetingDate || !client.meetingTime) {
+    console.info('[commercial-cloud] agenda sync skipped - missing meeting date/time', {
+      clientName: client.clientName,
+      userId: toDbUserId(userId),
+    });
+    return;
+  }
+
+  const leadDate = isoToBrazilianDate(client.meetingDate);
+  const leadTime = toTime(client.meetingTime);
+  if (!leadDate || !leadTime) return;
+
+  const leadName = normalizeMeetingClientName(client.clientName || 'Lead sem nome') || 'Lead sem nome';
+  const leadPhone = normalizePhone(client.telefone);
+  const leadStage = client.stage || 'NOVO';
+  const agendaTime = `${leadTime}:00`;
+  const now = new Date().toISOString();
+
+  const [existingLeadByPhone, existingLeadByName, existingEventByPhone, existingEventByName] = await Promise.all([
+    leadPhone ? supabase.from('agendamento_leads').select('*').eq('telefone', client.telefone || leadPhone).limit(10) : Promise.resolve({ data: [] as any[], error: null }),
+    supabase.from('agendamento_leads').select('*').ilike('nome', leadName).limit(10),
+    leadPhone ? supabase.from('agenda_events').select('*').eq('client_phone', client.telefone || leadPhone).limit(10) : Promise.resolve({ data: [] as any[], error: null }),
+    supabase.from('agenda_events').select('*').ilike('client_name', leadName).limit(10),
+  ]);
+
+  if ((existingLeadByPhone as any).error) throw (existingLeadByPhone as any).error;
+  if ((existingLeadByName as any).error) throw (existingLeadByName as any).error;
+  if ((existingEventByPhone as any).error) throw (existingEventByPhone as any).error;
+  if ((existingEventByName as any).error) throw (existingEventByName as any).error;
+
+  const candidateLeads = [
+    ...((existingLeadByPhone as any).data || []),
+    ...((existingLeadByName as any).data || []),
+  ];
+  const existingLead = candidateLeads.find((lead: any) => peopleMatch(lead.telefone, lead.nome, leadPhone, leadName)) || null;
+
+  const candidateEvents = [
+    ...((existingEventByPhone as any).data || []),
+    ...((existingEventByName as any).data || []),
+  ];
+  const existingEvent = candidateEvents.find((event: any) => peopleMatch(event.client_phone, event.client_name || event.title, leadPhone, leadName)) || null;
+
+  const agendamentoLeadPayload = {
+    data: leadDate,
+    nome: client.clientName || leadName,
+    telefone: client.telefone || leadPhone,
+    horario: timeToPeriod(client.meetingTime),
+    horario_especifico: leadTime,
+    tem_socio: commercialAnswerToDb(client.temSocio),
+    tem_mkt: commercialAnswerToDb(client.temMkt),
+    tem_secretaria: commercialAnswerToDb(client.temSecretaria),
+    salao_ou_clinica: client.salaoOuClinica || null,
+    faturamento: normalizePipelineFaturamento(client.faturamento),
+    pode_investir: client.podeInvestir || null,
+    agendado_via: client.agendadoVia || null,
+    funil: getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
+    status: pipelineToAgendamentoStatus(leadStage),
+    created_by_user_id: toDbUserId(userId) || toDbUserId(client.createdByUserId) || null,
+    created_at: existingLead?.created_at || now,
+    updated_at: now,
+  };
+
+  const agendaEventPayload = {
+    client_name: client.clientName || leadName,
+    client_phone: client.telefone || leadPhone,
+    title: existingEvent?.title || `Reuniao com ${leadName}`,
+    description: existingEvent?.description || `Lead do Pipeline - ${getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
+    event_date: leadDate,
+    event_time: agendaTime,
+    duration_minutes: existingEvent?.duration_minutes || 60,
+    meeting_link: existingEvent?.meeting_link || null,
+    notes: existingEvent?.notes ?? client.notes ?? null,
+    color: existingEvent?.color || agendaColorForStage(leadStage),
+    reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
+    reminder_30min_sent: existingEvent?.reminder_30min_sent || false,
+    created_by_user_id: toDbUserId(userId) || toDbUserId(client.createdByUserId) || null,
+    assigned_closer_id: existingEvent?.assigned_closer_id || null,
+    team_id: existingEvent?.team_id || null,
+    created_at: existingEvent?.created_at || now,
+    updated_at: now,
+  };
+
+  if (existingLead) {
+    const { error: updateLeadError } = await supabase.from('agendamento_leads').update(agendamentoLeadPayload).eq('id', existingLead.id);
+    if (updateLeadError) throw updateLeadError;
+  } else {
+    const { error: insertLeadError } = await supabase.from('agendamento_leads').insert(agendamentoLeadPayload);
+    if (insertLeadError) throw insertLeadError;
+  }
+
+  if (existingEvent) {
+    const { error: updateEventError } = await supabase.from('agenda_events').update(agendaEventPayload).eq('id', existingEvent.id);
+    if (updateEventError) throw updateEventError;
+  } else {
+    const { error: insertEventError } = await supabase.from('agenda_events').insert(agendaEventPayload);
+    if (insertEventError) throw insertEventError;
+  }
+
+  console.info('[commercial-cloud] agenda sync completed', {
     clientName: client.clientName,
     userId: toDbUserId(userId),
   });

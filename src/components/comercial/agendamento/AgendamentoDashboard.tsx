@@ -102,7 +102,7 @@ function getPipelineAreaLabel(area: PipelineClient['salaoOuClinica']) {
 export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, selectedMonthRange, period }: AgendamentoDashboardProps) {
   const { pipelineClients } = useCommercial();
   const { filterByPeriod } = usePeriodFilter();
-  const sourceClients = pipelineClients.length > 0 ? pipelineClients : leads;
+  const sourceClients = leads.length > 0 ? leads : pipelineClients;
   const isWeeklyFilter = period === 'current_week' || period === 'last_week';
   const periodCardLabel = period === 'current_day' || period === 'day'
     ? 'Hoje'
@@ -241,7 +241,7 @@ export function AgendamentoDashboard({ leads, selectedDay, selectedMonth, select
 
     const salaoClinicaData = SALAO_OU_CLINICA_OPTIONS.map((option) => ({
       name: option.label,
-      value: filteredClients.filter((lead) => lead.salaoOuClinica === option.value).length,
+      value: filteredClients.filter((lead) => (lead.salaoOuClinica || lead.salao_ou_clinica) === option.value).length,
     })).filter((item) => item.value > 0);
 
     return {

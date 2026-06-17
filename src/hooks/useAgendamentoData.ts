@@ -5,6 +5,7 @@ import { useCommercialSafe } from '@/contexts/CommercialContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { readCommercialLocalData, syncAgendamentoLeadAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { savePipelineClientToCloud } from '@/lib/commercialCloudStore';
+import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import { agendamentoToPipeline, AGENDAMENTO_STATUS_TO_PIPELINE_STAGE } from './usePipelineAgendamentoSync';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, commercialAnswerToDb, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
@@ -181,7 +182,7 @@ export const PIPELINE_STAGE_TO_STATUS: Record<string, AgendamentoStatus> = {
   FECHADO: 'FECHADO',
 };
 
-function buildLeadWithAgenda(lead: any, agendaEvents: any[]): AgendamentoLead {
+function buildLeadWithAgenda(lead: any, agendaEvents: any[]): any {
   const leadPhone = lead.telefone?.replace(/\D/g, '');
   const leadName = matchMeetingName(lead.nome || '');
   const agendaDate = lead.agenda_event_date || null;
@@ -208,11 +209,135 @@ function buildLeadWithAgenda(lead: any, agendaEvents: any[]): AgendamentoLead {
     ...lead,
     agenda_event_date: agendaEvent?.event_date || null,
     agenda_event_time: agendaEvent?.event_time || null,
+    meetingDate: agendaEvent?.event_date || lead.agenda_event_date || null,
+    meetingTime: agendaEvent?.event_time || lead.agenda_event_time || lead.horario_especifico || null,
+    stage: lead.stage || AGENDAMENTO_STATUS_TO_PIPELINE_STAGE[lead.status] || 'NOVO',
+    agendadoPor: lead.agendadoPor || lead.assignedSDR || null,
+    creativeSource: lead.creativeSource || getCommercialLeadOrigin({ criativo: lead.criativo, funil: lead.funil }),
   };
 }
 
 function normalizePhoneDigits(value?: string | null) {
   return String(value || '').replace(/\D/g, '');
+}
+
+function normalizeLeadDateKey(value?: string | null) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parts = value.split('/');
+  if (parts.length === 3) {
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeLeadTimeKey(value?: string | null) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '';
+}
+
+function buildAgendamentoIdentity(lead: {
+  telefone?: string | null;
+  nome?: string | null;
+  data?: string | null;
+  horario_especifico?: string | null;
+  agenda_event_date?: string | null;
+  agenda_event_time?: string | null;
+  meetingDate?: string | null;
+  meetingTime?: string | null;
+}) {
+  const phone = normalizePhoneDigits(lead.telefone);
+  const name = normalizeMeetingClientName(lead.nome || '');
+  const date = normalizeLeadDateKey(lead.data || lead.agenda_event_date || lead.meetingDate);
+  const time = normalizeLeadTimeKey(lead.horario_especifico || lead.agenda_event_time || lead.meetingTime);
+  return { phone, name, date, time };
+}
+
+function agendamentoLeadMatches(left: any, right: any) {
+  const leftPipelineClientId = String(left.pipeline_client_id || '').trim();
+  const rightPipelineClientId = String(right.pipeline_client_id || '').trim();
+  if (leftPipelineClientId && rightPipelineClientId && leftPipelineClientId === rightPipelineClientId) {
+    return true;
+  }
+
+  const leftAgendaEventId = String(left.agenda_event_id || '').trim();
+  const rightAgendaEventId = String(right.agenda_event_id || '').trim();
+  if (leftAgendaEventId && rightAgendaEventId && leftAgendaEventId === rightAgendaEventId) {
+    return true;
+  }
+
+  const leftIdentity = buildAgendamentoIdentity(left);
+  const rightIdentity = buildAgendamentoIdentity(right);
+  const phoneMatch = leftIdentity.phone && rightIdentity.phone && leftIdentity.phone === rightIdentity.phone;
+  const nameMatch = leftIdentity.name && rightIdentity.name && leftIdentity.name === rightIdentity.name;
+  const dateMatch = !leftIdentity.date || !rightIdentity.date || leftIdentity.date === rightIdentity.date;
+  const timeMatch = !leftIdentity.time || !rightIdentity.time || leftIdentity.time === rightIdentity.time;
+
+  if (phoneMatch && dateMatch && timeMatch) return true;
+  return Boolean(nameMatch && dateMatch && timeMatch);
+}
+
+function pipelineClientToAgendamentoLead(client: any, agendaEvents: any[]) {
+  if (!client?.meetingDate || !client?.meetingTime) return null;
+
+  const meetingDate = normalizeLeadDateKey(client.meetingDate);
+  const meetingTime = normalizeLeadTimeKey(client.meetingTime);
+  if (!meetingDate || !meetingTime) return null;
+
+  const leadName = normalizeMeetingClientName(client.clientName || client.nome || 'Lead sem nome') || 'Lead sem nome';
+  const leadPhone = formatPhoneForWhatsApp(client.telefone || '');
+  const existingEvent =
+    agendaEvents.find((event: any) => {
+      const eventPhone = normalizePhoneDigits(event.client_phone);
+      const eventName = normalizeMeetingClientName(event.client_name || event.title || '');
+      return (
+        String(event?.event_date || '') === meetingDate &&
+        normalizeLeadTimeKey(event?.event_time) === meetingTime &&
+        (
+          (leadPhone && eventPhone && leadPhone.replace(/\D/g, '') === eventPhone) ||
+          (leadName && eventName && leadName === eventName)
+        )
+      );
+    }) || null;
+
+  return {
+    id: `agendamento-${client.id || crypto.randomUUID()}`,
+    pipeline_client_id: client.id || null,
+    agenda_event_id: existingEvent?.id || null,
+    data: `${meetingDate.split('-')[2]}/${meetingDate.split('-')[1]}/${meetingDate.split('-')[0]}`,
+    nome: client.clientName || leadName,
+    telefone: leadPhone,
+    horario: client.meetingTime
+      ? Number(meetingTime.slice(0, 2)) < 12
+        ? 'MANHA'
+        : Number(meetingTime.slice(0, 2)) < 17
+          ? 'TARDE'
+          : 'NOITE'
+      : 'MANHA',
+    horario_especifico: meetingTime,
+    tem_socio: commercialAnswerToDb(client.temSocio || client.tem_socio || 'NAO'),
+    tem_mkt: commercialAnswerToDb(client.temMkt || client.tem_mkt || 'NAO'),
+    tem_secretaria: commercialAnswerToDb(client.temSecretaria || client.tem_secretaria || 'NAO_SEI'),
+    salao_ou_clinica: client.salaoOuClinica || client.salao_ou_clinica || 'NAO_INFORMADO',
+    faturamento: normalizeAgendamentoFaturamento(client.faturamento),
+    pode_investir: client.podeInvestir || client.pode_investir || null,
+    agendado_via: client.agendadoVia || client.agendado_via || null,
+    funil: getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
+    status: PIPELINE_STAGE_TO_STATUS[client.stage || 'NOVO'] || 'NOVO_LEAD',
+    created_by_user_id: client.createdByUserId || client.created_by_user_id || null,
+    created_at: client.createdAt ? new Date(client.createdAt).toISOString() : new Date().toISOString(),
+    updated_at: client.updatedAt ? new Date(client.updatedAt).toISOString() : new Date().toISOString(),
+    agenda_event_date: meetingDate,
+    agenda_event_time: meetingTime,
+    agenda_event_title: existingEvent?.title || `Reuniao com ${leadName}`,
+    stage: client.stage || 'NOVO',
+    agendadoPor: client.agendadoPor || client.assignedSDR || null,
+    creativeSource: getCommercialLeadOrigin({ creativeSource: client.creativeSource, creative_source: client.creative_source, criativo: client.criativo, funil: client.funil }),
+  };
 }
 
 type AgendaEventLike = {
@@ -299,6 +424,7 @@ export function useAgendamentoData() {
       );
       if (leadsError) throw leadsError;
       if (agendaError) throw agendaError;
+
       return (agendamentoLeads || []).map((lead: any) => buildLeadWithAgenda(
         normalizeAgendamentoLeadAnswers({
           ...lead,

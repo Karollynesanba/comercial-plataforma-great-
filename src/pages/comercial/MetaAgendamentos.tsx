@@ -23,11 +23,37 @@ HEBERT: 'Herbert',
 ALAN: 'Alan',
 };
 
+function normalizeLeadKey(lead: any) {
+  const pipelineClientId = String(lead.pipeline_client_id || '').trim();
+  if (pipelineClientId) return `pipeline:${pipelineClientId}`;
+
+  const agendaEventId = String(lead.agenda_event_id || '').trim();
+  if (agendaEventId) return `agenda:${agendaEventId}`;
+
+  const phone = String(lead.telefone || '').replace(/\D/g, '');
+  const name = String(lead.nome || '').trim().toLowerCase();
+  if (phone) return `person:${phone}`;
+  if (name) return `person:${name}`;
+  const date = String(lead.data || lead.agenda_event_date || lead.meetingDate || '').trim();
+  const time = String(lead.horario_especifico || lead.agenda_event_time || lead.meetingTime || '').trim();
+  return `fallback:${date}:${time}`;
+}
+
+function uniqueLeadsByIdentity(leads: any[]) {
+  const seen = new Set<string>();
+  return leads.filter((lead) => {
+    const key = normalizeLeadKey(lead);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function MetaAgendamentos() {
   useAgendamentoRealtime();
   const authContext = useAuthSafe();
   const user = authContext?.user;
-  const { pipelineClients, sdrGoals, setSDRGoal } = useCommercial();
+  const { sdrGoals, setSDRGoal } = useCommercial();
   const { leads, isLoading: isLoadingAgendamentos } = useAgendamentoData();
   const { filterByPeriod } = usePeriodFilter();
   const [period, setPeriod] = useState<PeriodFilterValue>('current_month');
@@ -69,6 +95,18 @@ export default function MetaAgendamentos() {
     setGoals(nextGoals);
   }, [currentMonthKey, sdrGoals]);
 
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      if (!lead.data) return false;
+      const parts = lead.data.split('/');
+      if (parts.length !== 3) return false;
+      const leadDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      return filterByPeriod(leadDate, period, customStart, customEnd);
+    });
+  }, [customEnd, customStart, filterByPeriod, leads, period]);
+
+  const uniqueFilteredLeads = useMemo(() => uniqueLeadsByIdentity(filteredLeads), [filteredLeads]);
+
   const sdrStats = useMemo(() => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -76,15 +114,15 @@ export default function MetaAgendamentos() {
     const stats: Record<Agendador, { scheduledCount: number; todayCount: number }> = {} as Record<Agendador, { scheduledCount: number; todayCount: number }>;
 
     AGENDADOR_OPTIONS.forEach((option) => {
-      const scheduledCount = pipelineClients.filter((client) => {
-        if (client.agendadoPor !== option.value) return false;
-        const date = parseCalendarDate(getScheduleDate(client));
+      const scheduledCount = uniqueFilteredLeads.filter((lead: any) => {
+        if (lead.agendadoPor !== option.value) return false;
+        const date = parseCalendarDate(getScheduleDate(lead));
         return date ? filterByPeriod(date, period, customStart, customEnd) : false;
       }).length;
 
-      const todayCount = pipelineClients.filter((client) => {
-        if (client.agendadoPor !== option.value) return false;
-        const date = parseCalendarDate(getScheduleDate(client));
+      const todayCount = uniqueFilteredLeads.filter((lead: any) => {
+        if (lead.agendadoPor !== option.value) return false;
+        const date = parseCalendarDate(getScheduleDate(lead));
         return !!date && date >= todayStart && date <= todayEnd;
       }).length;
 
@@ -92,7 +130,7 @@ export default function MetaAgendamentos() {
     });
 
     return stats;
-  }, [customEnd, customStart, filterByPeriod, period, pipelineClients]);
+  }, [customEnd, customStart, filterByPeriod, period, uniqueFilteredLeads]);
 
   useEffect(() => {
     OFFICIAL_SDR_VALUES.forEach((name) => {
@@ -104,23 +142,14 @@ export default function MetaAgendamentos() {
     });
   }, [celebrated, sdrStats]);
 
-  const totalScheduled = useMemo(() => pipelineClients.filter((client) => {
-    if (!client.agendadoPor || !recognizedAgendadores.has(client.agendadoPor)) return false;
-    const date = parseCalendarDate(getScheduleDate(client));
+  const totalScheduled = useMemo(() => uniqueFilteredLeads.filter((lead: any) => {
+    if (!lead.agendadoPor || !recognizedAgendadores.has(lead.agendadoPor)) return false;
+    const date = parseCalendarDate(getScheduleDate(lead));
     return date ? filterByPeriod(date, period, customStart, customEnd) : false;
-  }).length, [customEnd, customStart, filterByPeriod, period, pipelineClients, recognizedAgendadores]);
+  }).length, [customEnd, customStart, filterByPeriod, period, recognizedAgendadores, uniqueFilteredLeads]);
 
   const effectiveGeneralGoal = parseInt(generalGoal) || AGENDADOR_OPTIONS.reduce((sum, option) => sum + (parseInt(goals[option.value]) || 0), 0);
   const totalProgress = effectiveGeneralGoal > 0 ? Math.min((totalScheduled / effectiveGeneralGoal) * 100, 100) : 0;
-  const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      if (!lead.data) return false;
-      const parts = lead.data.split('/');
-      if (parts.length !== 3) return false;
-      const leadDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-      return filterByPeriod(leadDate, period, customStart, customEnd);
-    });
-  }, [customEnd, customStart, filterByPeriod, leads, period]);
 
   const selectedMonthRange = useMemo(() => {
     if (period !== 'current_month') return null;

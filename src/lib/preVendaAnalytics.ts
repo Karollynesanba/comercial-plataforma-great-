@@ -26,7 +26,14 @@ export function rate(part: number, total: number) {
 }
 
 export function getScheduleDate(client: PipelineClient) {
-  return client.meetingDate || client.dataEntrada || client.entryDate || client.createdAt || client.lastStageChange || null;
+  return client.meetingDate
+    || (client as any).agenda_event_date
+    || (client as any).data
+    || client.dataEntrada
+    || client.entryDate
+    || client.createdAt
+    || client.lastStageChange
+    || null;
 }
 
 export function parseCalendarDate(value: string | Date | null | undefined): Date | null {
@@ -50,7 +57,12 @@ export function parseCalendarDate(value: string | Date | null | undefined): Date
 }
 
 export function getHour(client: PipelineClient) {
-  const match = String(client.meetingTime || '').match(/^(\d{1,2})/);
+  const rawTime = client.meetingTime
+    || (client as any).agenda_event_time
+    || (client as any).horario_especifico
+    || (client as any).horario
+    || '';
+  const match = String(rawTime).match(/^(\d{1,2})/);
   return match ? Number(match[1]) : null;
 }
 

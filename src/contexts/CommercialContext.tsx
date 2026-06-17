@@ -1010,7 +1010,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     const activeClients = pipelineClients.filter((client) => client.stage !== 'PERDIDO' && client.ativo);
     const metrics = buildDashboardMetrics(pipelineClients, currentGoal?.goalValue || 0, { start: startOfMonth(), end: endOfMonth() });
     const totalValue = activeClients.reduce((sum, client) => sum + getClientRevenue(client), 0);
-    const leadCount = pipelineClients.filter((client) => client.stage !== 'FECHADO' && client.stage !== 'PERDIDO' && client.ativo).length;
+    const leadCount = pipelineClients.length;
 
     return {
       totalValue,

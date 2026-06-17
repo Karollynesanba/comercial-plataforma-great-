@@ -24,14 +24,10 @@ export default function ControleAgendamento() {
 
   // Get date range from selected month
   // Filter leads by selected period
-  // IMPORTANT: Use the lead's 'data' field (DD/MM/YYYY) as the primary date reference
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      if (!lead.data) return false;
-      const parts = lead.data.split('/');
-      if (parts.length !== 3) return false;
-
-      const leadDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      const leadDate = lead.created_at ? new Date(lead.created_at) : null;
+      if (!leadDate || Number.isNaN(leadDate.getTime())) return false;
       return filterByPeriod(leadDate, periodFilter, customStart, customEnd);
     });
   }, [leads, periodFilter, customStart, customEnd, filterByPeriod]);
