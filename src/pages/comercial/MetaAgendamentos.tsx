@@ -97,10 +97,9 @@ export default function MetaAgendamentos() {
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      if (!lead.data) return false;
-      const parts = lead.data.split('/');
-      if (parts.length !== 3) return false;
-      const leadDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      const rawDate = lead.created_at || lead.data;
+      const leadDate = rawDate ? new Date(rawDate) : null;
+      if (!leadDate || Number.isNaN(leadDate.getTime())) return false;
       return filterByPeriod(leadDate, period, customStart, customEnd);
     });
   }, [customEnd, customStart, filterByPeriod, leads, period]);
