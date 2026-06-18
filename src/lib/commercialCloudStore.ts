@@ -923,7 +923,14 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   });
 
   const savedClient = dbPipelineToLocal(data);
-  await syncPipelineAutomationsToCloud(savedClient, userId);
+  void syncPipelineAutomationsToCloud(savedClient, userId).catch((syncError) => {
+    console.warn('[commercial-cloud] pipeline automation sync failed after successful lead save', {
+      error: syncError,
+      clientId: savedClient.id,
+      clientName: savedClient.clientName,
+      userId: toDbUserId(userId),
+    });
+  });
   return savedClient;
 }
 

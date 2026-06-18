@@ -597,13 +597,22 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     }));
 
     try {
-      const savedClient = await Promise.race([
-        savePipelineClientToCloud(newClient, user?.id),
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:save_pipeline_client')), 8000)),
-      ]) as PipelineClient | null;
+      console.info('[commercial] persisting pipeline client to cloud', {
+        clientName: newClient.clientName,
+        stage: newClient.stage,
+        meetingDate: newClient.meetingDate,
+        meetingTime: newClient.meetingTime,
+      });
+
+      const savedClient = await savePipelineClientToCloud(newClient, user?.id);
       if (!savedClient) {
         throw new Error('cloud_save_returned_empty_result');
       }
+
+      console.info('[commercial] pipeline client persisted successfully', {
+        clientId: savedClient.id,
+        clientName: savedClient.clientName,
+      });
 
       setCloudState((current) => ({
         ...current,
