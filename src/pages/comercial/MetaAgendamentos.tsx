@@ -423,19 +423,13 @@ export default function MetaAgendamentos() {
             <CardDescription>Mesmas métricas do antigo Controle de Agendamento, agora centralizadas aqui e conectadas às automações do pipeline.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingAgendamentos ? (
-              <div className="flex h-48 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <AgendamentoDashboard
-                leads={filteredLeads}
-                selectedDay={period === 'day' || period === 'current_day' ? customStart || new Date() : undefined}
-                selectedMonth={period === 'current_month' ? format(new Date(), 'yyyy-MM') : undefined}
-                selectedMonthRange={selectedMonthRange}
-                period={period}
-              />
-            )}
+            <AgendamentoDashboard
+              leads={filteredLeads}
+              selectedDay={period === 'day' || period === 'current_day' ? customStart || new Date() : undefined}
+              selectedMonth={period === 'current_month' ? format(new Date(), 'yyyy-MM') : undefined}
+              selectedMonthRange={selectedMonthRange}
+              period={period}
+            />
           </CardContent>
         </Card>
       </div>
