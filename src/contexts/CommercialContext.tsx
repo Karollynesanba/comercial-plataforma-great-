@@ -597,22 +597,10 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     }));
 
     try {
-      console.info('[commercial] persisting pipeline client to cloud', {
-        clientName: newClient.clientName,
-        stage: newClient.stage,
-        meetingDate: newClient.meetingDate,
-        meetingTime: newClient.meetingTime,
-      });
-
       const savedClient = await savePipelineClientToCloud(newClient, user?.id);
       if (!savedClient) {
         throw new Error('cloud_save_returned_empty_result');
       }
-
-      console.info('[commercial] pipeline client persisted successfully', {
-        clientId: savedClient.id,
-        clientName: savedClient.clientName,
-      });
 
       setCloudState((current) => ({
         ...current,
@@ -623,11 +611,9 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
             : [savedClient, ...current.pipelineClients],
       }));
 
-      try {
-        await refreshCommercialState();
-      } catch (refreshError) {
+      void refreshCommercialState().catch((refreshError) => {
         console.warn('Lead created, but refreshCommercialState failed after save.', refreshError);
-      }
+      });
 
       try {
         logActivity('CLIENT_CREATED', 'Pipeline', savedClient.id, `Cliente ${savedClient.clientName} criado`);
