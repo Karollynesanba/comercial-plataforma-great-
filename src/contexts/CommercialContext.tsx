@@ -623,11 +623,9 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
             : [savedClient, ...current.pipelineClients],
       }));
 
-      try {
-        await refreshCommercialState();
-      } catch (refreshError) {
+      void refreshCommercialState().catch((refreshError) => {
         console.warn('Lead created, but refreshCommercialState failed after save.', refreshError);
-      }
+      });
 
       try {
         logActivity('CLIENT_CREATED', 'Pipeline', savedClient.id, `Cliente ${savedClient.clientName} criado`);
