@@ -623,8 +623,17 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
             : [savedClient, ...current.pipelineClients],
       }));
 
-      await refreshCommercialState();
-      logActivity('CLIENT_CREATED', 'Pipeline', savedClient.id, `Cliente ${savedClient.clientName} criado`);
+      try {
+        await refreshCommercialState();
+      } catch (refreshError) {
+        console.warn('Lead created, but refreshCommercialState failed after save.', refreshError);
+      }
+
+      try {
+        logActivity('CLIENT_CREATED', 'Pipeline', savedClient.id, `Cliente ${savedClient.clientName} criado`);
+      } catch (activityError) {
+        console.warn('Lead created, but activity log failed after save.', activityError);
+      }
     } catch (error) {
       console.warn('Lead save cloud sync failed or timed out.', error);
       await refreshCommercialState().catch((refreshError) => {
