@@ -12,7 +12,6 @@ import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/c
 import { getCommercialSetting, setCommercialSetting } from '@/lib/commercialCloudStore';
 import { useAuthSafe } from '@/contexts/AuthContext';
 import { AgendamentoDashboard } from '@/components/comercial/agendamento/AgendamentoDashboard';
-import { useAgendamentoData } from '@/hooks/useAgendamentoData';
 import { useAgendamentoRealtime } from '@/hooks/useAgendamentoRealtime';
 import { format } from 'date-fns';
 import { getScheduleDate, parseCalendarDate } from '@/lib/preVendaAnalytics';
@@ -53,8 +52,7 @@ export default function MetaAgendamentos() {
   useAgendamentoRealtime();
   const authContext = useAuthSafe();
   const user = authContext?.user;
-  const { sdrGoals, setSDRGoal } = useCommercial();
-  const { leads, isLoading: isLoadingAgendamentos } = useAgendamentoData();
+  const { sdrGoals, setSDRGoal, pipelineClients } = useCommercial();
   const { filterByPeriod } = usePeriodFilter();
   const [period, setPeriod] = useState<PeriodFilterValue>('current_month');
   const [customStart, setCustomStart] = useState<Date | undefined>();
@@ -96,15 +94,12 @@ export default function MetaAgendamentos() {
   }, [currentMonthKey, sdrGoals]);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      if (!lead.data) return false;
-      const parts = lead.data.split('/');
-      if (parts.length !== 3) return false;
-      const leadDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-      if (Number.isNaN(leadDate.getTime())) return false;
-      return filterByPeriod(leadDate, period, customStart, customEnd);
+    return pipelineClients.filter((lead) => {
+      const rawDate = getScheduleDate(lead);
+      const leadDate = parseCalendarDate(rawDate);
+      return leadDate ? filterByPeriod(leadDate, period, customStart, customEnd) : false;
     });
-  }, [customEnd, customStart, filterByPeriod, leads, period]);
+  }, [customEnd, customStart, filterByPeriod, period, pipelineClients]);
 
   const uniqueFilteredLeads = useMemo(() => uniqueLeadsByIdentity(filteredLeads), [filteredLeads]);
 
