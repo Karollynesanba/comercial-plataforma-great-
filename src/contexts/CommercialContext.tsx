@@ -118,6 +118,34 @@ export const PODE_INVESTIR_OPTIONS = [
   { value: 'NAO' as PodeInvestir, label: 'Nao' },
 ];
 
+function normalizePipelineLocalIdentity(client: Partial<PipelineClient>) {
+  const phone = String(client.telefone || '').replace(/\D/g, '');
+  const name = String(client.clientName || '').trim().toLowerCase();
+  return { phone, name };
+}
+
+function upsertLocalPipelineClient(current: CommercialCloudState, client: PipelineClient) {
+  const { phone, name } = normalizePipelineLocalIdentity(client);
+  const existingIndex = current.pipelineClients.findIndex((item: any) => {
+    const itemIdentity = normalizePipelineLocalIdentity(item);
+    return item.id === client.id
+      || (phone && itemIdentity.phone === phone)
+      || (name && itemIdentity.name === name);
+  });
+
+  const nextPipelineClients = [...current.pipelineClients];
+  if (existingIndex >= 0) {
+    nextPipelineClients[existingIndex] = client;
+  } else {
+    nextPipelineClients.unshift(client);
+  }
+
+  return {
+    ...current,
+    pipelineClients: nextPipelineClients,
+  };
+}
+
 export interface PipelineClient {
   id: string;
   ativo: boolean;
@@ -589,27 +617,22 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       meetingTime: newClient.meetingTime,
     });
 
-    setCloudState((current) => ({
-      ...current,
-      pipelineClients: current.pipelineClients.some((item) => item.id === newClient.id)
-        ? current.pipelineClients.map((item) => (item.id === newClient.id ? newClient : item))
-        : [newClient, ...current.pipelineClients],
-    }));
+    updateCommercialLocalData((current) => upsertLocalPipelineClient(current, newClient));
+    window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+    setCloudState((current) => upsertLocalPipelineClient(current, newClient));
 
     try {
-      const savedClient = await savePipelineClientToCloud(newClient, user?.id);
+      const savedClient = await Promise.race([
+        savePipelineClientToCloud(newClient, user?.id),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:add_pipeline_client')), 12000)),
+      ]);
       if (!savedClient) {
         throw new Error('cloud_save_returned_empty_result');
       }
 
-      setCloudState((current) => ({
-        ...current,
-        pipelineClients: current.pipelineClients.some((item) => item.id === newClient.id)
-          ? current.pipelineClients.map((item) => (item.id === newClient.id ? savedClient : item))
-          : current.pipelineClients.some((item) => item.id === savedClient.id)
-            ? current.pipelineClients.map((item) => (item.id === savedClient.id ? savedClient : item))
-            : [savedClient, ...current.pipelineClients],
-      }));
+      updateCommercialLocalData((current) => upsertLocalPipelineClient(current, savedClient));
+      window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+      setCloudState((current) => upsertLocalPipelineClient(current, savedClient));
 
       void refreshCommercialState().catch((refreshError) => {
         console.warn('Lead created, but refreshCommercialState failed after save.', refreshError);
@@ -621,11 +644,10 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
         console.warn('Lead created, but activity log failed after save.', activityError);
       }
     } catch (error) {
-      console.warn('Lead save cloud sync failed or timed out.', error);
+      console.warn('Lead saved locally, but cloud sync failed or timed out.', error);
       await refreshCommercialState().catch((refreshError) => {
         console.warn('Lead save failed, and refresh also failed.', refreshError);
       });
-      throw error;
     }
   }, [logActivity, refreshCommercialState, session, supabaseUser?.id, user?.id]);
 
