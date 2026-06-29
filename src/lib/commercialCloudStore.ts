@@ -167,31 +167,83 @@ async function findExistingPipelineClientByIdentity(client: Partial<PipelineClie
   const normalizedName = normalizeMeetingClientName(client.clientName || '');
   if (!normalizedPhone && !normalizedName) return null;
 
-  const queries = [
-    normalizedPhone
-      ? supabase.from('pipeline_clients').select('*').eq('telefone', client.telefone || normalizedPhone).limit(10)
-      : Promise.resolve({ data: [], error: null } as const),
-    normalizedName
-      ? supabase.from('pipeline_clients').select('*').ilike('client_name', normalizedName).limit(10)
-      : Promise.resolve({ data: [], error: null } as const),
-  ];
+  const { data, error } = await supabase
+    .from('pipeline_clients')
+    .select('id, telefone, client_name, created_at, updated_at, ativo, stage, last_stage_change')
+    .limit(5000);
 
-  const [byPhone, byName] = await Promise.all(queries);
-  if ((byPhone as any).error) throw (byPhone as any).error;
-  if ((byName as any).error) throw (byName as any).error;
+  if (error) throw error;
 
-  const candidates = [
-    ...((byPhone as any).data || []),
-    ...((byName as any).data || []),
-  ];
-
-  return candidates.find((row: any) => {
+  return (data || []).find((row: any) => {
     const rowPhone = normalizePhone(row.telefone);
     const rowName = normalizeMeetingClientName(row.client_name || '');
     const phoneMatches = normalizedPhone && rowPhone && rowPhone === normalizedPhone;
     const nameMatches = normalizedName && rowName && rowName === normalizedName;
     return phoneMatches || nameMatches;
   }) || null;
+}
+
+async function findReusableDeletedPipelineClientId(client: Partial<PipelineClient>) {
+  if (!isSupabaseConfigured) return null;
+
+  const normalizedPhone = normalizePhone(client.telefone);
+  const normalizedName = normalizeMeetingClientName(client.clientName || '');
+  const leadDate = dateOnly(client.meetingDate || client.dataEntrada || client.createdAt);
+  const leadTime = toTime(client.meetingTime);
+
+  if (!normalizedPhone && !normalizedName) return null;
+
+  const [agendaEventsResult, agendamentoLeadsResult] = await Promise.all([
+    supabase
+      .from('agenda_events')
+      .select('pipeline_client_id, client_phone, client_name, event_date, event_time, created_at, updated_at')
+      .limit(5000),
+    supabase
+      .from('agendamento_leads')
+      .select('pipeline_client_id, telefone, nome, data, horario_especifico, created_at, updated_at')
+      .limit(5000),
+  ]);
+
+  if (agendaEventsResult.error) throw agendaEventsResult.error;
+  if (agendamentoLeadsResult.error) throw agendamentoLeadsResult.error;
+
+  const agendaEventCandidate = (agendaEventsResult.data || []).find((row: any) => {
+    if (!row.pipeline_client_id) return false;
+    if (leadDate && row.event_date && String(row.event_date).slice(0, 10) !== leadDate) return false;
+    if (leadTime && toTime(row.event_time) !== leadTime) return false;
+    const rowPhone = normalizePhone(row.client_phone);
+    const rowName = normalizeMeetingClientName(row.client_name || '');
+    return (normalizedPhone && rowPhone && rowPhone === normalizedPhone) || (normalizedName && rowName && rowName === normalizedName);
+  }) || null;
+
+  const agendamentoLeadCandidate = (agendamentoLeadsResult.data || []).find((row: any) => {
+    if (!row.pipeline_client_id) return false;
+    if (leadDate && row.data && normalizeLeadDateKey(row.data) !== leadDate) return false;
+    if (leadTime && normalizeLeadTimeKey(row.horario_especifico) !== leadTime) return false;
+    const rowPhone = normalizePhone(row.telefone);
+    const rowName = normalizeMeetingClientName(row.nome || '');
+    return (normalizedPhone && rowPhone && rowPhone === normalizedPhone) || (normalizedName && rowName && rowName === normalizedName);
+  }) || null;
+
+  const candidateIds = [
+    agendaEventCandidate?.pipeline_client_id,
+    agendamentoLeadCandidate?.pipeline_client_id,
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidateId of candidateIds) {
+    const { data, error } = await supabase
+      .from('pipeline_clients')
+      .select('id')
+      .eq('id', candidateId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data?.id) {
+      return candidateId;
+    }
+  }
+
+  return null;
 }
 
 function normalizeLeadDateKey(value?: string | null) {
@@ -926,6 +978,9 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   const existingClient = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id)
     ? null
     : await findExistingPipelineClientByIdentity(client);
+  const reusableDeletedClientId = !existingClient && !(typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id))
+    ? await findReusableDeletedPipelineClientId(client)
+    : null;
   const payload = localPipelineToDb(client, userId);
   const nextPayload = existingClient
     ? {
@@ -937,11 +992,17 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
         last_stage_change: new Date().toISOString(),
         created_at: existingClient.created_at,
       }
+    : reusableDeletedClientId
+      ? {
+          ...payload,
+          id: reusableDeletedClientId,
+        }
     : payload;
   const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
   console.info('[commercial-cloud] pipeline save requested', {
     hasCloudId,
     restoringExistingClient: Boolean(existingClient),
+    restoringDeletedClientId: reusableDeletedClientId,
     userId: toDbUserId(userId),
     clientName: client.clientName,
     stage: client.stage,
@@ -988,6 +1049,10 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
 export async function deletePipelineClientFromCloud(client: PipelineClient) {
   if (!isSupabaseConfigured) return;
 
+  await Promise.all([
+    supabase.from('agenda_events').update({ pipeline_client_id: null, updated_at: new Date().toISOString() }).eq('pipeline_client_id', client.id),
+    supabase.from('agendamento_leads').update({ pipeline_client_id: null, updated_at: new Date().toISOString() }).eq('pipeline_client_id', client.id),
+  ]);
   await supabase.from('pipeline_clients').delete().eq('id', client.id);
 }
 
