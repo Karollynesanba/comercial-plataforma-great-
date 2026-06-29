@@ -7,6 +7,12 @@ import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commer
 import { commercialAnswerToDb, coerceCommercialAnswer } from '@/lib/commercialAnswer';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
+function normalizePipelineIdentity(client: any) {
+  const phone = String(client.telefone || '').replace(/\D/g, '');
+  const name = String(client.clientName || '').trim().toLowerCase();
+  return { phone, name };
+}
+
 export interface PipelineClientDB {
   id: string;
   ativo: boolean | null;
@@ -142,15 +148,33 @@ export function usePipelineData() {
       const localClient = dbToLocal(client, user?.id) as any;
 
       if (!isSupabaseConfigured) {
-        const savedLocal = updateCommercialLocalData((current) => {
+        let savedLocalClient: any = null;
+        updateCommercialLocalData((current) => {
+          const { phone, name } = normalizePipelineIdentity(client);
           const nextClient = localToDb({ ...client, id: `pipeline-${crypto.randomUUID()}`, createdByUserId: user?.id || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as any, user?.id);
+          const existingIndex = current.pipelineClients.findIndex((item: any) => {
+            const itemIdentity = normalizePipelineIdentity(item);
+            return (phone && itemIdentity.phone === phone) || (name && itemIdentity.name === name);
+          });
+
+          if (existingIndex >= 0) {
+            const nextPipelineClients = [...current.pipelineClients];
+            savedLocalClient = { ...nextPipelineClients[existingIndex], ...nextClient, updatedAt: new Date().toISOString() };
+            nextPipelineClients[existingIndex] = savedLocalClient;
+            return {
+              ...current,
+              pipelineClients: nextPipelineClients,
+            };
+          }
+
+          savedLocalClient = nextClient;
           return {
             ...current,
             pipelineClients: [nextClient, ...current.pipelineClients],
           };
         });
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
-        return localToDb(savedLocal.pipelineClients[0], user?.id);
+        return localToDb(savedLocalClient, user?.id);
       }
 
       const saved = await savePipelineClientToCloud(localClient, user?.id);

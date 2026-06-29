@@ -160,6 +160,40 @@ function normalizePhone(value?: string | null) {
   return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
+async function findExistingPipelineClientByIdentity(client: Partial<PipelineClient>) {
+  if (!isSupabaseConfigured) return null;
+
+  const normalizedPhone = normalizePhone(client.telefone);
+  const normalizedName = normalizeMeetingClientName(client.clientName || '');
+  if (!normalizedPhone && !normalizedName) return null;
+
+  const queries = [
+    normalizedPhone
+      ? supabase.from('pipeline_clients').select('*').eq('telefone', client.telefone || normalizedPhone).limit(10)
+      : Promise.resolve({ data: [], error: null } as const),
+    normalizedName
+      ? supabase.from('pipeline_clients').select('*').ilike('client_name', normalizedName).limit(10)
+      : Promise.resolve({ data: [], error: null } as const),
+  ];
+
+  const [byPhone, byName] = await Promise.all(queries);
+  if ((byPhone as any).error) throw (byPhone as any).error;
+  if ((byName as any).error) throw (byName as any).error;
+
+  const candidates = [
+    ...((byPhone as any).data || []),
+    ...((byName as any).data || []),
+  ];
+
+  return candidates.find((row: any) => {
+    const rowPhone = normalizePhone(row.telefone);
+    const rowName = normalizeMeetingClientName(row.client_name || '');
+    const phoneMatches = normalizedPhone && rowPhone && rowPhone === normalizedPhone;
+    const nameMatches = normalizedName && rowName && rowName === normalizedName;
+    return phoneMatches || nameMatches;
+  }) || null;
+}
+
 function normalizeLeadDateKey(value?: string | null) {
   if (!value) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -889,28 +923,45 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
 export async function savePipelineClientToCloud(client: Partial<PipelineClient>, userId?: string | null) {
   if (!isSupabaseConfigured) return null;
 
+  const existingClient = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id)
+    ? null
+    : await findExistingPipelineClientByIdentity(client);
   const payload = localPipelineToDb(client, userId);
+  const nextPayload = existingClient
+    ? {
+        ...payload,
+        ativo: true,
+        stage: client.stage || 'NOVO',
+        lost_reason: null,
+        no_show_reason: null,
+        last_stage_change: new Date().toISOString(),
+        created_at: existingClient.created_at,
+      }
+    : payload;
   const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
   console.info('[commercial-cloud] pipeline save requested', {
     hasCloudId,
+    restoringExistingClient: Boolean(existingClient),
     userId: toDbUserId(userId),
     clientName: client.clientName,
     stage: client.stage,
     meetingDate: client.meetingDate,
     meetingTime: client.meetingTime,
-    payload,
+    payload: nextPayload,
   });
 
   const query = hasCloudId
-    ? supabase.from('pipeline_clients').update(payload).eq('id', client.id!).select('*').single()
-    : supabase.from('pipeline_clients').insert(payload).select('*').single();
+    ? supabase.from('pipeline_clients').update(nextPayload).eq('id', client.id!).select('*').single()
+    : existingClient
+      ? supabase.from('pipeline_clients').update(nextPayload).eq('id', existingClient.id).select('*').single()
+      : supabase.from('pipeline_clients').insert(nextPayload).select('*').single();
 
   const { data, error } = await query;
 
   if (error) {
     console.error('[commercial-cloud] pipeline save failed', {
       error,
-      payload,
+      payload: nextPayload,
       userId: toDbUserId(userId),
     });
     throw error;
