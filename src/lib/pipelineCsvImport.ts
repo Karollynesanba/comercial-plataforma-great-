@@ -289,15 +289,16 @@ async function importPipelineCsvFromPathIfNeeded(params: {
   version: string;
   markerKey: string;
   replaceExisting?: boolean;
+  force?: boolean;
 }) {
-  const { path, version, markerKey, replaceExisting = false } = params;
+  const { path, version, markerKey, replaceExisting = false, force = false } = params;
 
-  if (safeGetItem(markerKey) === version) {
+  if (!force && safeGetItem(markerKey) === version) {
     return { imported: false, count: 0 };
   }
 
   try {
-    if (await getCommercialSetting(markerKey) === version) {
+    if (!force && await getCommercialSetting(markerKey) === version) {
       safeSetItem(markerKey, version);
       return { imported: false, count: 0 };
     }
@@ -405,6 +406,32 @@ async function importPipelineCsvFromPathIfNeeded(params: {
   }
 }
 
+async function shouldForceMayBackupImport() {
+  if (!isSupabaseConfigured) return false;
+
+  try {
+    const [pipelineClientsResult, agendamentoLeadsResult, agendaEventsResult] = await Promise.all([
+      supabase.from('pipeline_clients').select('id', { count: 'exact', head: true }),
+      supabase.from('agendamento_leads').select('id', { count: 'exact', head: true }),
+      supabase.from('agenda_events').select('id', { count: 'exact', head: true }),
+    ]);
+
+    if (pipelineClientsResult.error || agendamentoLeadsResult.error || agendaEventsResult.error) {
+      return false;
+    }
+
+    const totalRows =
+      (pipelineClientsResult.count || 0) +
+      (agendamentoLeadsResult.count || 0) +
+      (agendaEventsResult.count || 0);
+
+    return totalRows === 0;
+  } catch (error) {
+    console.warn('Could not inspect commercial cloud counts before backup import.', error);
+    return false;
+  }
+}
+
 export async function importBundledPipelineCsvIfNeeded() {
   const result = await importPipelineCsvFromPathIfNeeded({
     path: PIPELINE_IMPORT_PATH,
@@ -430,11 +457,13 @@ export async function importBundledPipelineCsvIfNeeded() {
 }
 
 export async function importMayBackupCsvIfNeeded() {
+  const forceRestore = await shouldForceMayBackupImport();
   const result = await importPipelineCsvFromPathIfNeeded({
     path: MAY_BACKUP_IMPORT_PATH,
     version: MAY_BACKUP_IMPORT_VERSION,
     markerKey: MAY_BACKUP_IMPORT_MARKER_KEY,
     replaceExisting: true,
+    force: forceRestore,
   });
 
   if (result.imported && isSupabaseConfigured) {
