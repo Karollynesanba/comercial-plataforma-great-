@@ -975,16 +975,23 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
 export async function savePipelineClientToCloud(client: Partial<PipelineClient>, userId?: string | null) {
   if (!isSupabaseConfigured) return null;
 
+  const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
   const existingClient = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id)
     ? null
     : await findExistingPipelineClientByIdentity(client);
-  const reusableDeletedClientId = !existingClient && !(typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id))
+  const reusableDeletedClientId = !existingClient && !hasCloudId
     ? await findReusableDeletedPipelineClientId(client)
     : null;
   const payload = localPipelineToDb(client, userId);
+  const cleanPayload = hasCloudId || existingClient || reusableDeletedClientId
+    ? payload
+    : (() => {
+        const { id: _discardedId, ...rest } = payload;
+        return rest;
+      })();
   const nextPayload = existingClient
     ? {
-        ...payload,
+        ...cleanPayload,
         ativo: true,
         stage: client.stage || 'NOVO',
         lost_reason: null,
@@ -994,11 +1001,10 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
       }
     : reusableDeletedClientId
       ? {
-          ...payload,
+          ...cleanPayload,
           id: reusableDeletedClientId,
         }
-    : payload;
-  const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
+    : cleanPayload;
   console.info('[commercial-cloud] pipeline save requested', {
     hasCloudId,
     restoringExistingClient: Boolean(existingClient),
