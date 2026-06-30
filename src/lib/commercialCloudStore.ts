@@ -1017,11 +1017,53 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
     payload: nextPayload,
   });
 
-  const query = supabase
-    .rpc('commercial_pipeline_client_upsert_secure', { payload: nextPayload })
-    .single();
+  const persistDirectly = async () => {
+    const query = hasCloudId
+      ? supabase.from('pipeline_clients').update(nextPayload).eq('id', client.id!).select('*').single()
+      : existingClient
+        ? supabase.from('pipeline_clients').update(nextPayload).eq('id', existingClient.id).select('*').single()
+        : supabase.from('pipeline_clients').insert(nextPayload).select('*').single();
 
-  const { data, error } = await query;
+    return query;
+  };
+
+  let data: any = null;
+  let error: any = null;
+
+  try {
+    const result = await supabase
+      .rpc('commercial_pipeline_client_upsert_secure', { payload: nextPayload })
+      .single();
+    data = result.data;
+    error = result.error;
+  } catch (rpcError) {
+    error = rpcError;
+  }
+
+  const rpcMissing = Boolean(error && (
+    error.code === '42883'
+    || String(error.message || '').toLowerCase().includes('commercial_pipeline_client_upsert_secure')
+    || String(error.message || '').toLowerCase().includes('function')
+  ));
+
+  if (error && !rpcMissing) {
+    console.error('[commercial-cloud] pipeline save failed', {
+      error,
+      payload: nextPayload,
+      userId: toDbUserId(userId),
+    });
+    throw error;
+  }
+
+  if (rpcMissing) {
+    console.warn('[commercial-cloud] secure pipeline RPC unavailable, falling back to direct table save', {
+      error,
+      userId: toDbUserId(userId),
+    });
+    const directResult = await persistDirectly();
+    data = directResult.data;
+    error = directResult.error;
+  }
 
   if (error) {
     console.error('[commercial-cloud] pipeline save failed', {
