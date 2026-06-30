@@ -621,7 +621,16 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
         console.warn('Lead created, but activity log failed after save.', activityError);
       }
     } catch (error) {
-      console.warn('Lead save cloud sync failed or timed out.', error);
+      console.warn('[commercial] Lead save cloud sync failed or timed out.', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        userId: user?.id || null,
+        supabaseUserId: supabaseUser?.id || null,
+        clientName: newClient.clientName,
+        stage: newClient.stage,
+        meetingDate: newClient.meetingDate,
+        meetingTime: newClient.meetingTime,
+      });
       await refreshCommercialState().catch((refreshError) => {
         console.warn('Lead save failed, and refresh also failed.', refreshError);
       });

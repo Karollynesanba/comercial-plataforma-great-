@@ -121,20 +121,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     setIsSubmitting(true);
     try {
       const formattedPhone = formatPhoneForWhatsApp(data.telefone);
-      console.info('[commercial:create-lead] form submit', {
-        clientName: data.clientName,
-        telefone: data.telefone,
-        formattedPhone,
-        funil: data.funil,
-        criativo: data.criativo || null,
-        faturamento: data.faturamento,
-        agendadoPor: data.agendadoPor,
-        agendadoVia: data.agendadoVia,
-        meetingDate: data.meetingDate,
-        meetingTime: data.meetingTime,
-      });
-
-      await addPipelineClient({
+      const leadPayload = {
         ativo: true,
         clientName: data.clientName,
         clinicName: data.clientName,
@@ -167,14 +154,38 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         stage: 'NOVO' as PipelineStage,
         meetingDate: data.meetingDate,
         meetingTime: data.meetingTime,
+      };
+      console.info('[commercial:create-lead] form submit', {
+        clientName: data.clientName,
+        telefone: data.telefone,
+        formattedPhone,
+        funil: data.funil,
+        criativo: data.criativo || null,
+        faturamento: data.faturamento,
+        agendadoPor: data.agendadoPor,
+        agendadoVia: data.agendadoVia,
+        meetingDate: data.meetingDate,
+        meetingTime: data.meetingTime,
       });
+      console.info('[commercial:create-lead] payload', leadPayload);
+
+      await addPipelineClient(leadPayload);
       console.info('[commercial:create-lead] lead creation completed');
       toast.success('Cliente adicionado ao pipeline!');
       form.reset();
       onOpenChange(false);
     } catch (error) {
-      console.error('Erro ao criar cliente no pipeline:', error);
-      const message = error instanceof Error ? error.message : 'Erro ao criar cliente';
+      console.error('[commercial:create-lead] erro ao criar cliente no pipeline', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        details: typeof error === 'object' && error !== null ? (error as any).details : undefined,
+        hint: typeof error === 'object' && error !== null ? (error as any).hint : undefined,
+      });
+      const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as any).message)
+          : 'Erro ao criar cliente';
       toast.error(message);
     } finally {
       setIsSubmitting(false);
