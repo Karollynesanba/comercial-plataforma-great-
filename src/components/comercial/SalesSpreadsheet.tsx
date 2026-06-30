@@ -188,9 +188,9 @@ export function SalesSpreadsheet() {
       : <ArrowDown className="h-3 w-3 text-primary" />;
   };
 
-  const handleCellSave = (clientId: string, field: string, value: string | number) => {
+  const handleCellSave = async (clientId: string, field: string, value: string | number) => {
     try {
-      updatePipelineClient(clientId, { [field]: value });
+      await updatePipelineClient(clientId, { [field]: value } as any);
       toast.success('Atualizado com sucesso');
     } catch (error) {
       toast.error('Erro ao atualizar');

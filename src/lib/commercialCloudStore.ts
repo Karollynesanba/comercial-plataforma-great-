@@ -1096,17 +1096,6 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   });
 
   const savedClient = dbPipelineToLocal(data);
-  try {
-    await syncPipelineAutomationsToCloud(savedClient, userId);
-  } catch (syncError) {
-    console.error('[commercial-cloud] pipeline automation sync failed after successful lead save', {
-      error: syncError,
-      clientId: savedClient.id,
-      clientName: savedClient.clientName,
-      userId: toDbUserId(userId),
-    });
-    throw syncError;
-  }
   return savedClient;
 }
 
@@ -1114,8 +1103,8 @@ export async function deletePipelineClientFromCloud(client: PipelineClient) {
   if (!isSupabaseConfigured) return;
 
   await Promise.all([
-    supabase.from('agenda_events').update({ pipeline_client_id: null, updated_at: new Date().toISOString() }).eq('pipeline_client_id', client.id),
-    supabase.from('agendamento_leads').update({ pipeline_client_id: null, updated_at: new Date().toISOString() }).eq('pipeline_client_id', client.id),
+    supabase.from('agenda_events').delete().eq('pipeline_client_id', client.id),
+    supabase.from('agendamento_leads').delete().eq('pipeline_client_id', client.id),
   ]);
   await supabase.from('pipeline_clients').delete().eq('id', client.id);
 }
@@ -1240,53 +1229,26 @@ export async function archiveCriativoInCloud(name: string) {
 export async function syncPipelineAutomationsToCloud(client: PipelineClient, userId?: string | null) {
   if (!isSupabaseConfigured) return;
 
-  const leadDate = isoToBrazilianDate(client.meetingDate || client.createdAt || new Date());
-  const leadTime = toTime(client.meetingTime) || '09:00';
-  if (!leadDate) return;
-
+  const leadDate = client.meetingDate ? isoToBrazilianDate(client.meetingDate) : '';
+  const leadTime = toTime(client.meetingTime) || '';
+  const now = new Date().toISOString();
+  const normalizedPhone = normalizePhone(client.telefone);
   const leadName = normalizeMeetingClientName(client.clientName || 'Lead sem nome') || 'Lead sem nome';
-  const leadPhone = normalizePhone(client.telefone);
+  const defaultTitle = `Reuniao com ${leadName}`;
+
+  if (!leadDate || !leadTime) {
+    await Promise.all([
+      supabase.from('agenda_events').delete().eq('pipeline_client_id', client.id),
+      supabase.from('agendamento_leads').delete().eq('pipeline_client_id', client.id),
+    ]);
+    return;
+  }
+
+  const leadPhone = normalizedPhone;
   const leadStage = client.stage || 'NOVO';
   const agendaTime = `${leadTime}:00`;
-  const now = new Date().toISOString();
-
-  const [existingLeadByPhone, existingLeadByName, existingEventByPhone, existingEventByName] = await Promise.all([
-    leadPhone ? supabase.from('agendamento_leads').select('*').eq('telefone', client.telefone || leadPhone).limit(10) : Promise.resolve({ data: [] as any[], error: null }),
-    supabase.from('agendamento_leads').select('*').ilike('nome', leadName).limit(10),
-    leadPhone ? supabase.from('agenda_events').select('*').eq('client_phone', client.telefone || leadPhone).limit(10) : Promise.resolve({ data: [] as any[], error: null }),
-    supabase.from('agenda_events').select('*').ilike('client_name', leadName).limit(10),
-  ]);
-
-  if ((existingLeadByPhone as any).error) throw (existingLeadByPhone as any).error;
-  if ((existingLeadByName as any).error) throw (existingLeadByName as any).error;
-  if ((existingEventByPhone as any).error) throw (existingEventByPhone as any).error;
-  if ((existingEventByName as any).error) throw (existingEventByName as any).error;
-
-  const candidateLeads = [
-    ...((existingLeadByPhone as any).data || []),
-    ...((existingLeadByName as any).data || []),
-  ];
-  const existingLead = candidateLeads.find((lead: any) => peopleMatch(lead.telefone, lead.nome, leadPhone, leadName))
-    || candidateLeads.find((lead: any) =>
-      !lead.pipeline_client_id
-      && String(lead.data || '').trim() === leadDate
-      && normalizeLeadTimeKey(lead.horario_especifico) === leadTime
-    )
-    || null;
-
-  const candidateEvents = [
-    ...((existingEventByPhone as any).data || []),
-    ...((existingEventByName as any).data || []),
-  ];
-  const existingEvent = candidateEvents.find((event: any) => peopleMatch(event.client_phone, event.client_name || event.title, leadPhone, leadName))
-    || candidateEvents.find((event: any) =>
-      !event.pipeline_client_id
-      && String(event.event_date || '').slice(0, 10) === leadDate
-      && normalizeLeadTimeKey(event.event_time) === leadTime
-    )
-    || null;
-
   const agendamentoLeadPayload = {
+    pipeline_client_id: client.id,
     data: leadDate,
     nome: client.clientName || leadName,
     telefone: client.telefone || leadPhone,
@@ -1302,45 +1264,38 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
     funil: getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
     status: pipelineToAgendamentoStatus(leadStage),
     created_by_user_id: toDbUserId(userId) || toDbUserId(client.createdByUserId) || null,
-    created_at: existingLead?.created_at || now,
+    created_at: now,
     updated_at: now,
   };
 
   const agendaEventPayload = {
+    pipeline_client_id: client.id,
     client_name: client.clientName || leadName,
     client_phone: client.telefone || leadPhone,
-    title: existingEvent?.title || `Reuniao com ${leadName}`,
-    description: existingEvent?.description || `Lead do Pipeline - ${getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
+    title: defaultTitle,
+    description: `Lead do Pipeline - ${getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
     event_date: leadDate,
     event_time: agendaTime,
-    duration_minutes: existingEvent?.duration_minutes || 60,
-    meeting_link: existingEvent?.meeting_link || null,
-    notes: existingEvent?.notes ?? client.notes ?? null,
-    color: existingEvent?.color || agendaColorForStage(leadStage),
-    reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
-    reminder_30min_sent: existingEvent?.reminder_30min_sent || false,
+    duration_minutes: 60,
+    meeting_link: null,
+    notes: client.notes ?? null,
+    color: agendaColorForStage(leadStage),
+    reminder_2h_sent: false,
+    reminder_30min_sent: false,
     created_by_user_id: toDbUserId(userId) || toDbUserId(client.createdByUserId) || null,
-    assigned_closer_id: existingEvent?.assigned_closer_id || null,
-    team_id: existingEvent?.team_id || null,
-    created_at: existingEvent?.created_at || now,
+    assigned_closer_id: null,
+    team_id: null,
+    created_at: now,
     updated_at: now,
   };
 
-  if (existingLead) {
-    const { error: updateLeadError } = await supabase.from('agendamento_leads').update(agendamentoLeadPayload).eq('id', existingLead.id);
-    if (updateLeadError) throw updateLeadError;
-  } else {
-    const { error: insertLeadError } = await supabase.from('agendamento_leads').insert(agendamentoLeadPayload);
-    if (insertLeadError) throw insertLeadError;
-  }
+  const [{ error: leadError }, { error: eventError }] = await Promise.all([
+    supabase.from('agendamento_leads').upsert(agendamentoLeadPayload as any, { onConflict: 'pipeline_client_id' }),
+    supabase.from('agenda_events').upsert(agendaEventPayload as any, { onConflict: 'pipeline_client_id' }),
+  ]);
 
-  if (existingEvent) {
-    const { error: updateEventError } = await supabase.from('agenda_events').update(agendaEventPayload).eq('id', existingEvent.id);
-    if (updateEventError) throw updateEventError;
-  } else {
-    const { error: insertEventError } = await supabase.from('agenda_events').insert(agendaEventPayload);
-    if (insertEventError) throw insertEventError;
-  }
+  if (leadError) throw leadError;
+  if (eventError) throw eventError;
 
   console.info('[commercial-cloud] agenda sync completed', {
     clientName: client.clientName,

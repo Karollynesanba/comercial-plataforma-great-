@@ -271,9 +271,9 @@ interface CommercialContextType {
   closerDailyLogs: CloserDailyLog[];
   getNextTeamLabel: () => string;
   addPipelineClient: (client: Omit<PipelineClient, 'id' | 'createdByUserId'>, skipAgendamentoSync?: boolean) => Promise<void>;
-  updatePipelineClient: (id: string, data: Partial<PipelineClient>) => void;
-  movePipelineClient: (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => void;
-  deletePipelineClient: (id: string) => void;
+  updatePipelineClient: (id: string, data: Partial<PipelineClient>) => Promise<void>;
+  movePipelineClient: (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => Promise<void>;
+  deletePipelineClient: (id: string) => Promise<void>;
   setSalesGoal: (month: string, goalValue: number) => Promise<void>;
   setSDRGoal: (agendador: Agendador, month: string, goalCount: number) => Promise<void>;
   upsertPreSalesDailyLog: (log: Omit<PreSalesDailyLog, 'id' | 'updatedAt'>) => void;
@@ -614,6 +614,9 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       void refreshCommercialState().catch((refreshError) => {
         console.warn('Lead created, but refreshCommercialState failed after save.', refreshError);
       });
+      queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
 
       try {
         logActivity('CLIENT_CREATED', 'Pipeline', savedClient.id, `Cliente ${savedClient.clientName} criado`);
@@ -638,7 +641,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
     }
   }, [logActivity, refreshCommercialState, session, supabaseUser?.id, user?.id]);
 
-  const updatePipelineClient = useCallback((id: string, data: Partial<PipelineClient>) => {
+  const updatePipelineClient = useCallback(async (id: string, data: Partial<PipelineClient>) => {
     const previousClient = pipelineClients.find((client) => client.id === id);
     if (!previousClient) return;
     const updatedClient = { ...previousClient, ...data };
@@ -647,17 +650,21 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
-    void Promise.race([
-      savePipelineClientToCloud(updatedClient, user?.id),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:update_pipeline_client')), 8000)),
-    ])
-      .then(refreshCommercialState)
-      .catch((error) => {
-        console.warn('Pipeline client update cloud sync failed or timed out.', error);
-      });
-  }, [pipelineClients, refreshCommercialState, user?.id]);
+    try {
+      await Promise.race([
+        savePipelineClientToCloud(updatedClient, user?.id),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:update_pipeline_client')), 8000)),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
+      await refreshCommercialState();
+    } catch (error) {
+      console.warn('Pipeline client update cloud sync failed or timed out.', error);
+    }
+  }, [pipelineClients, queryClient, refreshCommercialState, user?.id]);
 
-  const movePipelineClient = useCallback((id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
+  const movePipelineClient = useCallback(async (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
     const previousClient = pipelineClients.find((client) => client.id === id);
     if (!previousClient) return;
     const updatedClient: PipelineClient = {
@@ -673,28 +680,33 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
-    void Promise.race([
-      savePipelineClientToCloud(updatedClient, user?.id),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:move_pipeline_client')), 8000)),
-    ])
-      .then(refreshCommercialState)
-      .catch((error) => {
-        console.warn('Pipeline client move cloud sync failed or timed out.', error);
-      });
-  }, [pipelineClients, refreshCommercialState, user?.id]);
+    try {
+      await Promise.race([
+        savePipelineClientToCloud(updatedClient, user?.id),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout:move_pipeline_client')), 8000)),
+      ]);
+      queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
+      await refreshCommercialState();
+    } catch (error) {
+      console.warn('Pipeline client move cloud sync failed or timed out.', error);
+    }
+  }, [pipelineClients, queryClient, refreshCommercialState, user?.id]);
 
-  const deletePipelineClient = useCallback((id: string) => {
+  const deletePipelineClient = useCallback(async (id: string) => {
     const removed = pipelineClients.find((client) => client.id === id);
     setCloudState((current) => ({
       ...current,
       pipelineClients: current.pipelineClients.filter((client) => client.id !== id),
     }));
     if (removed) {
-      void deletePipelineClientFromCloud(removed)
-        .then(refreshCommercialState)
-        .catch((error) => {
-          console.warn('Pipeline client delete cloud sync failed or timed out.', error);
-        });
+      try {
+        await deletePipelineClientFromCloud(removed);
+        await refreshCommercialState();
+      } catch (error) {
+        console.warn('Pipeline client delete cloud sync failed or timed out.', error);
+      }
     }
   }, [pipelineClients, refreshCommercialState]);
 

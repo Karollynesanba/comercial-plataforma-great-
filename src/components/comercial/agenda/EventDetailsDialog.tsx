@@ -91,9 +91,12 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       const leadPhoneDigits = lead.telefone.replace(/\D/g, '');
       const leadSlotTime = (lead.agenda_event_time || lead.horario_especifico || '').slice(0, 5);
       return (
-        leadPhoneDigits === eventPhoneDigits &&
-        lead.agenda_event_date === event.event_date &&
-        (!eventSlotTime || leadSlotTime === eventSlotTime)
+        lead.agenda_event_id === event.id ||
+        (
+          leadPhoneDigits === eventPhoneDigits &&
+          lead.agenda_event_date === event.event_date &&
+          (!eventSlotTime || leadSlotTime === eventSlotTime)
+        )
       );
     }) || null;
   }, [event, eventPhoneDigits, leads]);

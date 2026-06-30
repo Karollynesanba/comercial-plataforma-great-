@@ -98,18 +98,18 @@ export function RecontatoList({ clients, onEditClient, onNotesClient }: Recontat
     setScheduleTime(client.meetingTime || '');
   };
 
-  const handleSaveSchedule = (clientId: string) => {
+  const handleSaveSchedule = async (clientId: string) => {
     if (!scheduleDate) return;
     const meetingDate = format(scheduleDate, 'yyyy-MM-dd');
-    updatePipelineClient(clientId, {
+    await updatePipelineClient(clientId, {
       meetingDate,
       meetingTime: scheduleTime || (null as any),
     });
     setScheduleOpenFor(null);
   };
 
-  const handleClearSchedule = (clientId: string) => {
-    updatePipelineClient(clientId, {
+  const handleClearSchedule = async (clientId: string) => {
+    await updatePipelineClient(clientId, {
       meetingDate: null as any,
       meetingTime: null as any,
     });

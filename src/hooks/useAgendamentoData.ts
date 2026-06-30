@@ -20,6 +20,28 @@ function normalizeAgendamentoLeadAnswers(lead: AgendamentoLead): AgendamentoLead
   };
 }
 
+function isoToBrazilianDate(value?: string | null) {
+  if (!value) return null;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}/${month}/${year}`;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${parsed.getFullYear()}`;
+}
+
+function normalizeAgendaEventTimeInput(value?: string | null) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
 export interface AgendamentoLead {
   id: string;
   pipeline_client_id?: string | null;
@@ -207,6 +229,7 @@ function buildLeadWithAgenda(lead: any, agendaEvents: any[]): any {
 
   return {
     ...lead,
+    agenda_event_id: agendaEvent?.id || lead.agenda_event_id || null,
     agenda_event_date: agendaEvent?.event_date || null,
     agenda_event_time: agendaEvent?.event_time || null,
     meetingDate: agendaEvent?.event_date || lead.agenda_event_date || null,
@@ -523,9 +546,11 @@ export function useAgendamentoData() {
         agenda_event_title?: string | null;
         agenda_event_id?: string | null;
       };
+      const normalizedAgendaDate = agenda_event_date ? isoToBrazilianDate(agenda_event_date) : null;
+      const normalizedAgendaTime = normalizeAgendaEventTimeInput(agenda_event_time);
 
       if (!isSupabaseConfigured) {
-        const { agenda_event_id, ...safeDbUpdates } = dbUpdates as AgendamentoLeadUpdate & { agenda_event_id?: string | null };
+        const { agenda_event_id: _ignoredAgendaEventId, ...safeDbUpdates } = dbUpdates as AgendamentoLeadUpdate & { agenda_event_id?: string | null };
         const formattedPhone = safeDbUpdates.telefone ? formatPhoneForWhatsApp(safeDbUpdates.telefone) : undefined;
         updateCommercialLocalData((current) => {
           const nextLeads = current.agendamentoLeads.map((item: any) =>
@@ -534,6 +559,10 @@ export function useAgendamentoData() {
                   ...item,
                   ...safeDbUpdates,
                   ...(formattedPhone ? { telefone: formattedPhone } : {}),
+                  ...(agenda_event_id !== undefined ? { agenda_event_id } : {}),
+                  ...(normalizedAgendaDate ? { agenda_event_date: normalizedAgendaDate, data: normalizedAgendaDate } : {}),
+                  ...(normalizedAgendaTime ? { agenda_event_time: normalizedAgendaTime, horario_especifico: normalizedAgendaTime } : {}),
+                  ...(agenda_event_title !== undefined ? { agenda_event_title } : {}),
                   updated_at: new Date().toISOString(),
                 }
               : item
@@ -565,6 +594,10 @@ export function useAgendamentoData() {
       const payload = {
         ...dbUpdates,
         telefone: dbUpdates.telefone ? formatPhoneForWhatsApp(dbUpdates.telefone) : undefined,
+        ...(agenda_event_id !== undefined ? { agenda_event_id } : {}),
+        ...(normalizedAgendaDate ? { agenda_event_date: normalizedAgendaDate, data: normalizedAgendaDate } : {}),
+        ...(normalizedAgendaTime ? { agenda_event_time: normalizedAgendaTime, horario_especifico: normalizedAgendaTime } : {}),
+        ...(agenda_event_title !== undefined ? { agenda_event_title } : {}),
         updated_at: new Date().toISOString(),
       };
       const { data: updatedLead, error } = await supabase.from('agendamento_leads').update(payload).eq('id', id).select('*').single();

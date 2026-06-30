@@ -20,10 +20,10 @@ interface DeleteClientDialogProps {
 export function DeleteClientDialog({ open, onOpenChange, client }: DeleteClientDialogProps) {
   const { deletePipelineClient } = useCommercial();
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!client) return;
     
-    deletePipelineClient(client.id);
+    await deletePipelineClient(client.id);
     toast.success('Cliente removido do pipeline');
     onOpenChange(false);
   };

@@ -279,72 +279,82 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
   const now = new Date().toISOString();
 
   if (!meetingDate || !meetingTime) {
-    return current;
+    const nextAgendaEvents = current.agendaEvents.filter((event: any) =>
+      event.pipeline_client_id !== client.id && !peopleMatch(event.client_phone, event.client_name, phone, clientName)
+    );
+    const nextAgendamentoLeads = current.agendamentoLeads.filter((lead: any) =>
+      lead.pipeline_client_id !== client.id && !peopleMatch(lead.telefone, lead.nome, phone, clientName)
+    );
+    return {
+      ...current,
+      agendaEvents: nextAgendaEvents,
+      agendamentoLeads: nextAgendamentoLeads,
+    };
   }
 
-  const existingEvent = findAgendaEventForSync(current.agendaEvents, phone, clientName, meetingDate, meetingTime);
-
   const agendaEvent = {
-    ...(existingEvent || {}),
-    id: existingEvent?.id || `agenda-${crypto.randomUUID()}`,
-    title: String(existingEvent?.title || '').trim() || normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
-    description: existingEvent?.description || `Lead do Pipeline - ${getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
-    notes: existingEvent?.notes ?? client.notes ?? null,
-    client_name: existingEvent?.client_name || clientName,
-    client_phone: existingEvent?.client_phone || phone || '',
-    clinic_name: existingEvent?.clinic_name || clinicName,
-    event_date: existingEvent?.event_date || meetingDate,
-    event_time: existingEvent?.event_time || toAgendaTime(meetingTime),
-    duration_minutes: existingEvent?.duration_minutes || 60,
-    meeting_link: existingEvent?.meeting_link || null,
-    scheduled_by: existingEvent?.scheduled_by || client.agendadoPor || client.assignedSDR || null,
-    lead_stage: existingEvent?.lead_stage || client.stage || 'NOVO',
-    creative_source: existingEvent?.creative_source || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: existingEvent?.creative_source }) || null,
-    color: existingEvent?.color || agendaColorForStage(client.stage),
-    reminder_2h_sent: existingEvent?.reminder_2h_sent || false,
-    reminder_30min_sent: existingEvent?.reminder_30min_sent || false,
-    created_by_user_id: client.createdByUserId || existingEvent?.created_by_user_id || 'local-user',
-    assigned_closer_id: existingEvent?.assigned_closer_id || null,
-    created_at: existingEvent?.created_at || now,
+    pipeline_client_id: client.id,
+    id: `agenda-${crypto.randomUUID()}`,
+    title: normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
+    description: `Lead do Pipeline - ${getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
+    notes: client.notes ?? null,
+    client_name: clientName,
+    client_phone: phone || '',
+    clinic_name: clinicName,
+    event_date: meetingDate,
+    event_time: toAgendaTime(meetingTime),
+    duration_minutes: 60,
+    meeting_link: null,
+    scheduled_by: client.agendadoPor || client.assignedSDR || null,
+    lead_stage: client.stage || 'NOVO',
+    creative_source: getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil }) || null,
+    color: agendaColorForStage(client.stage),
+    reminder_2h_sent: false,
+    reminder_30min_sent: false,
+    created_by_user_id: client.createdByUserId || 'local-user',
+    assigned_closer_id: null,
+    created_at: now,
     updated_at: now,
   };
 
-  const existingLead = current.agendamentoLeads.find((lead: any) =>
-    peopleMatch(lead.telefone, lead.nome, phone, clientName)
-  );
-
   const agendamentoLead = {
-    ...(existingLead || {}),
-    id: existingLead?.id || `agendamento-${crypto.randomUUID()}`,
-    data: existingLead?.data || isoToBrazilianDate(meetingDate),
-    nome: existingLead?.nome || clientName,
-    telefone: existingLead?.telefone || phone || '',
-    horario: existingLead?.horario || timeToPeriod(meetingTime),
-    horario_especifico: existingLead?.horario_especifico || meetingTime,
-    tem_socio: existingLead?.tem_socio || coerceCommercialAnswer(client.temSocio, 'NAO'),
-    tem_mkt: existingLead?.tem_mkt || coerceCommercialAnswer(client.temMkt, 'NAO'),
-    tem_secretaria: existingLead?.tem_secretaria || coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
-    salao_ou_clinica: existingLead?.salao_ou_clinica || client.salaoOuClinica || 'NAO_INFORMADO',
-    faturamento: existingLead?.faturamento || normalizeFaturamento(client.faturamento),
-    pode_investir: existingLead?.pode_investir || client.podeInvestir || null,
-    agendado_via: existingLead?.agendado_via || client.agendadoVia || null,
-    funil: existingLead?.funil || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: existingLead?.funil }) || 'NAO IDENTIFICADO',
-    status: existingLead?.status || STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
-    created_by_user_id: client.createdByUserId || existingLead?.created_by_user_id || 'local-user',
-    created_at: existingLead?.created_at || now,
+    pipeline_client_id: client.id,
+    id: `agendamento-${crypto.randomUUID()}`,
+    data: isoToBrazilianDate(meetingDate),
+    nome: clientName,
+    telefone: phone || '',
+    horario: timeToPeriod(meetingTime),
+    horario_especifico: meetingTime,
+    tem_socio: coerceCommercialAnswer(client.temSocio, 'NAO'),
+    tem_mkt: coerceCommercialAnswer(client.temMkt, 'NAO'),
+    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
+    salao_ou_clinica: client.salaoOuClinica || 'NAO_INFORMADO',
+    faturamento: normalizeFaturamento(client.faturamento),
+    pode_investir: client.podeInvestir || null,
+    agendado_via: client.agendadoVia || null,
+    funil: getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: null }) || 'NAO IDENTIFICADO',
+    status: STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
+    created_by_user_id: client.createdByUserId || 'local-user',
+    created_at: now,
     updated_at: now,
-    agenda_event_date: existingLead?.agenda_event_date || meetingDate,
-    agenda_event_time: existingLead?.agenda_event_time || toAgendaTime(meetingTime),
+    agenda_event_date: meetingDate,
+    agenda_event_time: toAgendaTime(meetingTime),
   };
 
   return {
     ...current,
-    agendaEvents: existingEvent
-      ? current.agendaEvents.map((event: any) => event.id === existingEvent.id ? agendaEvent : event)
-      : [agendaEvent, ...current.agendaEvents],
-    agendamentoLeads: existingLead
-      ? current.agendamentoLeads.map((lead: any) => lead.id === existingLead.id ? agendamentoLead : lead)
-      : [agendamentoLead, ...current.agendamentoLeads],
+    agendaEvents: [
+      agendaEvent,
+      ...current.agendaEvents.filter((event: any) =>
+        event.pipeline_client_id !== client.id && !peopleMatch(event.client_phone, event.client_name, phone, clientName)
+      ),
+    ],
+    agendamentoLeads: [
+      agendamentoLead,
+      ...current.agendamentoLeads.filter((lead: any) =>
+        lead.pipeline_client_id !== client.id && !peopleMatch(lead.telefone, lead.nome, phone, clientName)
+      ),
+    ],
   };
 }
 
@@ -366,7 +376,20 @@ export function syncAgendamentoLeadAutomations(
   const allowPersonMatch = options?.allowPersonMatch !== false;
 
   if (!meetingDate || !agendaTime) {
-    return current;
+    const targetEventId = agendaEventId || current.agendaEvents.find((event: any) =>
+      peopleMatch(event.client_phone, event.client_name, phone, clientName)
+    )?.id;
+    const nextAgendaEvents = current.agendaEvents.filter((event: any) =>
+      event.id !== targetEventId && event.pipeline_client_id !== lead.pipeline_client_id && !peopleMatch(event.client_phone, event.client_name, phone, clientName)
+    );
+    const nextAgendamentoLeads = current.agendamentoLeads.filter((item: any) =>
+      item.id !== lead.id && item.pipeline_client_id !== lead.pipeline_client_id && !peopleMatch(item.telefone, item.nome, phone, clientName)
+    );
+    return {
+      ...current,
+      agendaEvents: nextAgendaEvents,
+      agendamentoLeads: nextAgendamentoLeads,
+    };
   }
 
   const existingEvent = agendaEventId

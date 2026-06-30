@@ -7,6 +7,7 @@ import { isCustomMeetingTitle, matchMeetingName, normalizeMeetingTitle } from '@
 
 export interface AgendaEvent {
   id: string;
+  pipeline_client_id?: string | null;
   title: string;
   description: string | null;
   notes: string | null;
@@ -46,6 +47,7 @@ export type AgendaEventInsert = Omit<
   scheduled_by?: string | null;
   lead_stage?: string | null;
   creative_source?: string | null;
+  pipeline_client_id?: string | null;
   skip_related_sync?: boolean;
 };
 export type AgendaEventUpdate = Partial<Omit<AgendaEventInsert, 'created_by_user_id'>>;
