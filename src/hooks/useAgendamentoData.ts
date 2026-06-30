@@ -500,6 +500,17 @@ export function useAgendamentoData() {
         dataEntrada: new Date(),
       } as any, user?.id);
 
+      if (savedPipeline) {
+        updateCommercialLocalData((current) => ({
+          ...current,
+          pipelineClients: current.pipelineClients.some((item: any) => item.id === savedPipeline.id)
+            ? current.pipelineClients.map((item: any) => (item.id === savedPipeline.id ? savedPipeline : item))
+            : [savedPipeline, ...current.pipelineClients],
+        }));
+      }
+
+      window.dispatchEvent(new Event('great-commercial-local-data-updated'));
+
       const payload = {
         ...lead,
         telefone: formattedPhone,
@@ -514,6 +525,8 @@ export function useAgendamentoData() {
         .select('*')
         .single();
       if (error) throw error;
+
+      window.dispatchEvent(new Event('great-commercial-local-data-updated'));
 
       return data as AgendamentoLead;
     },
