@@ -976,12 +976,35 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   if (!isSupabaseConfigured) return null;
 
   const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
-  const existingClient = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id)
-    ? null
-    : await findExistingPipelineClientByIdentity(client);
-  const reusableDeletedClientId = !existingClient && !hasCloudId
-    ? await findReusableDeletedPipelineClientId(client)
-    : null;
+  let existingClient = null;
+  let reusableDeletedClientId: string | null = null;
+
+  if (!hasCloudId) {
+    try {
+      existingClient = await findExistingPipelineClientByIdentity(client);
+    } catch (lookupError) {
+      console.warn('[commercial-cloud] pipeline identity lookup failed, continuing with a fresh save', {
+        error: lookupError,
+        userId: toDbUserId(userId),
+        clientName: client.clientName,
+        phone: client.telefone,
+      });
+    }
+
+    if (!existingClient) {
+      try {
+        reusableDeletedClientId = await findReusableDeletedPipelineClientId(client);
+      } catch (lookupError) {
+        console.warn('[commercial-cloud] reusable pipeline lookup failed, continuing with a fresh save', {
+          error: lookupError,
+          userId: toDbUserId(userId),
+          clientName: client.clientName,
+          phone: client.telefone,
+        });
+      }
+    }
+  }
+
   const payload = localPipelineToDb(client, userId);
   const cleanPayload = hasCloudId || existingClient || reusableDeletedClientId
     ? payload
