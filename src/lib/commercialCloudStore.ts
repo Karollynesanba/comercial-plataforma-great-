@@ -1096,14 +1096,17 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   });
 
   const savedClient = dbPipelineToLocal(data);
-  void syncPipelineAutomationsToCloud(savedClient, userId).catch((syncError) => {
-    console.warn('[commercial-cloud] pipeline automation sync failed after successful lead save', {
+  try {
+    await syncPipelineAutomationsToCloud(savedClient, userId);
+  } catch (syncError) {
+    console.error('[commercial-cloud] pipeline automation sync failed after successful lead save', {
       error: syncError,
       clientId: savedClient.id,
       clientName: savedClient.clientName,
       userId: toDbUserId(userId),
     });
-  });
+    throw syncError;
+  }
   return savedClient;
 }
 
@@ -1237,17 +1240,9 @@ export async function archiveCriativoInCloud(name: string) {
 export async function syncPipelineAutomationsToCloud(client: PipelineClient, userId?: string | null) {
   if (!isSupabaseConfigured) return;
 
-  if (!client.meetingDate || !client.meetingTime) {
-    console.info('[commercial-cloud] agenda sync skipped - missing meeting date/time', {
-      clientName: client.clientName,
-      userId: toDbUserId(userId),
-    });
-    return;
-  }
-
-  const leadDate = isoToBrazilianDate(client.meetingDate);
-  const leadTime = toTime(client.meetingTime);
-  if (!leadDate || !leadTime) return;
+  const leadDate = isoToBrazilianDate(client.meetingDate || client.createdAt || new Date());
+  const leadTime = toTime(client.meetingTime) || '09:00';
+  if (!leadDate) return;
 
   const leadName = normalizeMeetingClientName(client.clientName || 'Lead sem nome') || 'Lead sem nome';
   const leadPhone = normalizePhone(client.telefone);
@@ -1271,13 +1266,25 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
     ...((existingLeadByPhone as any).data || []),
     ...((existingLeadByName as any).data || []),
   ];
-  const existingLead = candidateLeads.find((lead: any) => peopleMatch(lead.telefone, lead.nome, leadPhone, leadName)) || null;
+  const existingLead = candidateLeads.find((lead: any) => peopleMatch(lead.telefone, lead.nome, leadPhone, leadName))
+    || candidateLeads.find((lead: any) =>
+      !lead.pipeline_client_id
+      && String(lead.data || '').trim() === leadDate
+      && normalizeLeadTimeKey(lead.horario_especifico) === leadTime
+    )
+    || null;
 
   const candidateEvents = [
     ...((existingEventByPhone as any).data || []),
     ...((existingEventByName as any).data || []),
   ];
-  const existingEvent = candidateEvents.find((event: any) => peopleMatch(event.client_phone, event.client_name || event.title, leadPhone, leadName)) || null;
+  const existingEvent = candidateEvents.find((event: any) => peopleMatch(event.client_phone, event.client_name || event.title, leadPhone, leadName))
+    || candidateEvents.find((event: any) =>
+      !event.pipeline_client_id
+      && String(event.event_date || '').slice(0, 10) === leadDate
+      && normalizeLeadTimeKey(event.event_time) === leadTime
+    )
+    || null;
 
   const agendamentoLeadPayload = {
     data: leadDate,
@@ -1337,6 +1344,8 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
 
   console.info('[commercial-cloud] agenda sync completed', {
     clientName: client.clientName,
+    leadDate,
+    leadTime,
     userId: toDbUserId(userId),
   });
 }
