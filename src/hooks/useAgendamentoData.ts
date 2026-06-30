@@ -533,6 +533,7 @@ export function useAgendamentoData() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
       toast.success('Lead adicionado com sucesso!');
     },
     onError: (error) => {
