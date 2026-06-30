@@ -483,45 +483,16 @@ export function useAgendamentoData() {
         throw new Error('DUPLICATE:Esse lead ja foi cadastrado. Edite o lead existente.');
       }
 
-      const pipelineData = agendamentoToPipeline(
-        {
-          ...lead,
-          telefone: formattedPhone,
-        } as any,
-        user?.id || 'cloud-user',
-        commercial?.nextTeamInQueue || 'team-equipe-7'
-      );
-
-      const savedPipeline = await savePipelineClientToCloud({
-        ...pipelineData,
-        telefone: formattedPhone,
-        createdByUserId: user?.id || 'cloud-user',
-        createdAt: new Date(),
-        dataEntrada: new Date(),
-      } as any, user?.id);
-
-      if (savedPipeline) {
-        updateCommercialLocalData((current) => ({
-          ...current,
-          pipelineClients: current.pipelineClients.some((item: any) => item.id === savedPipeline.id)
-            ? current.pipelineClients.map((item: any) => (item.id === savedPipeline.id ? savedPipeline : item))
-            : [savedPipeline, ...current.pipelineClients],
-        }));
-      }
-
-      window.dispatchEvent(new Event('great-commercial-local-data-updated'));
-
       const payload = {
         ...lead,
         telefone: formattedPhone,
-        pipeline_client_id: savedPipeline?.id || null,
         created_by_user_id: user?.id || null,
         updated_at: new Date().toISOString(),
       };
 
       const { data, error } = await supabase
         .from('agendamento_leads')
-        .upsert(payload as any, { onConflict: 'pipeline_client_id' })
+        .insert(payload as any)
         .select('*')
         .single();
       if (error) throw error;
