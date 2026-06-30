@@ -1096,6 +1096,11 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   });
 
   const savedClient = dbPipelineToLocal(data);
+  try {
+    await syncPipelineAutomationsToCloud(savedClient, userId);
+  } catch (syncError) {
+    console.warn('[commercial-cloud] agenda sync fallback failed after pipeline save', syncError);
+  }
   return savedClient;
 }
 
@@ -1229,7 +1234,8 @@ export async function archiveCriativoInCloud(name: string) {
 export async function syncPipelineAutomationsToCloud(client: PipelineClient, userId?: string | null) {
   if (!isSupabaseConfigured) return;
 
-  const leadDate = client.meetingDate ? isoToBrazilianDate(client.meetingDate) : '';
+  const leadDateIso = toLocalIsoDate(client.meetingDate);
+  const leadDate = leadDateIso ? isoToBrazilianDate(leadDateIso) : '';
   const leadTime = toTime(client.meetingTime) || '';
   const now = new Date().toISOString();
   const normalizedPhone = normalizePhone(client.telefone);
@@ -1274,7 +1280,7 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
     client_phone: client.telefone || leadPhone,
     title: defaultTitle,
     description: `Lead do Pipeline - ${getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
-    event_date: leadDate,
+    event_date: leadDateIso,
     event_time: agendaTime,
     duration_minutes: 60,
     meeting_link: null,
