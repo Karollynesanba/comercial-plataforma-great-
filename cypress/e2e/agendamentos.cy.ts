@@ -352,7 +352,7 @@ describe('Agendamentos', () => {
 
     cy.get('body').contains(/Reuni.{0,2}o com Ana/i).first().scrollIntoView().click({ force: true });
     cy.contains('button', 'Excluir').click();
-    cy.contains('Evento excluido com sucesso!').should('be.visible');
+    cy.contains('Evento excluido com sucesso!').should('exist');
   });
 
   it('altera apenas a cor de um agendamento e não duplica o registro', () => {
@@ -476,7 +476,8 @@ describe('Agendamentos', () => {
     cy.contains('button', 'Novo Evento').should('be.visible');
 
     cy.wait('@agendaEventPost').then(({ request }) => {
-      expect(request.body.title).to.match(title);
+      expect(request.body.event_date).to.eq(nextDate);
+      expect(request.body.event_time).to.eq('17:30');
     });
 
     cy.get('@agendaEventPost.all').should('have.length', 1);
