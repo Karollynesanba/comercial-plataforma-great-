@@ -1017,11 +1017,9 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
     payload: nextPayload,
   });
 
-  const query = hasCloudId
-    ? supabase.from('pipeline_clients').update(nextPayload).eq('id', client.id!).select('*').single()
-    : existingClient
-      ? supabase.from('pipeline_clients').update(nextPayload).eq('id', existingClient.id).select('*').single()
-      : supabase.from('pipeline_clients').insert(nextPayload).select('*').single();
+  const query = supabase
+    .rpc('commercial_pipeline_client_upsert_secure', { payload: nextPayload })
+    .single();
 
   const { data, error } = await query;
 
