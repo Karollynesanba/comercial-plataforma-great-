@@ -47,6 +47,7 @@ BEGIN
     WHEN NEW.stage IN ('TAXA_INTERESSE', 'NEGOCIACAO', 'FECHADO') THEN '#66FF00'
     ELSE '#3B82F6'
   END;
+  -- Convert the pipeline text team key into the UUID expected by agenda_events.team_id.
 
   INSERT INTO public.agenda_events (
     pipeline_client_id,
@@ -81,7 +82,11 @@ BEGIN
     false,
     false,
     NULL,
-    NEW.equipe,
+    CASE
+      WHEN NEW.equipe = 'team-equipe-7' THEN 'ac2c282a-54a6-491e-b133-90890e2d299d'::uuid
+      WHEN NEW.equipe = 'team-tropa-de-elite' THEN '5090ad67-315d-45f5-b4b2-5a1a73ae201d'::uuid
+      ELSE NULL
+    END,
     now()
   )
   ON CONFLICT (pipeline_client_id)
@@ -245,4 +250,3 @@ ALTER TABLE public.agendamento_leads
     'NAO_INFORMADO',
     'PERSONALIZADO'
   ));
-
