@@ -1052,6 +1052,7 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
 
   let data: any = null;
   let error: any = null;
+  let rpcError: any = null;
 
   try {
     const result = await supabase
@@ -1059,42 +1060,33 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
       .single();
     data = result.data;
     error = result.error;
-  } catch (rpcError) {
-    error = rpcError;
+  } catch (caughtRpcError) {
+    rpcError = caughtRpcError;
+    error = caughtRpcError;
   }
 
-  const rpcMissing = Boolean(error && (
-    error.code === '42883'
-    || String(error.message || '').toLowerCase().includes('commercial_pipeline_client_upsert_secure')
-    || String(error.message || '').toLowerCase().includes('function')
-  ));
-
-  if (error && !rpcMissing) {
-    console.error('[commercial-cloud] pipeline save failed', {
-      error,
-      payload: nextPayload,
-      userId: toDbUserId(userId),
-    });
-    throw error;
-  }
-
-  if (rpcMissing) {
-    console.warn('[commercial-cloud] secure pipeline RPC unavailable, falling back to direct table save', {
-      error,
-      userId: toDbUserId(userId),
-    });
-    const directResult = await persistDirectly();
-    data = directResult.data;
-    error = directResult.error;
+  if (!error && !data) {
+    error = new Error('commercial_pipeline_rpc_returned_empty_result');
   }
 
   if (error) {
-    console.error('[commercial-cloud] pipeline save failed', {
-      error,
-      payload: nextPayload,
-      userId: toDbUserId(userId),
-    });
-    throw error;
+    const directResult = await persistDirectly();
+    if (!directResult.error && directResult.data) {
+      console.warn('[commercial-cloud] secure pipeline RPC failed, but direct table save succeeded', {
+        rpcError: error,
+        userId: toDbUserId(userId),
+      });
+      data = directResult.data;
+      error = null;
+    } else {
+      console.error('[commercial-cloud] pipeline save failed', {
+        error: directResult.error || error,
+        rpcError,
+        payload: nextPayload,
+        userId: toDbUserId(userId),
+      });
+      throw directResult.error || error;
+    }
   }
 
   console.info('[commercial-cloud] pipeline save succeeded', {
