@@ -483,19 +483,16 @@ export function useAgendamentoData() {
         throw new Error('DUPLICATE:Esse lead ja foi cadastrado. Edite o lead existente.');
       }
 
-      const payload = {
-        ...lead,
-        telefone: formattedPhone,
-        created_by_user_id: user?.id || null,
-        updated_at: new Date().toISOString(),
-      };
+      const pipelineData = agendamentoToPipeline(
+        {
+          ...lead,
+          telefone: formattedPhone,
+        } as any,
+        user?.id || 'cloud-user',
+        commercial?.nextTeamInQueue || 'team-equipe-7'
+      );
 
-      const { data, error } = await supabase.from('agendamento_leads').insert(payload).select('*').single();
-      if (error) throw error;
-
-      const newLead = data as AgendamentoLead;
-      const pipelineData = agendamentoToPipeline(newLead as any, user?.id || 'cloud-user', commercial?.nextTeamInQueue || 'team-equipe-7');
-      await savePipelineClientToCloud({
+      const savedPipeline = await savePipelineClientToCloud({
         ...pipelineData,
         telefone: formattedPhone,
         createdByUserId: user?.id || 'cloud-user',
@@ -503,7 +500,22 @@ export function useAgendamentoData() {
         dataEntrada: new Date(),
       } as any, user?.id);
 
-      return newLead;
+      const payload = {
+        ...lead,
+        telefone: formattedPhone,
+        pipeline_client_id: savedPipeline?.id || null,
+        created_by_user_id: user?.id || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('agendamento_leads')
+        .upsert(payload as any, { onConflict: 'pipeline_client_id' })
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      return data as AgendamentoLead;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });

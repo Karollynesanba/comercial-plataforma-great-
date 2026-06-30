@@ -625,6 +625,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       await refreshCommercialState().catch((refreshError) => {
         console.warn('Lead save failed, and refresh also failed.', refreshError);
       });
+      throw error;
     }
   }, [logActivity, refreshCommercialState, session, supabaseUser?.id, user?.id]);
 
