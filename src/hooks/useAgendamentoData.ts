@@ -42,6 +42,23 @@ function normalizeAgendaEventTimeInput(value?: string | null) {
   return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
+function normalizeAgendaEventDateInput(value?: string | null) {
+  if (!value) return null;
+  const text = String(value).trim();
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+  const brazilianMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brazilianMatch) {
+    const [, day, month, year] = brazilianMatch;
+    return `${year}-${month}-${day}`;
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
 export interface AgendamentoLead {
   id: string;
   pipeline_client_id?: string | null;
@@ -629,8 +646,8 @@ export function useAgendamentoData() {
       const previousLeadPhoneDigits = normalizePhoneDigits(previousLead?.telefone);
       const previousLeadName = matchMeetingName(previousLead?.nome || '');
       const linkedAgendaEventId = agenda_event_id || (previousLead as any)?.agenda_event_id || (resolvedLead as any)?.agenda_event_id || null;
-      const agendaDate = agenda_event_date || resolvedLead.data || null;
-      const agendaTime = agenda_event_time || resolvedLead.horario_especifico || null;
+      const agendaDate = normalizeAgendaEventDateInput(agenda_event_date || resolvedLead.data || previousLead?.data || null);
+      const agendaTime = normalizeAgendaEventTimeInput(agenda_event_time || resolvedLead.horario_especifico || previousLead?.horario_especifico || null);
 
       try {
         if (agendaDate && agendaTime) {
@@ -652,23 +669,25 @@ export function useAgendamentoData() {
           const defaultAgendaTitle = normalizeMeetingTitle(leadName || resolvedLead.nome || 'Lead') || `Reuniao com ${leadName || resolvedLead.nome || 'Lead'}`;
           const nextAgendaTitle = explicitAgendaTitle || existingAgendaTitle || defaultAgendaTitle;
           const nextAgendaPipelineClientId = matchingEvent?.pipeline_client_id || (linkedAgendaEventId ? (resolvedLead as any)?.pipeline_client_id || null : null);
+          const nextAgendaEventId = matchingEvent?.id || linkedAgendaEventId || null;
+          const nextAgendaEventTime = agendaTime.length === 5 ? `${agendaTime}:00` : agendaTime;
 
           const agendaPayload = {
             ...(matchingEvent || {}),
             pipeline_client_id: nextAgendaPipelineClientId,
             title: nextAgendaTitle,
-            description: matchingEvent?.description || (resolvedLead.funil ? `Lead de Agendamento - ${resolvedLead.funil}` : 'Lead de Agendamento'),
-            notes: matchingEvent?.notes ?? resolvedLead.notes ?? null,
-            client_name: leadName || normalizeMeetingClientName(matchingEvent?.client_name) || 'Lead sem nome',
-            client_phone: matchingEvent?.client_phone || leadPhone || '',
-            clinic_name: matchingEvent?.clinic_name || resolvedLead.clinic_name || leadName || 'Lead sem nome',
-            event_date: matchingEvent?.event_date || agendaDate,
-            event_time: matchingEvent?.event_time || (agendaTime.length === 5 ? `${agendaTime}:00` : agendaTime),
+            description: resolvedLead.funil ? `Lead de Agendamento - ${resolvedLead.funil}` : 'Lead de Agendamento',
+            notes: resolvedLead.notes ?? matchingEvent?.notes ?? null,
+            client_name: leadName || normalizeMeetingClientName(matchingEvent?.client_name) || resolvedLead.nome || 'Lead sem nome',
+            client_phone: leadPhone || matchingEvent?.client_phone || '',
+            clinic_name: resolvedLead.clinic_name || leadName || matchingEvent?.clinic_name || 'Lead sem nome',
+            event_date: agendaDate,
+            event_time: nextAgendaEventTime,
             duration_minutes: matchingEvent?.duration_minutes || 60,
             meeting_link: matchingEvent?.meeting_link || null,
-            scheduled_by: matchingEvent?.scheduled_by || resolvedLead.agendado_por || null,
-            lead_stage: matchingEvent?.lead_stage || AGENDAMENTO_STATUS_TO_PIPELINE_STAGE[resolvedLead.status] || 'NOVO',
-            creative_source: matchingEvent?.creative_source || resolvedLead.funil || null,
+            scheduled_by: resolvedLead.agendado_por || matchingEvent?.scheduled_by || null,
+            lead_stage: AGENDAMENTO_STATUS_TO_PIPELINE_STAGE[resolvedLead.status] || matchingEvent?.lead_stage || 'NOVO',
+            creative_source: resolvedLead.funil || matchingEvent?.creative_source || null,
             color: matchingEvent?.color || '#3B82F6',
             reminder_2h_sent: matchingEvent?.reminder_2h_sent || false,
             reminder_30min_sent: matchingEvent?.reminder_30min_sent || false,
@@ -681,9 +700,39 @@ export function useAgendamentoData() {
           if (matchingEvent?.id) {
             const { error: updateAgendaError } = await supabase.from('agenda_events').update(agendaPayload as any).eq('id', matchingEvent.id);
             if (updateAgendaError) throw updateAgendaError;
+          } else if (nextAgendaEventId) {
+            const { error: updateAgendaError } = await supabase.from('agenda_events').update(agendaPayload as any).eq('id', nextAgendaEventId);
+            if (updateAgendaError) throw updateAgendaError;
           } else {
-            const { error: insertAgendaError } = await supabase.from('agenda_events').insert(agendaPayload as any);
+            const { data: insertedAgendaEvent, error: insertAgendaError } = await supabase.from('agenda_events').insert(agendaPayload as any).select('*').single();
             if (insertAgendaError) throw insertAgendaError;
+            if (insertedAgendaEvent?.id) {
+              const { error: linkLeadError } = await supabase
+                .from('agendamento_leads')
+                .update({
+                  agenda_event_id: insertedAgendaEvent.id,
+                  agenda_event_date: agendaDate,
+                  agenda_event_time: agendaTime,
+                  agenda_event_title: nextAgendaTitle,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', id);
+              if (linkLeadError) throw linkLeadError;
+            }
+          }
+
+          if (nextAgendaEventId && String((resolvedLead as any)?.agenda_event_id || '') !== String(nextAgendaEventId)) {
+            const { error: linkLeadError } = await supabase
+              .from('agendamento_leads')
+              .update({
+                agenda_event_id: nextAgendaEventId,
+                agenda_event_date: agendaDate,
+                agenda_event_time: agendaTime,
+                agenda_event_title: nextAgendaTitle,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', id);
+            if (linkLeadError) throw linkLeadError;
           }
         }
 

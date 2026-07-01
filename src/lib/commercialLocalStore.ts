@@ -421,11 +421,41 @@ export function syncAgendamentoLeadAutomations(
     updated_at: now,
   };
 
+  const resolvedAgendaEventId = agendaEvent.id;
+  const nextAgendamentoLeads = current.agendamentoLeads.map((item: any) => {
+    if (item.id !== lead.id) return item;
+    return {
+      ...item,
+      pipeline_client_id: lead.pipeline_client_id || item.pipeline_client_id || fallbackPipelineClient?.id || null,
+      data: isoToBrazilianDate(meetingDate),
+      nome: clientName,
+      telefone: phone || item.telefone,
+      horario: timeToPeriod(meetingTime),
+      horario_especifico: meetingTime,
+      tem_socio: coerceCommercialAnswer(lead.tem_socio, 'NAO'),
+      tem_mkt: coerceCommercialAnswer(lead.tem_mkt, 'NAO'),
+      tem_secretaria: coerceCommercialAnswer(lead.tem_secretaria) || 'NAO_SEI',
+      salao_ou_clinica: lead.salaoOuClinica || item.salao_ou_clinica || 'NAO_INFORMADO',
+      faturamento: normalizeFaturamento(lead.faturamento),
+      pode_investir: lead.pode_investir || item.pode_investir || null,
+      agendado_via: lead.agendado_via || item.agendado_via || null,
+      funil: getStoredLeadOrigin({ criativo: fallbackPipelineClient?.criativo, funil: lead.funil }) || item.funil,
+      status: STAGE_TO_AGENDAMENTO_STATUS[lead.stage] || item.status || 'NOVO_LEAD',
+      created_by_user_id: lead.created_by_user_id || item.created_by_user_id || 'local-user',
+      updated_at: now,
+      agenda_event_id: resolvedAgendaEventId,
+      agenda_event_date: meetingDate,
+      agenda_event_time: toAgendaTime(meetingTime),
+      agenda_event_title: agendaEvent.title,
+    };
+  });
+
   return {
     ...current,
     agendaEvents: existingEvent
       ? current.agendaEvents.map((event: any) => event.id === existingEvent.id ? agendaEvent : event)
       : [agendaEvent, ...current.agendaEvents],
+    agendamentoLeads: nextAgendamentoLeads,
     pipelineClients: current.pipelineClients.map((client: any) => {
       const targetPipelineClientId = lead.pipeline_client_id || fallbackPipelineClient?.id || null;
       if (targetPipelineClientId) {
