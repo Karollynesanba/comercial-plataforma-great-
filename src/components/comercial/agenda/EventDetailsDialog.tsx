@@ -92,6 +92,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       const leadSlotTime = (lead.agenda_event_time || lead.horario_especifico || '').slice(0, 5);
       return (
         lead.agenda_event_id === event.id ||
+        (event.pipeline_client_id && lead.pipeline_client_id === event.pipeline_client_id) ||
         (
           leadPhoneDigits === eventPhoneDigits &&
           lead.agenda_event_date === event.event_date &&
@@ -264,6 +265,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
         await updateLead.mutateAsync({
           id: leadData.id,
           agenda_event_id: event.id,
+          pipeline_client_id: leadData.pipeline_client_id || pipelineClient?.id || null,
           ...leadPatch,
         });
       }

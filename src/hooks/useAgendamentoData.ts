@@ -417,18 +417,24 @@ function findMatchingAgendaEvent(agendaEvents: AgendaEventLike[], target: {
   const exactMatch = agendaEvents.find((event) => {
     const eventPhoneDigits = normalizePhoneDigits(event.client_phone);
     const eventName = matchMeetingName(event.client_name || event.title || '');
+    const slotMatches = matchesAgendaSlot(event, target.agendaDate, target.agendaTime);
+
+    if (!slotMatches) {
+      return false;
+    }
+
     return (
-      matchesAgendaSlot(event, target.agendaDate, target.agendaTime) &&
-      (
-        (target.phoneDigits && eventPhoneDigits && target.phoneDigits === eventPhoneDigits) ||
-        (target.previousPhoneDigits && eventPhoneDigits && target.previousPhoneDigits === eventPhoneDigits) ||
-        (target.leadName && eventName && target.leadName.toLowerCase() === eventName) ||
-        (target.previousLeadName && eventName && target.previousLeadName === eventName)
-      )
+      (target.phoneDigits && eventPhoneDigits && target.phoneDigits === eventPhoneDigits) ||
+      (target.previousPhoneDigits && eventPhoneDigits && target.previousPhoneDigits === eventPhoneDigits) ||
+      (target.leadName && eventName && target.leadName.toLowerCase() === eventName) ||
+      (target.previousLeadName && eventName && target.previousLeadName === eventName)
     );
   });
 
   if (exactMatch) return exactMatch;
+
+  const slotOnlyMatch = agendaEvents.find((event) => matchesAgendaSlot(event, target.agendaDate, target.agendaTime));
+  if (slotOnlyMatch) return slotOnlyMatch;
 
   return null;
 }
@@ -478,6 +484,7 @@ export function useAgendamentoData() {
     mutationFn: async (lead: AgendamentoLeadInsert) => {
       if (!isSupabaseConfigured) {
         const formattedPhone = formatPhoneForWhatsApp(lead.telefone);
+        const normalizedName = normalizeMeetingClientName(lead.nome || '');
         const newLead = {
           id: `agendamento-${crypto.randomUUID()}`,
           ...lead,
@@ -489,11 +496,13 @@ export function useAgendamentoData() {
 
         updateCommercialLocalData((current) => {
           const exists = current.agendamentoLeads.some((item: any) =>
-            String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '')
+            String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '') &&
+            normalizeMeetingClientName(item.nome || '') === normalizedName
           );
           const nextLeads = exists
             ? current.agendamentoLeads.map((item: any) =>
-                String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '')
+                String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '') &&
+                normalizeMeetingClientName(item.nome || '') === normalizedName
                   ? newLead
                   : item
               )
@@ -515,8 +524,12 @@ export function useAgendamentoData() {
       }
 
       const formattedPhone = formatPhoneForWhatsApp(lead.telefone);
-      const { data: existingLeads } = await supabase.from('agendamento_leads').select('id, telefone').limit(1000);
-      const duplicate = (existingLeads || []).find((item: any) => item.telefone.replace(/\D/g, '') === formattedPhone.replace(/\D/g, ''));
+      const normalizedName = normalizeMeetingClientName(lead.nome || '');
+      const { data: existingLeads } = await supabase.from('agendamento_leads').select('id, telefone, nome').limit(1000);
+      const duplicate = (existingLeads || []).find((item: any) =>
+        item.telefone.replace(/\D/g, '') === formattedPhone.replace(/\D/g, '') &&
+        normalizeMeetingClientName(item.nome || '') === normalizedName
+      );
 
       if (duplicate) {
         throw new Error('DUPLICATE:Esse lead ja foi cadastrado. Edite o lead existente.');
@@ -685,13 +698,11 @@ export function useAgendamentoData() {
           const existingAgendaTitle = String(matchingEvent?.title || '').trim();
           const defaultAgendaTitle = normalizeMeetingTitle(leadName || resolvedLead.nome || 'Lead') || `Reuniao com ${leadName || resolvedLead.nome || 'Lead'}`;
           const nextAgendaTitle = explicitAgendaTitle || existingAgendaTitle || defaultAgendaTitle;
-          const nextAgendaPipelineClientId = matchingEvent?.pipeline_client_id || (linkedAgendaEventId ? (resolvedLead as any)?.pipeline_client_id || null : null);
           const nextAgendaEventId = matchingEvent?.id || linkedAgendaEventId || null;
           const nextAgendaEventTime = agendaTime.length === 5 ? `${agendaTime}:00` : agendaTime;
 
           const agendaPayload = {
             ...(matchingEvent || {}),
-            pipeline_client_id: nextAgendaPipelineClientId,
             title: nextAgendaTitle,
             description: resolvedLead.funil ? `Lead de Agendamento - ${resolvedLead.funil}` : 'Lead de Agendamento',
             notes: resolvedLead.notes ?? matchingEvent?.notes ?? null,
@@ -714,14 +725,21 @@ export function useAgendamentoData() {
             updated_at: new Date().toISOString(),
           };
 
-          if (matchingEvent?.id) {
-            const { error: updateAgendaError } = await supabase.from('agenda_events').update(agendaPayload as any).eq('id', matchingEvent.id);
+          if (nextAgendaEventId) {
+            const { error: updateAgendaError } = await supabase.from('agenda_events').update({
+              ...agendaPayload,
+              pipeline_client_id: (matchingEvent?.pipeline_client_id || resolvedLead.pipeline_client_id || null),
+            } as any).eq('id', nextAgendaEventId);
             if (updateAgendaError) throw updateAgendaError;
-          } else if (nextAgendaEventId) {
-            const { error: updateAgendaError } = await supabase.from('agenda_events').update(agendaPayload as any).eq('id', nextAgendaEventId);
-            if (updateAgendaError) throw updateAgendaError;
-          } else {
-            const { data: insertedAgendaEvent, error: insertAgendaError } = await supabase.from('agenda_events').insert(agendaPayload as any).select('*').single();
+          } else if (!resolvedLead.agenda_event_id) {
+            const { data: insertedAgendaEvent, error: insertAgendaError } = await supabase
+              .from('agenda_events')
+              .insert({
+                ...agendaPayload,
+                pipeline_client_id: resolvedLead.pipeline_client_id || null,
+              } as any)
+              .select('*')
+              .single();
             if (insertAgendaError) throw insertAgendaError;
             if (insertedAgendaEvent?.id) {
               const { error: linkLeadError } = await supabase
