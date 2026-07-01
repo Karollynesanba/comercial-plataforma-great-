@@ -160,11 +160,36 @@ function normalizePhone(value?: string | null) {
   return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
+function normalizePipelineIdentityName(value?: string | null) {
+  return normalizeMeetingClientName(value || '').trim().toLowerCase();
+}
+
+function hasExactPipelineIdentity(left: { telefone?: string | null; clientName?: string | null }, right: { telefone?: string | null; clientName?: string | null }) {
+  const leftPhone = normalizePhone(left.telefone);
+  const rightPhone = normalizePhone(right.telefone);
+  const leftName = normalizePipelineIdentityName(left.clientName);
+  const rightName = normalizePipelineIdentityName(right.clientName);
+
+  if (leftPhone && rightPhone && leftName && rightName) {
+    return leftPhone === rightPhone && leftName === rightName;
+  }
+
+  if (leftPhone && rightPhone) {
+    return leftPhone === rightPhone;
+  }
+
+  if (leftName && rightName) {
+    return leftName === rightName;
+  }
+
+  return false;
+}
+
 async function findExistingPipelineClientByIdentity(client: Partial<PipelineClient>) {
   if (!isSupabaseConfigured) return null;
 
   const normalizedPhone = normalizePhone(client.telefone);
-  const normalizedName = normalizeMeetingClientName(client.clientName || '');
+  const normalizedName = normalizePipelineIdentityName(client.clientName || '');
   if (!normalizedPhone && !normalizedName) return null;
 
   const { data, error } = await supabase
@@ -175,11 +200,10 @@ async function findExistingPipelineClientByIdentity(client: Partial<PipelineClie
   if (error) throw error;
 
   return (data || []).find((row: any) => {
-    const rowPhone = normalizePhone(row.telefone);
-    const rowName = normalizeMeetingClientName(row.client_name || '');
-    const phoneMatches = normalizedPhone && rowPhone && rowPhone === normalizedPhone;
-    const nameMatches = normalizedName && rowName && rowName === normalizedName;
-    return phoneMatches || nameMatches;
+    return hasExactPipelineIdentity(
+      { telefone: row.telefone, clientName: row.client_name },
+      { telefone: normalizedPhone, clientName: normalizedName }
+    );
   }) || null;
 }
 
@@ -187,7 +211,7 @@ async function findReusableDeletedPipelineClientId(client: Partial<PipelineClien
   if (!isSupabaseConfigured) return null;
 
   const normalizedPhone = normalizePhone(client.telefone);
-  const normalizedName = normalizeMeetingClientName(client.clientName || '');
+  const normalizedName = normalizePipelineIdentityName(client.clientName || '');
   const leadDate = dateOnly(client.meetingDate || client.dataEntrada || client.createdAt);
   const leadTime = toTime(client.meetingTime);
 
@@ -211,18 +235,20 @@ async function findReusableDeletedPipelineClientId(client: Partial<PipelineClien
     if (!row.pipeline_client_id) return false;
     if (leadDate && row.event_date && String(row.event_date).slice(0, 10) !== leadDate) return false;
     if (leadTime && toTime(row.event_time) !== leadTime) return false;
-    const rowPhone = normalizePhone(row.client_phone);
-    const rowName = normalizeMeetingClientName(row.client_name || '');
-    return (normalizedPhone && rowPhone && rowPhone === normalizedPhone) || (normalizedName && rowName && rowName === normalizedName);
+    return hasExactPipelineIdentity(
+      { telefone: row.client_phone, clientName: row.client_name },
+      { telefone: normalizedPhone, clientName: normalizedName }
+    );
   }) || null;
 
   const agendamentoLeadCandidate = (agendamentoLeadsResult.data || []).find((row: any) => {
     if (!row.pipeline_client_id) return false;
     if (leadDate && row.data && normalizeLeadDateKey(row.data) !== leadDate) return false;
     if (leadTime && normalizeLeadTimeKey(row.horario_especifico) !== leadTime) return false;
-    const rowPhone = normalizePhone(row.telefone);
-    const rowName = normalizeMeetingClientName(row.nome || '');
-    return (normalizedPhone && rowPhone && rowPhone === normalizedPhone) || (normalizedName && rowName && rowName === normalizedName);
+    return hasExactPipelineIdentity(
+      { telefone: row.telefone, clientName: row.nome },
+      { telefone: normalizedPhone, clientName: normalizedName }
+    );
   }) || null;
 
   const candidateIds = [

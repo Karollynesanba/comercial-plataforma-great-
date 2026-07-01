@@ -277,11 +277,22 @@ function csvRowToPipelineClientV2(row: Record<string, string>, index: number) {
 function isSameClient(left: any, right: any) {
   const leftPhone = normalizePhone(left.telefone || '');
   const rightPhone = normalizePhone(right.telefone || '');
-  if (leftPhone && rightPhone && leftPhone === rightPhone) return true;
-
   const leftName = String(left.clientName || '').trim().toLowerCase();
   const rightName = String(right.clientName || '').trim().toLowerCase();
-  return Boolean(leftName && rightName && leftName === rightName);
+
+  if (leftPhone && rightPhone && leftName && rightName) {
+    return leftPhone === rightPhone && leftName === rightName;
+  }
+
+  if (leftPhone && rightPhone) {
+    return leftPhone === rightPhone;
+  }
+
+  if (leftName && rightName) {
+    return leftName === rightName;
+  }
+
+  return false;
 }
 
 async function importPipelineCsvFromPathIfNeeded(params: {
