@@ -181,7 +181,22 @@ AS $$
 DECLARE
   pc RECORD;
   existing_event RECORD;
-  exact_slot_event RECORD;
+  exact_slot_event_id UUID;
+  exact_slot_event_title TEXT;
+  exact_slot_event_description TEXT;
+  exact_slot_event_notes TEXT;
+  exact_slot_event_client_name TEXT;
+  exact_slot_event_client_phone TEXT;
+  exact_slot_event_clinic_name TEXT;
+  exact_slot_event_scheduled_by TEXT;
+  exact_slot_event_lead_stage TEXT;
+  exact_slot_event_creative_source TEXT;
+  exact_slot_event_duration_minutes INTEGER;
+  exact_slot_event_meeting_link TEXT;
+  exact_slot_event_color TEXT;
+  exact_slot_event_reminder_2h_sent BOOLEAN;
+  exact_slot_event_reminder_30min_sent BOOLEAN;
+  exact_slot_event_created_by_user_id UUID;
   existing_lead RECORD;
   exact_slot_lead RECORD;
   v_event_date DATE;
@@ -238,8 +253,40 @@ BEGIN
   LIMIT 1;
 
   IF existing_event.id IS NULL THEN
-    SELECT *
-    INTO exact_slot_event
+    SELECT
+      ae.id,
+      ae.title,
+      ae.description,
+      ae.notes,
+      ae.client_name,
+      ae.client_phone,
+      ae.clinic_name,
+      ae.scheduled_by,
+      ae.lead_stage,
+      ae.creative_source,
+      ae.duration_minutes,
+      ae.meeting_link,
+      ae.color,
+      ae.reminder_2h_sent,
+      ae.reminder_30min_sent,
+      ae.created_by_user_id
+    INTO
+      exact_slot_event_id,
+      exact_slot_event_title,
+      exact_slot_event_description,
+      exact_slot_event_notes,
+      exact_slot_event_client_name,
+      exact_slot_event_client_phone,
+      exact_slot_event_clinic_name,
+      exact_slot_event_scheduled_by,
+      exact_slot_event_lead_stage,
+      exact_slot_event_creative_source,
+      exact_slot_event_duration_minutes,
+      exact_slot_event_meeting_link,
+      exact_slot_event_color,
+      exact_slot_event_reminder_2h_sent,
+      exact_slot_event_reminder_30min_sent,
+      exact_slot_event_created_by_user_id
     FROM public.agenda_events ae
     WHERE regexp_replace(COALESCE(ae.client_phone, ''), '\D', '', 'g') = v_phone
       AND ae.event_date = v_event_date
@@ -271,29 +318,29 @@ BEGIN
       created_by_user_id = COALESCE(existing_event.created_by_user_id, pc.created_by_user_id),
       updated_at = now()
     WHERE id = existing_event.id;
-  ELSIF exact_slot_event.id IS NOT NULL THEN
+  ELSIF exact_slot_event_id IS NOT NULL THEN
     UPDATE public.agenda_events
     SET
       pipeline_client_id = pc.id,
-      title = COALESCE(NULLIF(BTRIM(exact_slot_event.title), ''), v_title),
-      description = COALESCE(NULLIF(BTRIM(exact_slot_event.description), ''), v_description),
-      notes = COALESCE(exact_slot_event.notes, pc.notes),
-      client_name = COALESCE(NULLIF(BTRIM(exact_slot_event.client_name), ''), pc.client_name),
-      client_phone = COALESCE(NULLIF(BTRIM(exact_slot_event.client_phone), ''), v_phone),
-      clinic_name = COALESCE(NULLIF(BTRIM(exact_slot_event.clinic_name), ''), pc.clinic_name, pc.client_name),
-      scheduled_by = COALESCE(exact_slot_event.scheduled_by, pc.agendado_por, pc.agendado_por),
-      lead_stage = COALESCE(exact_slot_event.lead_stage, pc.stage),
-      creative_source = COALESCE(exact_slot_event.creative_source, pc.criativo),
+      title = COALESCE(NULLIF(BTRIM(exact_slot_event_title), ''), v_title),
+      description = COALESCE(NULLIF(BTRIM(exact_slot_event_description), ''), v_description),
+      notes = COALESCE(exact_slot_event_notes, pc.notes),
+      client_name = COALESCE(NULLIF(BTRIM(exact_slot_event_client_name), ''), pc.client_name),
+      client_phone = COALESCE(NULLIF(BTRIM(exact_slot_event_client_phone), ''), v_phone),
+      clinic_name = COALESCE(NULLIF(BTRIM(exact_slot_event_clinic_name), ''), pc.clinic_name, pc.client_name),
+      scheduled_by = COALESCE(exact_slot_event_scheduled_by, pc.agendado_por, pc.agendado_por),
+      lead_stage = COALESCE(exact_slot_event_lead_stage, pc.stage),
+      creative_source = COALESCE(exact_slot_event_creative_source, pc.criativo),
       event_date = v_event_date,
       event_time = v_event_time,
-      duration_minutes = COALESCE(exact_slot_event.duration_minutes, 60),
-      meeting_link = exact_slot_event.meeting_link,
-      color = COALESCE(NULLIF(BTRIM(exact_slot_event.color), ''), v_color),
-      reminder_2h_sent = COALESCE(exact_slot_event.reminder_2h_sent, false),
-      reminder_30min_sent = COALESCE(exact_slot_event.reminder_30min_sent, false),
-      created_by_user_id = COALESCE(exact_slot_event.created_by_user_id, pc.created_by_user_id),
+      duration_minutes = COALESCE(exact_slot_event_duration_minutes, 60),
+      meeting_link = exact_slot_event_meeting_link,
+      color = COALESCE(NULLIF(BTRIM(exact_slot_event_color), ''), v_color),
+      reminder_2h_sent = COALESCE(exact_slot_event_reminder_2h_sent, false),
+      reminder_30min_sent = COALESCE(exact_slot_event_reminder_30min_sent, false),
+      created_by_user_id = COALESCE(exact_slot_event_created_by_user_id, pc.created_by_user_id),
       updated_at = now()
-    WHERE id = exact_slot_event.id;
+    WHERE id = exact_slot_event_id;
   ELSE
     INSERT INTO public.agenda_events (
       pipeline_client_id,
@@ -382,10 +429,10 @@ BEGIN
     UPDATE public.agendamento_leads
     SET
       pipeline_client_id = pc.id,
-      agenda_event_id = COALESCE(existing_lead.agenda_event_id, exact_slot_event.id, existing_event.id),
+      agenda_event_id = COALESCE(existing_lead.agenda_event_id, exact_slot_event_id, existing_event.id),
       agenda_event_date = TO_CHAR(v_event_date, 'YYYY-MM-DD'),
       agenda_event_time = LEFT(TO_CHAR(v_event_time, 'HH24:MI:SS'), 5),
-      agenda_event_title = COALESCE(NULLIF(BTRIM(existing_lead.agenda_event_title), ''), COALESCE(NULLIF(BTRIM(existing_event.title), ''), NULLIF(BTRIM(exact_slot_event.title), ''), v_title)),
+      agenda_event_title = COALESCE(NULLIF(BTRIM(existing_lead.agenda_event_title), ''), COALESCE(NULLIF(BTRIM(existing_event.title), ''), NULLIF(BTRIM(exact_slot_event_title), ''), v_title)),
       data = TO_CHAR(v_event_date, 'DD/MM/YYYY'),
       nome = COALESCE(NULLIF(BTRIM(existing_lead.nome), ''), pc.client_name),
       telefone = COALESCE(NULLIF(BTRIM(existing_lead.telefone), ''), v_phone),
@@ -411,10 +458,10 @@ BEGIN
     UPDATE public.agendamento_leads
     SET
       pipeline_client_id = pc.id,
-      agenda_event_id = COALESCE(exact_slot_lead.agenda_event_id, exact_slot_event.id, existing_event.id),
+      agenda_event_id = COALESCE(exact_slot_lead.agenda_event_id, exact_slot_event_id, existing_event.id),
       agenda_event_date = TO_CHAR(v_event_date, 'YYYY-MM-DD'),
       agenda_event_time = LEFT(TO_CHAR(v_event_time, 'HH24:MI:SS'), 5),
-      agenda_event_title = COALESCE(NULLIF(BTRIM(exact_slot_lead.agenda_event_title), ''), COALESCE(NULLIF(BTRIM(existing_event.title), ''), NULLIF(BTRIM(exact_slot_event.title), ''), v_title)),
+      agenda_event_title = COALESCE(NULLIF(BTRIM(exact_slot_lead.agenda_event_title), ''), COALESCE(NULLIF(BTRIM(existing_event.title), ''), NULLIF(BTRIM(exact_slot_event_title), ''), v_title)),
       data = TO_CHAR(v_event_date, 'DD/MM/YYYY'),
       nome = COALESCE(NULLIF(BTRIM(exact_slot_lead.nome), ''), pc.client_name),
       telefone = COALESCE(NULLIF(BTRIM(exact_slot_lead.telefone), ''), v_phone),
