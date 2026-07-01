@@ -215,7 +215,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     }
   };
 
-  const handleSaveEvent = async () => {
+  const saveCurrentChanges = async () => {
     const canonicalClientName = nextClientName;
     const shouldBeNoShow = !isLostLeadContext && isNoShowColor(eventForm.color);
     const resolvedLeadStatus = isLostLeadContext
@@ -253,6 +253,13 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     }
     if (eventForm.meeting_link !== (event.meeting_link || '')) {
       eventPatch.meeting_link = eventForm.meeting_link || null;
+    }
+
+    if (Object.keys(eventPatch).length > 0) {
+      await updateEvent.mutateAsync({
+        id: event.id,
+        ...eventPatch,
+      });
     }
 
     if (leadData) {
@@ -309,14 +316,12 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       }
     }
 
-    if (Object.keys(eventPatch).length > 0) {
-      await updateEvent.mutateAsync({
-        id: event.id,
-        ...eventPatch,
-      });
-    }
-
     setIsEditingEvent(false);
+    setIsEditingLead(false);
+  };
+
+  const handleSaveEvent = async () => {
+    await saveCurrentChanges();
   };
 
   const handleColorChange = async (color: string) => {
@@ -344,60 +349,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   };
 
   const handleSaveLead = async () => {
-    const shouldBeNoShow = !isLostLeadContext && isNoShowColor(eventForm.color);
-    const resolvedLeadStatus = isLostLeadContext
-      ? 'PERDIDO'
-      : shouldBeNoShow
-      ? 'NO_SHOW'
-      : leadForm.status === 'NO_SHOW'
-        ? 'NOVO_LEAD'
-      : leadForm.status;
-
-    if (leadData) {
-      const leadPatch: Record<string, any> = {};
-      if (leadForm.faturamento !== leadData.faturamento) leadPatch.faturamento = leadForm.faturamento;
-      if (leadForm.tem_socio !== leadData.tem_socio) leadPatch.tem_socio = leadForm.tem_socio;
-      if (leadForm.tem_mkt !== leadData.tem_mkt) leadPatch.tem_mkt = leadForm.tem_mkt;
-      if (leadForm.tem_secretaria !== leadData.tem_secretaria) leadPatch.tem_secretaria = leadForm.tem_secretaria;
-      if (leadForm.salao_ou_clinica !== leadData.salao_ou_clinica) leadPatch.salao_ou_clinica = leadForm.salao_ou_clinica;
-      if (leadForm.notes !== (leadData.notes || '')) leadPatch.notes = leadForm.notes || null;
-      if (resolvedLeadStatus !== leadData.status) leadPatch.status = resolvedLeadStatus;
-
-      if (Object.keys(leadPatch).length > 0) {
-        await updateLead.mutateAsync({
-          id: leadData.id,
-          agenda_event_id: event.id,
-          ...leadPatch,
-        });
-      }
-    }
-
-    if (pipelineClient) {
-      if (shouldBeNoShow) {
-        await syncNoShowToCrm({ color: eventForm.color, force: true });
-      } else if (pipelineClient.stage === 'NO_SHOW' && !isLostLeadContext) {
-        commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
-          clientName: nextClientName,
-          clinicName: pipelineClient.clinicName || nextClientName,
-          meetingDate: eventForm.event_date,
-          meetingTime: eventForm.event_time,
-          temSocio: leadForm.tem_socio as any,
-          temMkt: leadForm.tem_mkt as any,
-          temSecretaria: leadForm.tem_secretaria as any,
-        });
-      } else {
-        const pipelinePatch: Record<string, any> = {};
-        if (leadForm.tem_socio !== pipelineClient.temSocio) pipelinePatch.temSocio = leadForm.tem_socio as any;
-        if (leadForm.tem_mkt !== pipelineClient.temMkt) pipelinePatch.temMkt = leadForm.tem_mkt as any;
-        if (leadForm.tem_secretaria !== pipelineClient.temSecretaria) pipelinePatch.temSecretaria = leadForm.tem_secretaria as any;
-
-        if (Object.keys(pipelinePatch).length > 0) {
-          updatePipelineClient(pipelineClient.id, pipelinePatch);
-        }
-      }
-    }
-
-    setIsEditingLead(false);
+    await saveCurrentChanges();
     toast.success('Informações do lead atualizadas!');
   };
 
