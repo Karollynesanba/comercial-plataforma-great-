@@ -277,6 +277,12 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
   const meetingDate = toLocalIsoDate(client.meetingDate);
   const meetingTime = toTime(client.meetingTime);
   const now = new Date().toISOString();
+  const existingAgendaEvent = current.agendaEvents.find((event: any) =>
+    event.pipeline_client_id === client.id || peopleMatch(event.client_phone, event.client_name, phone, clientName)
+  );
+  const existingAgendamentoLead = current.agendamentoLeads.find((lead: any) =>
+    lead.pipeline_client_id === client.id || peopleMatch(lead.telefone, lead.nome, phone, clientName)
+  );
 
   if (!meetingDate || !meetingTime) {
     const nextAgendaEvents = current.agendaEvents.filter((event: any) =>
@@ -293,52 +299,56 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
   }
 
   const agendaEvent = {
+    ...(existingAgendaEvent || {}),
     pipeline_client_id: client.id,
-    id: `agenda-${crypto.randomUUID()}`,
-    title: normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
-    description: `Lead do Pipeline - ${getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
-    notes: client.notes ?? null,
-    client_name: clientName,
-    client_phone: phone || '',
-    clinic_name: clinicName,
-    event_date: meetingDate,
-    event_time: toAgendaTime(meetingTime),
-    duration_minutes: 60,
-    meeting_link: null,
-    scheduled_by: client.agendadoPor || client.assignedSDR || null,
-    lead_stage: client.stage || 'NOVO',
-    creative_source: getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil }) || null,
-    color: agendaColorForStage(client.stage),
-    reminder_2h_sent: false,
-    reminder_30min_sent: false,
-    created_by_user_id: client.createdByUserId || 'local-user',
-    assigned_closer_id: null,
-    created_at: now,
+    id: existingAgendaEvent?.id || `agenda-${crypto.randomUUID()}`,
+    title: existingAgendaEvent?.title || normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
+    description: existingAgendaEvent?.description || `Lead do Pipeline - ${getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil })}`,
+    notes: existingAgendaEvent?.notes ?? client.notes ?? null,
+    client_name: existingAgendaEvent?.client_name || clientName,
+    client_phone: existingAgendaEvent?.client_phone || phone || '',
+    clinic_name: existingAgendaEvent?.clinic_name || clinicName,
+    event_date: existingAgendaEvent?.event_date || meetingDate,
+    event_time: existingAgendaEvent?.event_time || toAgendaTime(meetingTime),
+    duration_minutes: existingAgendaEvent?.duration_minutes || 60,
+    meeting_link: existingAgendaEvent?.meeting_link || null,
+    scheduled_by: existingAgendaEvent?.scheduled_by || client.agendadoPor || client.assignedSDR || null,
+    lead_stage: existingAgendaEvent?.lead_stage || client.stage || 'NOVO',
+    creative_source: existingAgendaEvent?.creative_source || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil }) || null,
+    color: existingAgendaEvent?.color || agendaColorForStage(client.stage),
+    reminder_2h_sent: existingAgendaEvent?.reminder_2h_sent || false,
+    reminder_30min_sent: existingAgendaEvent?.reminder_30min_sent || false,
+    created_by_user_id: existingAgendaEvent?.created_by_user_id || client.createdByUserId || 'local-user',
+    assigned_closer_id: existingAgendaEvent?.assigned_closer_id || null,
+    created_at: existingAgendaEvent?.created_at || now,
     updated_at: now,
   };
 
   const agendamentoLead = {
+    ...(existingAgendamentoLead || {}),
     pipeline_client_id: client.id,
-    id: `agendamento-${crypto.randomUUID()}`,
-    data: isoToBrazilianDate(meetingDate),
-    nome: clientName,
-    telefone: phone || '',
-    horario: timeToPeriod(meetingTime),
-    horario_especifico: meetingTime,
-    tem_socio: coerceCommercialAnswer(client.temSocio, 'NAO'),
-    tem_mkt: coerceCommercialAnswer(client.temMkt, 'NAO'),
-    tem_secretaria: coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
-    salao_ou_clinica: client.salaoOuClinica || 'NAO_INFORMADO',
-    faturamento: normalizeFaturamento(client.faturamento),
-    pode_investir: client.podeInvestir || null,
-    agendado_via: client.agendadoVia || null,
-    funil: getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: null }) || 'NAO IDENTIFICADO',
-    status: STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
-    created_by_user_id: client.createdByUserId || 'local-user',
-    created_at: now,
+    id: existingAgendamentoLead?.id || `agendamento-${crypto.randomUUID()}`,
+    data: existingAgendamentoLead?.data || isoToBrazilianDate(meetingDate),
+    nome: existingAgendamentoLead?.nome || clientName,
+    telefone: existingAgendamentoLead?.telefone || phone || '',
+    horario: existingAgendamentoLead?.horario || timeToPeriod(meetingTime),
+    horario_especifico: existingAgendamentoLead?.horario_especifico || meetingTime,
+    tem_socio: existingAgendamentoLead?.tem_socio || coerceCommercialAnswer(client.temSocio, 'NAO'),
+    tem_mkt: existingAgendamentoLead?.tem_mkt || coerceCommercialAnswer(client.temMkt, 'NAO'),
+    tem_secretaria: existingAgendamentoLead?.tem_secretaria || coerceCommercialAnswer(client.temSecretaria) || 'NAO_SEI',
+    salao_ou_clinica: existingAgendamentoLead?.salao_ou_clinica || client.salaoOuClinica || 'NAO_INFORMADO',
+    faturamento: existingAgendamentoLead?.faturamento || normalizeFaturamento(client.faturamento),
+    pode_investir: existingAgendamentoLead?.pode_investir || client.podeInvestir || null,
+    agendado_via: existingAgendamentoLead?.agendado_via || client.agendadoVia || null,
+    funil: existingAgendamentoLead?.funil || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: null }) || 'NAO IDENTIFICADO',
+    status: existingAgendamentoLead?.status || STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
+    created_by_user_id: existingAgendamentoLead?.created_by_user_id || client.createdByUserId || 'local-user',
+    created_at: existingAgendamentoLead?.created_at || now,
     updated_at: now,
-    agenda_event_date: meetingDate,
-    agenda_event_time: toAgendaTime(meetingTime),
+    agenda_event_id: existingAgendamentoLead?.agenda_event_id || existingAgendaEvent?.id || null,
+    agenda_event_date: existingAgendamentoLead?.agenda_event_date || meetingDate,
+    agenda_event_time: existingAgendamentoLead?.agenda_event_time || toAgendaTime(meetingTime),
+    agenda_event_title: existingAgendamentoLead?.agenda_event_title || agendaEvent.title,
   };
 
   return {
