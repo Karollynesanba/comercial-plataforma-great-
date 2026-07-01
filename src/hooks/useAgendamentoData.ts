@@ -617,12 +617,30 @@ export function useAgendamentoData() {
         ...(agenda_event_title !== undefined ? { agenda_event_title } : {}),
         updated_at: new Date().toISOString(),
       };
-      const { data: updatedLead, error } = await supabase
-        .from('agendamento_leads')
-        .update(payload)
-        .eq('id', id)
-        .select('*')
-        .maybeSingle();
+      const projectionFields = ['agenda_event_id', 'agenda_event_date', 'agenda_event_time', 'agenda_event_title'] as const;
+      const payloadWithoutProjection = Object.fromEntries(
+        Object.entries(payload).filter(([key]) => !projectionFields.includes(key as any))
+      );
+
+      let updatedLead: any = null;
+      let error: any = null;
+      const tryUpdate = async (nextPayload: Record<string, any>) => {
+        const result = await supabase
+          .from('agendamento_leads')
+          .update(nextPayload)
+          .eq('id', id)
+          .select('*')
+          .maybeSingle();
+        updatedLead = result.data;
+        error = result.error;
+      };
+
+      await tryUpdate(payload);
+      if (error) {
+        console.warn('Retrying lead update without agenda projection fields', error);
+        await tryUpdate(payloadWithoutProjection);
+      }
+
       if (error) throw error;
 
       let resolvedLead = updatedLead;

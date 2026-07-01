@@ -70,7 +70,7 @@ const LOCAL_TEAMS = [
 function enrichEvent(event: any): AgendaEvent {
   return {
     ...event,
-    title: normalizeMeetingTitle(event.title || event.client_name || '') || event.title,
+    title: String(event.title || event.client_name || '').trim() || event.title,
     clinic_name: event.clinic_name || event.client_name || null,
     scheduled_by: event.scheduled_by || null,
     lead_stage: event.lead_stage || null,
@@ -177,7 +177,7 @@ export function useAgendaData() {
       if (!isSupabaseConfigured) {
         const payload = {
           ...payloadBase,
-          title: normalizeMeetingTitle(payloadBase.title || payloadBase.client_name || '') || payloadBase.title,
+          title: String(payloadBase.title || payloadBase.client_name || '').trim() || payloadBase.title,
           title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
           id: `agenda-${crypto.randomUUID()}`,
           client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
@@ -197,7 +197,7 @@ export function useAgendaData() {
 
       const payload = {
         ...payloadBase,
-        title: normalizeMeetingTitle(payloadBase.title || payloadBase.client_name || '') || payloadBase.title,
+        title: String(payloadBase.title || payloadBase.client_name || '').trim() || payloadBase.title,
         title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
         client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
         reminder_2h_sent: false,
@@ -263,8 +263,8 @@ export function useAgendaData() {
       const previousClientName = String(previous.client_name || '').trim();
       const explicitTitle = typeof updates.title === 'string' ? String(updates.title).trim() : '';
       const resolvedTitle = explicitTitle
-        ? normalizeMeetingTitle(explicitTitle) || previousTitle || normalizeMeetingTitle(previousClientName) || `Reuniao com ${previousClientName || 'Lead sem nome'}`
-        : previousTitle || normalizeMeetingTitle(previousClientName) || `Reuniao com ${previousClientName || 'Lead sem nome'}`;
+        ? explicitTitle
+        : previousTitle || `Reuniao com ${previousClientName || 'Lead sem nome'}`;
       const currentDefaultTitle = `Reuniao com ${String(updates.client_name || previous.client_name || 'Lead sem nome').trim()}`;
 
       const payload = {

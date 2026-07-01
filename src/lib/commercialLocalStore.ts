@@ -399,7 +399,7 @@ export function syncAgendamentoLeadAutomations(
   const agendaEvent = {
     ...(existingEvent || {}),
     id: existingEvent?.id || `agenda-${crypto.randomUUID()}`,
-    title: String(existingEvent?.title || '').trim() || normalizeMeetingTitle(clientName) || `Reuniao com ${clientName}`,
+    title: String(existingEvent?.title || '').trim() || `Reuniao com ${clientName}`,
     description: existingEvent?.description || `Lead de Agendamento - ${getStoredLeadOrigin({ criativo: fallbackPipelineClient?.criativo, funil: lead.funil })}`,
     notes: existingEvent?.notes ?? lead.notes ?? null,
     client_name: existingEvent?.client_name || clientName,

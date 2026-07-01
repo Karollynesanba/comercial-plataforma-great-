@@ -192,7 +192,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   const nextClientName = normalizeMeetingClientName(eventForm.client_name || '') || originalClientName;
   const titleWasEdited = (eventForm.title || '').trim() !== originalEventTitle;
   const nextEventTitle = titleWasEdited
-    ? normalizeMeetingTitle(eventForm.title || originalEventTitle || event.client_name || '') || originalEventTitle
+    ? (eventForm.title || originalEventTitle || event.client_name || '').trim() || originalEventTitle
     : originalEventTitle;
   const eventClientChanged = nextClientName !== originalClientName;
   const eventPhoneChanged = formatPhoneForWhatsApp(eventForm.client_phone) !== originalPhone;
