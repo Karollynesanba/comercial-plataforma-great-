@@ -199,22 +199,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
 
   const isLostLeadContext = pipelineClient?.stage === 'PERDIDO' || leadForm.status === 'PERDIDO';
 
-  const syncNoShowToCrm = async (input: { color?: string; force?: boolean } = {}, options?: { skipPipeline?: boolean }) => {
-    if (!input.force && !input.color) return;
-    if (!input.force && !isNoShowColor(input.color || '')) return;
-
-    const shouldUpdatePipeline = !options?.skipPipeline && !!pipelineClient && pipelineClient.stage !== 'NO_SHOW' && pipelineClient.stage !== 'PERDIDO';
-    if (!shouldUpdatePipeline) return;
-
-    const noShowReason = pipelineClient?.noShowReason || leadForm.notes || 'Marcado como no show pela agenda';
-
-    if (shouldUpdatePipeline) {
-      commercial?.movePipelineClient(pipelineClient!.id, 'NO_SHOW', undefined, {
-        noShowReason,
-      });
-    }
-  };
-
   const saveCurrentChanges = async () => {
     const canonicalClientName = nextClientName;
     const shouldBeNoShow = !isLostLeadContext && isNoShowColor(eventForm.color);
@@ -285,37 +269,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       }
     }
 
-    if (pipelineClient) {
-      if (shouldBeNoShow) {
-        await syncNoShowToCrm({ color: eventForm.color, force: true });
-      } else if (pipelineClient.stage === 'NO_SHOW' && !isLostLeadContext) {
-        commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
-          clientName: canonicalClientName,
-          clinicName: pipelineClient.clinicName || canonicalClientName,
-          meetingDate: eventForm.event_date,
-          meetingTime: eventForm.event_time,
-          temSocio: leadForm.tem_socio as any,
-          temMkt: leadForm.tem_mkt as any,
-          temSecretaria: leadForm.tem_secretaria as any,
-        });
-      } else {
-        const pipelinePatch: Record<string, any> = {};
-        if (eventClientChanged) {
-          pipelinePatch.clientName = canonicalClientName;
-          pipelinePatch.clinicName = pipelineClient.clinicName || canonicalClientName;
-        }
-        if (leadForm.tem_socio !== pipelineClient.temSocio) pipelinePatch.temSocio = leadForm.tem_socio as any;
-        if (leadForm.tem_mkt !== pipelineClient.temMkt) pipelinePatch.temMkt = leadForm.tem_mkt as any;
-        if (leadForm.tem_secretaria !== pipelineClient.temSecretaria) pipelinePatch.temSecretaria = leadForm.tem_secretaria as any;
-        if (eventForm.event_date !== pipelineClient.meetingDate) pipelinePatch.meetingDate = eventForm.event_date;
-        if (eventForm.event_time !== pipelineClient.meetingTime) pipelinePatch.meetingTime = eventForm.event_time;
-
-        if (Object.keys(pipelinePatch).length > 0) {
-          updatePipelineClient(pipelineClient.id, pipelinePatch);
-        }
-      }
-    }
-
     setIsEditingEvent(false);
     setIsEditingLead(false);
   };
@@ -325,26 +278,12 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   };
 
   const handleColorChange = async (color: string) => {
-    const previousColor = eventForm.color;
     setEventForm((current) => ({ ...current, color }));
 
     await updateEvent.mutateAsync({
       id: event.id,
       color,
     });
-
-    if (!isLostLeadContext && !isNoShowColor(previousColor) && isNoShowColor(color)) {
-      await syncNoShowToCrm({ color, force: true });
-    }
-
-    if (!isLostLeadContext && isNoShowColor(previousColor) && !isNoShowColor(color) && pipelineClient) {
-      commercial?.movePipelineClient(pipelineClient.id, recoveredPipelineStage as any, undefined, {
-        clientName: nextClientName,
-        clinicName: pipelineClient.clinicName || nextClientName,
-        meetingDate: eventForm.event_date,
-        meetingTime: eventForm.event_time,
-      });
-    }
     toast.success('Cor do evento atualizada!');
   };
 

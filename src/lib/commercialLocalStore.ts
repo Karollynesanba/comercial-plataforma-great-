@@ -363,7 +363,7 @@ export function syncAgendamentoLeadAutomations(
   lead: any,
   fallbackPipelineClient?: any,
   agendaEventId?: string | null,
-  options?: { allowPersonMatch?: boolean }
+  options?: { allowPersonMatch?: boolean; syncPipeline?: boolean }
 ): CommercialLocalData {
   const phone = normalizePhone(lead.telefone);
   const clientName = normalizeMeetingClientName(lead.nome || fallbackPipelineClient?.clientName || 'Lead sem nome') || 'Lead sem nome';
@@ -374,6 +374,7 @@ export function syncAgendamentoLeadAutomations(
   const agendaStage = AGENDAMENTO_STATUS_TO_STAGE[lead.status] || fallbackPipelineClient?.stage || 'NOVO';
   const now = new Date().toISOString();
   const allowPersonMatch = options?.allowPersonMatch !== false;
+  const syncPipeline = options?.syncPipeline !== false;
 
   if (!meetingDate || !agendaTime) {
     const targetEventId = agendaEventId || current.agendaEvents.find((event: any) =>
@@ -449,6 +450,17 @@ export function syncAgendamentoLeadAutomations(
       agenda_event_title: agendaEvent.title,
     };
   });
+
+  if (!syncPipeline) {
+    return {
+      ...current,
+      agendaEvents: existingEvent
+        ? current.agendaEvents.map((event: any) => event.id === existingEvent.id ? agendaEvent : event)
+        : [agendaEvent, ...current.agendaEvents],
+      agendamentoLeads: nextAgendamentoLeads,
+      pipelineClients: current.pipelineClients,
+    };
+  }
 
   return {
     ...current,

@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCommercialSafe } from '@/contexts/CommercialContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { readCommercialLocalData, syncAgendamentoLeadAutomations, updateCommercialLocalData } from '@/lib/commercialLocalStore';
-import { savePipelineClientToCloud } from '@/lib/commercialCloudStore';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import { agendamentoToPipeline, AGENDAMENTO_STATUS_TO_PIPELINE_STAGE } from './usePipelineAgendamentoSync';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
@@ -594,11 +593,11 @@ export function useAgendamentoData() {
                 {
                   ...current,
                   agendamentoLeads: nextLeads,
-                },
-                updatedLead,
-                fallbackPipelineClient,
-                agenda_event_id || (updatedLead as any)?.agenda_event_id || null,
-                { allowPersonMatch: false }
+              },
+              updatedLead,
+              fallbackPipelineClient,
+              agenda_event_id || (updatedLead as any)?.agenda_event_id || null,
+                { allowPersonMatch: false, syncPipeline: false }
               )
             : { ...current, agendamentoLeads: nextLeads };
           return synced;
@@ -754,43 +753,8 @@ export function useAgendamentoData() {
           }
         }
 
-        const linkedPipelineClientId = (resolvedLead as any)?.pipeline_client_id || (previousLead as any)?.pipeline_client_id || null;
-        const linkedPipelineClient = linkedPipelineClientId
-          ? commercial?.pipelineClients.find((client) => client.id === linkedPipelineClientId)
-          : null;
-
-        if (linkedPipelineClient && commercial?.updatePipelineClient) {
-          commercial.updatePipelineClient(linkedPipelineClient.id, {
-            clientName: leadName || resolvedLead.nome,
-            clinicName: resolvedLead.clinic_name || leadName || resolvedLead.nome,
-            telefone: leadPhone || linkedPipelineClient.telefone,
-            meetingDate: agendaDate || undefined,
-            meetingTime: agendaTime || undefined,
-            temSocio: coerceCommercialAnswer(resolvedLead.tem_socio, 'NAO'),
-            temMkt: coerceCommercialAnswer(resolvedLead.tem_mkt, 'NAO'),
-            temSecretaria: coerceCommercialAnswer(resolvedLead.tem_secretaria, 'NAO_SEI'),
-            salaoOuClinica: resolvedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
-            agendadoVia: resolvedLead.agendado_via || linkedPipelineClient.agendadoVia,
-            agendadoPor: resolvedLead.agendado_por || linkedPipelineClient.agendadoPor,
-          });
-        } else if (linkedPipelineClient) {
-          await savePipelineClientToCloud({
-            ...linkedPipelineClient,
-            clientName: leadName || resolvedLead.nome,
-            clinicName: resolvedLead.clinic_name || leadName || resolvedLead.nome,
-            telefone: leadPhone || linkedPipelineClient.telefone,
-            meetingDate: agendaDate || undefined,
-            meetingTime: agendaTime || undefined,
-            temSocio: coerceCommercialAnswer(resolvedLead.tem_socio, 'NAO'),
-            temMkt: coerceCommercialAnswer(resolvedLead.tem_mkt, 'NAO'),
-            temSecretaria: coerceCommercialAnswer(resolvedLead.tem_secretaria, 'NAO_SEI'),
-            salaoOuClinica: resolvedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
-            agendadoVia: resolvedLead.agendado_via || linkedPipelineClient.agendadoVia,
-            agendadoPor: resolvedLead.agendado_por || linkedPipelineClient.agendadoPor,
-          }, user?.id);
-        }
       } catch (syncError) {
-        console.error('Falha ao sincronizar agenda/pipeline do lead atualizado', syncError);
+        console.error('Falha ao sincronizar agenda do lead atualizado', syncError);
       }
 
       return resolvedLead;
