@@ -334,7 +334,12 @@ const EMPTY_COMMERCIAL_STATE: CommercialCloudState = {
 };
 
 function shouldPreferLocalCommercialData() {
-  return safeGetItem('great_test_session_bypass') === 'true';
+  if (safeGetItem('great_test_session_bypass') === 'true') return true;
+  if (safeGetItem('great_enable_localhost_fallback') === 'true') return true;
+  if (typeof window !== 'undefined') {
+    return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  }
+  return false;
 }
 
 function normalizePipelineClientKey(client: any) {

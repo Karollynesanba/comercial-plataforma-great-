@@ -600,17 +600,37 @@ export function useAgendamentoData() {
         ...(agenda_event_title !== undefined ? { agenda_event_title } : {}),
         updated_at: new Date().toISOString(),
       };
-      const { data: updatedLead, error } = await supabase.from('agendamento_leads').update(payload).eq('id', id).select('*').single();
+      const { data: updatedLead, error } = await supabase
+        .from('agendamento_leads')
+        .update(payload)
+        .eq('id', id)
+        .select('*')
+        .maybeSingle();
       if (error) throw error;
 
-      const leadPhone = formatPhoneForWhatsApp(updatedLead.telefone || dbUpdates.telefone || '');
+      let resolvedLead = updatedLead;
+      if (!resolvedLead) {
+        const { data: refetchedLead, error: refetchError } = await supabase
+          .from('agendamento_leads')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        if (refetchError) throw refetchError;
+        resolvedLead = refetchedLead ?? null;
+      }
+
+      if (!resolvedLead) {
+        throw new Error('O lead foi atualizado, mas o registro não pôde ser lido novamente.');
+      }
+
+      const leadPhone = formatPhoneForWhatsApp(resolvedLead.telefone || dbUpdates.telefone || '');
       const leadPhoneDigits = normalizePhoneDigits(leadPhone);
-      const leadName = normalizeMeetingClientName(updatedLead.nome || '');
+      const leadName = normalizeMeetingClientName(resolvedLead.nome || '');
       const previousLeadPhoneDigits = normalizePhoneDigits(previousLead?.telefone);
       const previousLeadName = matchMeetingName(previousLead?.nome || '');
-      const linkedAgendaEventId = agenda_event_id || (previousLead as any)?.agenda_event_id || (updatedLead as any)?.agenda_event_id || null;
-      const agendaDate = agenda_event_date || updatedLead.data || null;
-      const agendaTime = agenda_event_time || updatedLead.horario_especifico || null;
+      const linkedAgendaEventId = agenda_event_id || (previousLead as any)?.agenda_event_id || (resolvedLead as any)?.agenda_event_id || null;
+      const agendaDate = agenda_event_date || resolvedLead.data || null;
+      const agendaTime = agenda_event_time || resolvedLead.horario_especifico || null;
 
       try {
         if (agendaDate && agendaTime) {
@@ -629,32 +649,32 @@ export function useAgendamentoData() {
 
           const explicitAgendaTitle = normalizeMeetingTitle(agenda_event_title || '') || '';
           const existingAgendaTitle = String(matchingEvent?.title || '').trim();
-          const defaultAgendaTitle = normalizeMeetingTitle(leadName || updatedLead.nome || 'Lead') || `Reuniao com ${leadName || updatedLead.nome || 'Lead'}`;
+          const defaultAgendaTitle = normalizeMeetingTitle(leadName || resolvedLead.nome || 'Lead') || `Reuniao com ${leadName || resolvedLead.nome || 'Lead'}`;
           const nextAgendaTitle = explicitAgendaTitle || existingAgendaTitle || defaultAgendaTitle;
-          const nextAgendaPipelineClientId = matchingEvent?.pipeline_client_id || (linkedAgendaEventId ? (updatedLead as any)?.pipeline_client_id || null : null);
+          const nextAgendaPipelineClientId = matchingEvent?.pipeline_client_id || (linkedAgendaEventId ? (resolvedLead as any)?.pipeline_client_id || null : null);
 
           const agendaPayload = {
             ...(matchingEvent || {}),
             pipeline_client_id: nextAgendaPipelineClientId,
             title: nextAgendaTitle,
-            description: matchingEvent?.description || (updatedLead.funil ? `Lead de Agendamento - ${updatedLead.funil}` : 'Lead de Agendamento'),
-            notes: matchingEvent?.notes ?? updatedLead.notes ?? null,
+            description: matchingEvent?.description || (resolvedLead.funil ? `Lead de Agendamento - ${resolvedLead.funil}` : 'Lead de Agendamento'),
+            notes: matchingEvent?.notes ?? resolvedLead.notes ?? null,
             client_name: leadName || normalizeMeetingClientName(matchingEvent?.client_name) || 'Lead sem nome',
             client_phone: matchingEvent?.client_phone || leadPhone || '',
-            clinic_name: matchingEvent?.clinic_name || updatedLead.clinic_name || leadName || 'Lead sem nome',
+            clinic_name: matchingEvent?.clinic_name || resolvedLead.clinic_name || leadName || 'Lead sem nome',
             event_date: matchingEvent?.event_date || agendaDate,
             event_time: matchingEvent?.event_time || (agendaTime.length === 5 ? `${agendaTime}:00` : agendaTime),
             duration_minutes: matchingEvent?.duration_minutes || 60,
             meeting_link: matchingEvent?.meeting_link || null,
-            scheduled_by: matchingEvent?.scheduled_by || updatedLead.agendado_por || null,
-            lead_stage: matchingEvent?.lead_stage || AGENDAMENTO_STATUS_TO_PIPELINE_STAGE[updatedLead.status] || 'NOVO',
-            creative_source: matchingEvent?.creative_source || updatedLead.funil || null,
+            scheduled_by: matchingEvent?.scheduled_by || resolvedLead.agendado_por || null,
+            lead_stage: matchingEvent?.lead_stage || AGENDAMENTO_STATUS_TO_PIPELINE_STAGE[resolvedLead.status] || 'NOVO',
+            creative_source: matchingEvent?.creative_source || resolvedLead.funil || null,
             color: matchingEvent?.color || '#3B82F6',
             reminder_2h_sent: matchingEvent?.reminder_2h_sent || false,
             reminder_30min_sent: matchingEvent?.reminder_30min_sent || false,
-            created_by_user_id: matchingEvent?.created_by_user_id || updatedLead.created_by_user_id || user?.id || null,
+            created_by_user_id: matchingEvent?.created_by_user_id || resolvedLead.created_by_user_id || user?.id || null,
             assigned_closer_id: matchingEvent?.assigned_closer_id || null,
-            created_at: matchingEvent?.created_at || updatedLead.created_at || new Date().toISOString(),
+            created_at: matchingEvent?.created_at || resolvedLead.created_at || new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
 
@@ -667,54 +687,57 @@ export function useAgendamentoData() {
           }
         }
 
-        const linkedPipelineClientId = (updatedLead as any)?.pipeline_client_id || (previousLead as any)?.pipeline_client_id || null;
+        const linkedPipelineClientId = (resolvedLead as any)?.pipeline_client_id || (previousLead as any)?.pipeline_client_id || null;
         const linkedPipelineClient = linkedPipelineClientId
           ? commercial?.pipelineClients.find((client) => client.id === linkedPipelineClientId)
           : null;
 
         if (linkedPipelineClient && commercial?.updatePipelineClient) {
           commercial.updatePipelineClient(linkedPipelineClient.id, {
-            clientName: leadName || updatedLead.nome,
-            clinicName: updatedLead.clinic_name || leadName || updatedLead.nome,
+            clientName: leadName || resolvedLead.nome,
+            clinicName: resolvedLead.clinic_name || leadName || resolvedLead.nome,
             telefone: leadPhone || linkedPipelineClient.telefone,
             meetingDate: agendaDate || undefined,
             meetingTime: agendaTime || undefined,
-            temSocio: coerceCommercialAnswer(updatedLead.tem_socio, 'NAO'),
-            temMkt: coerceCommercialAnswer(updatedLead.tem_mkt, 'NAO'),
-            temSecretaria: coerceCommercialAnswer(updatedLead.tem_secretaria, 'NAO_SEI'),
-            salaoOuClinica: updatedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
-            agendadoVia: updatedLead.agendado_via || linkedPipelineClient.agendadoVia,
-            agendadoPor: updatedLead.agendado_por || linkedPipelineClient.agendadoPor,
+            temSocio: coerceCommercialAnswer(resolvedLead.tem_socio, 'NAO'),
+            temMkt: coerceCommercialAnswer(resolvedLead.tem_mkt, 'NAO'),
+            temSecretaria: coerceCommercialAnswer(resolvedLead.tem_secretaria, 'NAO_SEI'),
+            salaoOuClinica: resolvedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
+            agendadoVia: resolvedLead.agendado_via || linkedPipelineClient.agendadoVia,
+            agendadoPor: resolvedLead.agendado_por || linkedPipelineClient.agendadoPor,
           });
         } else if (linkedPipelineClient) {
           await savePipelineClientToCloud({
             ...linkedPipelineClient,
-            clientName: leadName || updatedLead.nome,
-            clinicName: updatedLead.clinic_name || leadName || updatedLead.nome,
+            clientName: leadName || resolvedLead.nome,
+            clinicName: resolvedLead.clinic_name || leadName || resolvedLead.nome,
             telefone: leadPhone || linkedPipelineClient.telefone,
             meetingDate: agendaDate || undefined,
             meetingTime: agendaTime || undefined,
-            temSocio: coerceCommercialAnswer(updatedLead.tem_socio, 'NAO'),
-            temMkt: coerceCommercialAnswer(updatedLead.tem_mkt, 'NAO'),
-            temSecretaria: coerceCommercialAnswer(updatedLead.tem_secretaria, 'NAO_SEI'),
-            salaoOuClinica: updatedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
-            agendadoVia: updatedLead.agendado_via || linkedPipelineClient.agendadoVia,
-            agendadoPor: updatedLead.agendado_por || linkedPipelineClient.agendadoPor,
+            temSocio: coerceCommercialAnswer(resolvedLead.tem_socio, 'NAO'),
+            temMkt: coerceCommercialAnswer(resolvedLead.tem_mkt, 'NAO'),
+            temSecretaria: coerceCommercialAnswer(resolvedLead.tem_secretaria, 'NAO_SEI'),
+            salaoOuClinica: resolvedLead.salao_ou_clinica || linkedPipelineClient.salaoOuClinica,
+            agendadoVia: resolvedLead.agendado_via || linkedPipelineClient.agendadoVia,
+            agendadoPor: resolvedLead.agendado_por || linkedPipelineClient.agendadoPor,
           }, user?.id);
         }
       } catch (syncError) {
         console.error('Falha ao sincronizar agenda/pipeline do lead atualizado', syncError);
       }
 
-      return updatedLead;
+      return resolvedLead;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
     },
-    onError: () => {
-      toast.error('Erro ao atualizar lead');
+    onError: (error) => {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message
+        : 'Erro ao atualizar lead';
+      toast.error(message);
     },
   });
 

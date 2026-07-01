@@ -1234,7 +1234,7 @@ export async function archiveCriativoInCloud(name: string) {
 export async function syncPipelineAutomationsToCloud(client: PipelineClient, userId?: string | null) {
   if (!isSupabaseConfigured) return;
 
-  const leadDateIso = toLocalIsoDate(client.meetingDate);
+  const leadDateIso = dateOnly(client.meetingDate);
   const leadDate = leadDateIso ? isoToBrazilianDate(leadDateIso) : '';
   const leadTime = toTime(client.meetingTime) || '';
   const now = new Date().toISOString();

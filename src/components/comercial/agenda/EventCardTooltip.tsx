@@ -158,6 +158,7 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
     : pipelineClient?.agendadoPor
       ? AGENDADOR_OPTIONS.find((option) => option.value === pipelineClient.agendadoPor)?.label || pipelineClient.agendadoPor
       : null;
+  const scheduledViaLabel = agendamentoLead?.agendado_via || pipelineClient?.agendadoVia || null;
   const endTime = format(
     addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
     'HH:mm'
@@ -181,7 +182,12 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
         <p className="text-xs text-muted-foreground mt-1">{colorLabel}</p>
         {scheduledByLabel && (
           <p className="text-xs font-semibold text-muted-foreground mt-1">
-            Agendado por: {scheduledByLabel}
+            Quem agendou: {scheduledByLabel}
+          </p>
+        )}
+        {scheduledViaLabel && (
+          <p className="text-xs font-semibold text-muted-foreground mt-1">
+            Agendado via: {scheduledViaLabel}
           </p>
         )}
       </div>

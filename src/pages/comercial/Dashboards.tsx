@@ -75,7 +75,7 @@ export default function ComercialDashboards() {
   const { pipelineClients, currentGoal, getGoalStats, getPipelineStats } = useCommercial();
 
   // Period filter state
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>('all_time');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>('current_month');
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
   const [selectedCreative, setSelectedCreative] = useState<string>('all');
