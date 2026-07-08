@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -59,6 +59,7 @@ import { toast } from 'sonner';
 export default function PipelinePage() {
   const { 
     pipelineClients, 
+    criativos,
     movePipelineClient,
     updatePipelineClient,
     deletePipelineClient,
@@ -104,9 +105,11 @@ export default function PipelinePage() {
   const [vendedorFilter, setVendedorFilter] = useState<string>('all');
   const [equipeFilter, setEquipeFilter] = useState<string>('all');
   const [sdrFilter, setSdrFilter] = useState<string>('all');
+  const [criativoFilter, setCriativoFilter] = useState<string>('all');
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const { filterByMonth } = useMonthFilter();
+  const previousCriativosRef = useRef<string[]>(criativos);
 
   // When the user wants "Todo o per?odo", ensure the month filter doesn't hide anything
 
@@ -133,6 +136,25 @@ export default function PipelinePage() {
       || undefined;
   };
 
+  useEffect(() => {
+    if (criativoFilter === 'all' || criativos.includes(criativoFilter)) {
+      previousCriativosRef.current = criativos;
+      return;
+    }
+
+    const previousCriativos = previousCriativosRef.current;
+    const removedCriativos = previousCriativos.filter((item) => !criativos.includes(item));
+    const addedCriativos = criativos.filter((item) => !previousCriativos.includes(item));
+
+    if (removedCriativos.length === 1 && addedCriativos.length === 1 && removedCriativos[0] === criativoFilter) {
+      setCriativoFilter(addedCriativos[0]);
+    } else {
+      setCriativoFilter('all');
+    }
+
+    previousCriativosRef.current = criativos;
+  }, [criativoFilter, criativos]);
+
   // Filter clients by period AND day for stats
   const periodFilteredClients = useMemo(() => {
     return pipelineClients.filter(client => {
@@ -157,6 +179,7 @@ export default function PipelinePage() {
       if (vendedorFilter !== 'all' && client.vendedor !== vendedorFilter) return false;
       if (equipeFilter !== 'all' && client.equipe !== equipeFilter) return false;
       if (sdrFilter !== 'all' && client.agendadoPor !== sdrFilter) return false;
+      if (criativoFilter !== 'all' && String(client.criativo || '').trim().toUpperCase() !== criativoFilter) return false;
 
       const clientDate = getClientDate(client);
 
@@ -177,7 +200,7 @@ export default function PipelinePage() {
 
       return true;
     });
-  }, [periodFilteredClients, vendedorFilter, equipeFilter, sdrFilter, monthFilter, searchQuery, filterByMonth]);
+  }, [periodFilteredClients, vendedorFilter, equipeFilter, sdrFilter, criativoFilter, monthFilter, searchQuery, filterByMonth]);
 
   // Calculate stats based on visible clients
   const stats = useMemo(() => {
@@ -556,6 +579,19 @@ export default function PipelinePage() {
                       <span className="text-sm font-medium">Filtros:</span>
                     </div>
                     <MonthPeriodFilter value={monthFilter} onChange={setMonthFilter} />
+                    <Select value={criativoFilter} onValueChange={setCriativoFilter}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Criativo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        <SelectItem value="all">Todos os criativos</SelectItem>
+                        {criativos.map((criativo) => (
+                          <SelectItem key={criativo} value={criativo}>
+                            {criativo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
                       <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Vendedor" />
@@ -604,7 +640,7 @@ export default function PipelinePage() {
                         className="pl-9"
                       />
                     </div>
-                    {(vendedorFilter !== 'all' || equipeFilter !== 'all' || sdrFilter !== 'all' || monthFilter !== 'all' || dayFilter || searchQuery) && (
+                    {(vendedorFilter !== 'all' || equipeFilter !== 'all' || sdrFilter !== 'all' || criativoFilter !== 'all' || monthFilter !== 'all' || dayFilter || searchQuery) && (
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -612,6 +648,7 @@ export default function PipelinePage() {
                           setVendedorFilter('all');
                           setEquipeFilter('all');
                           setSdrFilter('all');
+                          setCriativoFilter('all');
                           setMonthFilter('all');
                           setDayFilter(undefined);
                           setSearchQuery('');
