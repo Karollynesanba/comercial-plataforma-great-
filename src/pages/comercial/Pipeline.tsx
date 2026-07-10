@@ -368,13 +368,10 @@ export default function PipelinePage() {
 
   const handleClosedConfirm = (equipe: Equipe, pagadorAnuncio: PagadorAnuncio, clinicName: string) => {
     if (pendingClosed) {
-      const client = pipelineClients.find(c => c.id === pendingClosed.id);
       const extraData = { 
         equipe,
         pagadorAnuncio,
         clinicName,
-        periodo: client?.periodo,
-        entrada: client?.entrada || pendingClosed.entrada,
       };
       movePipelineClient(pendingClosed.id, 'FECHADO', undefined, extraData);
       // Trigger celebration animation

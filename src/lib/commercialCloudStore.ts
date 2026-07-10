@@ -1002,8 +1002,27 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
   if (!isSupabaseConfigured) return null;
 
   const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
+  let existingClientById: any = null;
   let existingClient = null;
   let reusableDeletedClientId: string | null = null;
+
+  if (hasCloudId) {
+    const { data, error } = await supabase
+      .from('pipeline_clients')
+      .select('*')
+      .eq('id', client.id!)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[commercial-cloud] pipeline lookup by id failed, continuing with incoming payload', {
+        error,
+        userId: toDbUserId(userId),
+        clientId: client.id,
+      });
+    } else {
+      existingClientById = data;
+    }
+  }
 
   if (!hasCloudId) {
     try {
@@ -1031,7 +1050,20 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
     }
   }
 
-  const payload = localPipelineToDb(client, userId);
+  const baseClient = existingClientById
+    ? dbPipelineToLocal(existingClientById)
+    : existingClient
+      ? dbPipelineToLocal(existingClient)
+      : null;
+  const mergedClient = baseClient
+    ? {
+        ...baseClient,
+        ...client,
+        id: baseClient.id,
+      }
+    : client;
+
+  const payload = localPipelineToDb(mergedClient, userId);
   const cleanPayload = hasCloudId || existingClient || reusableDeletedClientId
     ? payload
     : (() => {

@@ -672,12 +672,15 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const movePipelineClient = useCallback(async (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
     const previousClient = pipelineClients.find((client) => client.id === id);
     if (!previousClient) return;
+    const latestClient = isSupabaseConfigured
+      ? (await fetchCommercialCloudState(user?.id).then((state) => state.pipelineClients.find((client) => client.id === id) || previousClient).catch(() => previousClient))
+      : previousClient;
     const updatedClient: PipelineClient = {
-      ...previousClient,
+      ...latestClient,
       ...extraData,
       stage: newStage,
       ativo: newStage !== 'PERDIDO',
-      lostReason: newStage === 'PERDIDO' ? lostReason || previousClient.lostReason : previousClient.lostReason,
+      lostReason: newStage === 'PERDIDO' ? lostReason || latestClient.lostReason : latestClient.lostReason,
       lastStageChange: new Date(),
     };
 
