@@ -124,6 +124,7 @@ export interface PipelineClient {
   clientName: string;
   clinicName: string;
   telefone?: string;
+  profession?: string;
   vendedor?: Vendedor;
   criativo: string;
   equipe: Equipe;

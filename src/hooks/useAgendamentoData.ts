@@ -65,6 +65,7 @@ export interface AgendamentoLead {
   data: string;
   nome: string;
   telefone: string;
+  profession?: string | null;
   horario: 'MANHA' | 'TARDE' | 'NOITE';
   horario_especifico?: string;
   tem_socio: CommercialYesNoMaybe;
@@ -350,6 +351,7 @@ function pipelineClientToAgendamentoLead(client: any, agendaEvents: any[]) {
     data: `${meetingDate.split('-')[2]}/${meetingDate.split('-')[1]}/${meetingDate.split('-')[0]}`,
     nome: client.clientName || leadName,
     telefone: leadPhone,
+    profession: client.profession || null,
     horario: client.meetingTime
       ? Number(meetingTime.slice(0, 2)) < 12
         ? 'MANHA'

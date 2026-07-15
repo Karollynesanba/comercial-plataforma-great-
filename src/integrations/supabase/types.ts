@@ -203,6 +203,7 @@ export type Database = {
           id: string
           nome: string
           pode_investir: string | null
+          profession: string | null
           salao_ou_clinica: string | null
           status: string
           telefone: string
@@ -222,6 +223,7 @@ export type Database = {
           id?: string
           nome: string
           pode_investir?: string | null
+          profession?: string | null
           salao_ou_clinica?: string | null
           status: string
           telefone: string
@@ -241,6 +243,7 @@ export type Database = {
           id?: string
           nome?: string
           pode_investir?: string | null
+          profession?: string | null
           salao_ou_clinica?: string | null
           status?: string
           telefone?: string
@@ -1762,6 +1765,7 @@ export type Database = {
           pagador_anuncio: string | null
           periodo: string | null
           pode_investir: string | null
+          profession: string | null
           salao_ou_clinica: string | null
           stage: string | null
           telefone: string | null
@@ -1802,6 +1806,7 @@ export type Database = {
           pagador_anuncio?: string | null
           periodo?: string | null
           pode_investir?: string | null
+          profession?: string | null
           salao_ou_clinica?: string | null
           stage?: string | null
           telefone?: string | null
@@ -1842,6 +1847,7 @@ export type Database = {
           pagador_anuncio?: string | null
           periodo?: string | null
           pode_investir?: string | null
+          profession?: string | null
           salao_ou_clinica?: string | null
           stage?: string | null
           telefone?: string | null

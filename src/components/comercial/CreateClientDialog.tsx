@@ -45,9 +45,20 @@ import { toast } from 'sonner';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 
+const PROFESSION_OPTIONS = [
+  'Dentista',
+  'Médico',
+  'Cirurgião',
+  'Esteta',
+  'Nutrição',
+  'Psicologia',
+  'Não identificado',
+] as const;
+
 const formSchema = z.object({
   clientName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   telefone: z.string().min(1, 'Telefone e obrigatorio'),
+  profession: z.enum(PROFESSION_OPTIONS),
   funil: z.string().min(1, 'Funil e obrigatorio'),
   criativo: z.string().optional(),
   faturamento: z.enum(['0_A_10K', '10K_A_20K', '20K_A_30K', '30K_A_50K', '50K_A_80K', '80K_A_100K', '100K_A_150K', '150K_A_250K', '250K_A_400K', '400K_A_600K', '600K_A_1M', '1M_PLUS', 'NAO_INFORMADO'] as const, {
@@ -90,6 +101,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     defaultValues: {
       clientName: '',
       telefone: '',
+      profession: 'Não identificado',
       funil: '',
       criativo: '',
       faturamento: undefined,
@@ -126,6 +138,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         clientName: data.clientName,
         clinicName: data.clientName,
         telefone: formattedPhone,
+        profession: data.profession,
         vendedor: undefined,
         funil: data.funil,
         criativo: getCommercialLeadOrigin({
@@ -159,6 +172,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         clientName: data.clientName,
         telefone: data.telefone,
         formattedPhone,
+        profession: data.profession,
         funil: data.funil,
         criativo: data.criativo || null,
         faturamento: data.faturamento,
@@ -225,6 +239,31 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                   <FormControl>
                     <Input placeholder="(81) 99999-9999 ou 5581999999999" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="profession"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Profissão</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a profissão" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-popover z-[9999]">
+                      {PROFESSION_OPTIONS.map((profession) => (
+                        <SelectItem key={profession} value={profession}>
+                          {profession}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

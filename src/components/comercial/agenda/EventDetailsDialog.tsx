@@ -180,6 +180,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     ?.label || leadForm.salao_ou_clinica || pipelineClient?.salaoOuClinica || 'Sem informação';
   const faturamentoLabel = FATURAMENTO_OPTIONS.find((option) => option.value === leadForm.faturamento)?.label || leadForm.faturamento || 'Sem informação';
   const funilLabel = pipelineClient?.criativo || 'Sem informação';
+  const professionLabel = pipelineClient?.profession || leadData?.profession || 'Não identificado';
   const currentColorOption = EVENT_COLORS.find((color) => color.value === eventForm.color) || EVENT_COLORS[0];
   const isNoShowColor = (color: string) => color.toUpperCase() === '#FF0000';
   const recoveredStatus = leadForm.status === 'NO_SHOW' ? 'NOVO_LEAD' : leadForm.status;
@@ -607,6 +608,10 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Área de atuação</p>
                     <p className="mt-2 text-base font-black text-slate-950">{areaAtuacaoLabel}</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">PROFISSÃO</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{professionLabel}</p>
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Faturamento</p>
