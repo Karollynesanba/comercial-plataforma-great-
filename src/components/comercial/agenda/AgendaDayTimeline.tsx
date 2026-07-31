@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
@@ -18,6 +18,7 @@ import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaDayTimelineProps {
   events: AgendaEvent[];
+  initialDate?: Date;
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
 }
@@ -35,12 +36,21 @@ interface PositionedEvent {
   height: number;
 }
 
-export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDayTimelineProps) {
+const formatLocalDate = (value: string) => String(value || '').trim().slice(0, 10);
+
+export function AgendaDayTimeline({ events, initialDate, onEventClick, onAddEvent }: AgendaDayTimelineProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const hasAppliedInitialDate = useRef(false);
+
+  useEffect(() => {
+    if (!initialDate || hasAppliedInitialDate.current) return;
+    setCurrentDate(initialDate);
+    hasAppliedInitialDate.current = true;
+  }, [initialDate]);
 
   const dayEvents = useMemo(() => {
     const dateKey = format(currentDate, 'yyyy-MM-dd');
-    return events.filter((e) => e.event_date === dateKey);
+    return events.filter((e) => formatLocalDate(e.event_date) === dateKey);
   }, [events, currentDate]);
 
   const getScheduledByLabel = (event: AgendaEvent) =>
@@ -126,16 +136,15 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
 
   const weekDay = format(currentDate, 'EEE', { locale: ptBR }).toUpperCase();
   const dayNumber = format(currentDate, 'd');
-  const now = new Date();
-  const showCurrentTimeLine = isSameDay(currentDate, now);
-
   const currentTimeTop = useMemo(() => {
-    if (!showCurrentTimeLine) return 0;
+    const now = new Date();
+    if (!isSameDay(currentDate, now)) return 0;
     const hours = now.getHours();
     const minutes = now.getMinutes();
     if (hours < START_HOUR || hours >= END_HOUR) return -1;
     return (((hours - START_HOUR) * 60 + minutes) / 60) * HOUR_HEIGHT;
-  }, [showCurrentTimeLine, now]);
+  }, [currentDate]);
+  const showCurrentTimeLine = currentTimeTop >= 0;
 
   return (
     <div className="flex h-[calc(100vh-200px)] flex-col overflow-hidden rounded-[32px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-white/60">
