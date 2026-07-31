@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useCommercialSafe } from '@/contexts/CommercialContext';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
@@ -150,24 +151,35 @@ async function syncRelatedRecords(event: AgendaEvent) {
 
 export function useAgendaData() {
   const queryClient = useQueryClient();
+  const commercial = useCommercialSafe();
+  const commercialFallbackEvents = (commercial?.agendaEvents || []).map(enrichEvent);
+  const localFallbackEvents = (readCommercialLocalData().agendaEvents || []).map(enrichEvent);
+  const fallbackEvents = commercialFallbackEvents.length > 0 ? commercialFallbackEvents : localFallbackEvents;
 
   const { data: events = [], isLoading, error } = useQuery({
     queryKey: ['agenda-events'],
     queryFn: async () => {
       if (!isSupabaseConfigured) {
-        return (readCommercialLocalData().agendaEvents || []).map(enrichEvent);
+        return fallbackEvents;
       }
-      const { data, error } = await withTimeout(
-        supabase
-          .from('agenda_events')
-          .select('*')
-          .order('event_date', { ascending: true })
-          .order('event_time', { ascending: true }),
-        7000,
-        'agenda_events'
-      );
-      if (error) throw error;
-      return (data || []).map(enrichEvent);
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('agenda_events')
+            .select('*')
+            .order('event_date', { ascending: true })
+            .order('event_time', { ascending: true }),
+          7000,
+          'agenda_events'
+        );
+        if (error) throw error;
+
+        const remoteEvents = (data || []).map(enrichEvent);
+        return remoteEvents.length > 0 ? remoteEvents : fallbackEvents;
+      } catch (queryError) {
+        console.warn('Agenda query failed, falling back to commercial/local cache.', queryError);
+        return fallbackEvents;
+      }
     },
   });
 

@@ -79,6 +79,9 @@ export default function AgendaGreat() {
     return result;
   }, [events, selectedTeamId, searchQuery, selectedColors]);
 
+  const hasActiveFilters =
+    selectedTeamId !== 'all' || Boolean(searchQuery.trim()) || selectedColors.length > 0;
+
   const toggleColorFilter = (colorValue: string) => {
     setSelectedColors((current) =>
       current.includes(colorValue)
@@ -235,6 +238,39 @@ export default function AgendaGreat() {
           </div>
         </div>
       </div>
+
+      {events.length > 0 && filteredEvents.length === 0 && (
+        <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">Os eventos do Supabase estão carregando, mas os filtros estão ocultando tudo.</p>
+              <p className="text-amber-800">
+                Existem {events.length} evento{events.length !== 1 ? 's' : ''} na base, porém nenhum ficou visível com a filtragem atual.
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                className="rounded-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                onClick={() => {
+                  setSelectedTeamId('all');
+                  setSearchQuery('');
+                  setSelectedColors([]);
+                }}
+              >
+                Limpar filtros
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {events.length === 0 && !hasActiveFilters && (
+        <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+          Nenhum evento foi retornado do Supabase agora. Se a base estiver populada e isso continuar, o próximo passo é
+          checar conexão, auth ou RLS do banco.
+        </div>
+      )}
 
       {viewMode === 'day' && (
         <AgendaDayTimeline
