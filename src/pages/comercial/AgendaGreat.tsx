@@ -16,6 +16,7 @@ import { addMinutes, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
+const AGENDA_VISIBLE_DATES = new Set(['2026-07-31', '2026-08-01']);
 
 const COLOR_FILTER_LABELS: Record<string, string> = {
   '#3B82F6': 'Reunião Marcada',
@@ -58,7 +59,7 @@ export default function AgendaGreat() {
   }, [selectedColors]);
 
   const filteredEvents = useMemo(() => {
-    let result = events;
+    let result = events.filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date));
 
     if (selectedTeamId !== 'all') {
       result = result.filter((e) => e.team_id === selectedTeamId);
@@ -345,8 +346,7 @@ export default function AgendaGreat() {
 
       {events.length === 0 && !hasActiveFilters && (
         <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          Nenhum evento foi retornado do Supabase agora. Se a base estiver populada e isso continuar, o próximo passo é
-          checar conexão, auth ou RLS do banco.
+          A agenda está limitada para mostrar apenas os eventos de 31/07/2026 e 01/08/2026.
         </div>
       )}
 
