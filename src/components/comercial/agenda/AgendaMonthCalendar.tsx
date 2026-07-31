@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
@@ -25,6 +25,7 @@ import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaMonthCalendarProps {
   events: AgendaEvent[];
+  initialDate?: Date;
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
   onDayClick?: (date: Date) => void;
@@ -32,9 +33,19 @@ interface AgendaMonthCalendarProps {
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayClick }: AgendaMonthCalendarProps) {
+const getDateKey = (value: string) => String(value || '').trim().slice(0, 10);
+
+export function AgendaMonthCalendar({ events, initialDate, onEventClick, onAddEvent, onDayClick }: AgendaMonthCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const hasAppliedInitialDate = useRef(false);
+
+  useEffect(() => {
+    if (!initialDate || hasAppliedInitialDate.current) return;
+    setCurrentDate(initialDate);
+    setSelectedDay(initialDate);
+    hasAppliedInitialDate.current = true;
+  }, [initialDate]);
 
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
@@ -47,7 +58,7 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
   const eventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
     events.forEach((event) => {
-      const key = event.event_date;
+      const key = getDateKey(event.event_date);
       if (!map.has(key)) {
         map.set(key, []);
       }
