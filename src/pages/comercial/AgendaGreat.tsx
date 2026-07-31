@@ -12,6 +12,8 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
+import { addMinutes, format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
 
@@ -111,6 +113,14 @@ export default function AgendaGreat() {
     setSelectedTime(undefined);
     setAddDialogOpen(true);
   };
+
+  const visibleAgendaEvents = useMemo(() => {
+    return [...filteredEvents].sort((a, b) => {
+      const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
+      if (dateCompare !== 0) return dateCompare;
+      return String(a.event_time).localeCompare(String(b.event_time));
+    });
+  }, [filteredEvents]);
 
   return (
     <div className="space-y-6 bg-[#F7F7F9]">
@@ -237,6 +247,74 @@ export default function AgendaGreat() {
             })}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-[28px] border border-slate-200/70 bg-white/90 p-4 shadow-[0_12px_36px_rgba(15,23,42,0.06)] backdrop-blur">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">Agenda carregada</p>
+            <h3 className="text-lg font-extrabold tracking-tight text-slate-950">
+              {visibleAgendaEvents.length > 0
+                ? `${visibleAgendaEvents.length} reunião${visibleAgendaEvents.length !== 1 ? 'es' : ''} visível${visibleAgendaEvents.length !== 1 ? 'is' : ''}`
+                : 'Nenhuma reunião visível'}
+            </h3>
+          </div>
+          <Button
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white px-4 shadow-sm hover:bg-slate-50"
+            onClick={() => {
+              setSelectedTeamId('all');
+              setSearchQuery('');
+              setSelectedColors([]);
+            }}
+          >
+            Limpar filtros
+          </Button>
+        </div>
+
+        {visibleAgendaEvents.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {visibleAgendaEvents.map((event) => {
+              const endTime = format(
+                parseISO(`2000-01-01T${event.event_time}`),
+                'HH:mm'
+              );
+
+              return (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => handleEventClick(event)}
+                  className="group flex w-full items-start gap-3 rounded-[18px] border border-slate-200/70 bg-slate-50/80 p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+                >
+                  <span
+                    className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full shadow-sm"
+                    style={{ backgroundColor: event.color || '#3B82F6' }}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-950">{event.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {format(parseISO(event.event_date), "dd 'de' MMMM", { locale: ptBR })} às {event.event_time.slice(0, 5)} • {endTime}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600 shadow-sm ring-1 ring-slate-200">
+                        {event.client_name}
+                      </span>
+                    </div>
+                    <p className="mt-2 truncate text-xs text-slate-500">{event.description || 'Sem descrição'}</p>
+                    </div>
+                  </button>
+                );
+              })}
+          </div>
+        ) : (
+          <div className="rounded-[18px] border border-dashed border-slate-200 bg-slate-50/80 p-5 text-sm text-slate-500">
+            Não há reuniões visíveis com os filtros atuais. Se os eventos existirem no Supabase, eles aparecem quando a leitura estiver funcionando.
+          </div>
+        )}
       </div>
 
       {events.length > 0 && filteredEvents.length === 0 && (
