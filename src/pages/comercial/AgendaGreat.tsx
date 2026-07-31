@@ -10,10 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
+import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 import { addMinutes, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
 
 const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
 const AGENDA_VISIBLE_DATES = new Set(['2026-07-31', '2026-08-01']);
@@ -30,6 +32,22 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
 
 export default function AgendaGreat() {
   const { events } = useAgendaData();
+  const { data: agendaLoadedEvents = [] } = useQuery({
+    queryKey: ['agenda-loaded-events', '2026-07-31', '2026-08-01'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured) return [];
+
+      const { data, error } = await supabase
+        .from('agenda_events')
+        .select('*')
+        .in('event_date', ['2026-07-31', '2026-08-01'])
+        .order('event_date', { ascending: true })
+        .order('event_time', { ascending: true });
+
+      if (error) throw error;
+      return (data || []) as AgendaEvent[];
+    },
+  });
 
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -116,14 +134,17 @@ export default function AgendaGreat() {
   };
 
   const visibleAgendaEvents = useMemo(() => {
-    return filteredEvents
-      .filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date))
+    const source = agendaLoadedEvents.length > 0
+      ? agendaLoadedEvents
+      : filteredEvents.filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date));
+
+    return source
       .sort((a, b) => {
-      const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
-      if (dateCompare !== 0) return dateCompare;
-      return String(a.event_time).localeCompare(String(b.event_time));
+        const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
+        if (dateCompare !== 0) return dateCompare;
+        return String(a.event_time).localeCompare(String(b.event_time));
       });
-  }, [filteredEvents]);
+  }, [agendaLoadedEvents, filteredEvents]);
 
   return (
     <div className="space-y-6 bg-[#F7F7F9]">
@@ -258,7 +279,7 @@ export default function AgendaGreat() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">Agenda carregada</p>
             <h3 className="text-lg font-extrabold tracking-tight text-slate-950">
               {visibleAgendaEvents.length > 0
-                ? `${visibleAgendaEvents.length} reunião${visibleAgendaEvents.length !== 1 ? 'es' : ''} visível${visibleAgendaEvents.length !== 1 ? 'is' : ''}`
+                ? `${visibleAgendaEvents.length} reunião${visibleAgendaEvents.length !== 1 ? 'ões' : ''} visível${visibleAgendaEvents.length !== 1 ? 'is' : ''}`
                 : 'Nenhuma reunião visível'}
             </h3>
           </div>
