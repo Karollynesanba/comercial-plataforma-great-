@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
@@ -20,6 +20,7 @@ import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaWeekTimelineProps {
   events: AgendaEvent[];
+  initialDate?: Date;
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
 }
@@ -37,8 +38,15 @@ interface PositionedEvent {
   height: number;
 }
 
-export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaWeekTimelineProps) {
+export function AgendaWeekTimeline({ events, initialDate, onEventClick, onAddEvent }: AgendaWeekTimelineProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const hasAppliedInitialDate = useRef(false);
+
+  useEffect(() => {
+    if (!initialDate || hasAppliedInitialDate.current) return;
+    setCurrentDate(initialDate);
+    hasAppliedInitialDate.current = true;
+  }, [initialDate]);
 
   const getScheduledByLabel = (event: AgendaEvent) =>
     event.scheduled_by

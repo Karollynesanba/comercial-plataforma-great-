@@ -5,21 +5,17 @@ import { AgendaMonthCalendar } from '@/components/comercial/agenda/AgendaMonthCa
 import { AgendaWeekTimeline } from '@/components/comercial/agenda/AgendaWeekTimeline';
 import { AddEventDialog } from '@/components/comercial/agenda/AddEventDialog';
 import { EventDetailsDialog } from '@/components/comercial/agenda/EventDetailsDialog';
+import { useAgendaData, AgendaEvent, EVENT_COLORS } from '@/hooks/useAgendaData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
-import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
-import { addMinutes, format, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery } from '@tanstack/react-query';
 
 const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
-const AGENDA_VISIBLE_DATES = new Set(['2026-07-31', '2026-08-01']);
-
 const COLOR_FILTER_LABELS: Record<string, string> = {
   '#3B82F6': 'Reunião Marcada',
   '#66FF00': 'Call Feita',
@@ -32,22 +28,6 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
 
 export default function AgendaGreat() {
   const { events } = useAgendaData();
-  const { data: agendaLoadedEvents = [] } = useQuery({
-    queryKey: ['agenda-loaded-events', '2026-07-31', '2026-08-01'],
-    queryFn: async () => {
-      if (!isSupabaseConfigured) return [];
-
-      const { data, error } = await supabase
-        .from('agenda_events')
-        .select('*')
-        .in('event_date', ['2026-07-31', '2026-08-01'])
-        .order('event_date', { ascending: true })
-        .order('event_time', { ascending: true });
-
-      if (error) throw error;
-      return (data || []) as AgendaEvent[];
-    },
-  });
 
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -133,18 +113,22 @@ export default function AgendaGreat() {
     setAddDialogOpen(true);
   };
 
-  const visibleAgendaEvents = useMemo(() => {
-    const source = agendaLoadedEvents.length > 0
-      ? agendaLoadedEvents
-      : filteredEvents.filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date));
+  const agendaLoadedEvents = useMemo(() => {
+    return [...events].sort((a, b) => {
+      const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
+      if (dateCompare !== 0) return dateCompare;
+      return String(a.event_time).localeCompare(String(b.event_time));
+    });
+  }, [events]);
 
-    return source
-      .sort((a, b) => {
-        const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
-        if (dateCompare !== 0) return dateCompare;
-        return String(a.event_time).localeCompare(String(b.event_time));
-      });
-  }, [agendaLoadedEvents, filteredEvents]);
+  const initialFocusDate = useMemo(() => {
+    const firstEvent = agendaLoadedEvents[0];
+    return firstEvent ? parseISO(firstEvent.event_date) : null;
+  }, [agendaLoadedEvents]);
+
+  const visibleAgendaEvents = useMemo(() => {
+    return agendaLoadedEvents;
+  }, [agendaLoadedEvents]);
 
   return (
     <div className="space-y-6 bg-[#F7F7F9]">
@@ -279,7 +263,7 @@ export default function AgendaGreat() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">Agenda carregada</p>
             <h3 className="text-lg font-extrabold tracking-tight text-slate-950">
               {visibleAgendaEvents.length > 0
-                ? `${visibleAgendaEvents.length} reunião${visibleAgendaEvents.length !== 1 ? 'ões' : ''} visível${visibleAgendaEvents.length !== 1 ? 'is' : ''}`
+                ? `${visibleAgendaEvents.length} reunião${visibleAgendaEvents.length !== 1 ? 'ões' : ''} carregada${visibleAgendaEvents.length !== 1 ? 's' : ''}`
                 : 'Nenhuma reunião visível'}
             </h3>
           </div>
@@ -299,11 +283,6 @@ export default function AgendaGreat() {
         {visibleAgendaEvents.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {visibleAgendaEvents.map((event) => {
-              const endTime = format(
-                parseISO(`2000-01-01T${event.event_time}`),
-                'HH:mm'
-              );
-
               return (
                 <button
                   key={event.id}
@@ -321,7 +300,7 @@ export default function AgendaGreat() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-950">{event.title}</p>
                         <p className="text-xs text-slate-500">
-                          {format(parseISO(event.event_date), "dd 'de' MMMM", { locale: ptBR })} às {event.event_time.slice(0, 5)} • {endTime}
+                          {format(parseISO(event.event_date), "dd 'de' MMMM", { locale: ptBR })} às {event.event_time.slice(0, 5)}
                         </p>
                       </div>
                       <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600 shadow-sm ring-1 ring-slate-200">
@@ -367,15 +346,10 @@ export default function AgendaGreat() {
         </div>
       )}
 
-      {events.length === 0 && !hasActiveFilters && (
-        <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          A seção "Agenda carregada" está limitada para mostrar apenas os eventos de 31/07/2026 e 01/08/2026.
-        </div>
-      )}
-
       {viewMode === 'day' && (
         <AgendaDayTimeline
-          events={filteredEvents}
+          events={agendaLoadedEvents}
+          initialDate={initialFocusDate || undefined}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
         />
@@ -383,7 +357,8 @@ export default function AgendaGreat() {
 
       {viewMode === 'week' && (
         <AgendaWeekTimeline
-          events={filteredEvents}
+          events={agendaLoadedEvents}
+          initialDate={initialFocusDate || undefined}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
         />
@@ -391,7 +366,8 @@ export default function AgendaGreat() {
 
       {viewMode === 'month' && (
         <AgendaMonthCalendar
-          events={filteredEvents}
+          events={agendaLoadedEvents}
+          initialDate={initialFocusDate || undefined}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
         />

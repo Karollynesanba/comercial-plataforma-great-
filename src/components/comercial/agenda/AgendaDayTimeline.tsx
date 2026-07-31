@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
@@ -18,6 +18,7 @@ import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaDayTimelineProps {
   events: AgendaEvent[];
+  initialDate?: Date;
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
 }
@@ -35,8 +36,15 @@ interface PositionedEvent {
   height: number;
 }
 
-export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDayTimelineProps) {
+export function AgendaDayTimeline({ events, initialDate, onEventClick, onAddEvent }: AgendaDayTimelineProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const hasAppliedInitialDate = useRef(false);
+
+  useEffect(() => {
+    if (!initialDate || hasAppliedInitialDate.current) return;
+    setCurrentDate(initialDate);
+    hasAppliedInitialDate.current = true;
+  }, [initialDate]);
 
   const dayEvents = useMemo(() => {
     const dateKey = format(currentDate, 'yyyy-MM-dd');
