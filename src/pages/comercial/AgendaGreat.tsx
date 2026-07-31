@@ -16,14 +16,7 @@ import { addMinutes, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
-
-const formatLocalDate = (dateString: string) => String(dateString || '').trim().slice(0, 10);
-
-const parseLocalDate = (dateString: string) => {
-  const [year, month, day] = formatLocalDate(dateString).split('-').map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
-};
+const AGENDA_VISIBLE_DATES = new Set(['2026-07-31', '2026-08-01']);
 
 const COLOR_FILTER_LABELS: Record<string, string> = {
   '#3B82F6': 'Reunião Marcada',
@@ -122,22 +115,13 @@ export default function AgendaGreat() {
     setAddDialogOpen(true);
   };
 
-  const initialFocusDate = useMemo(() => {
-    const firstEvent = [...events].sort((a, b) => {
-      const dateCompare = formatLocalDate(a.event_date).localeCompare(formatLocalDate(b.event_date));
+  const visibleAgendaEvents = useMemo(() => {
+    return filteredEvents
+      .filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date))
+      .sort((a, b) => {
+      const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
       if (dateCompare !== 0) return dateCompare;
       return String(a.event_time).localeCompare(String(b.event_time));
-    })[0];
-
-    return firstEvent ? parseLocalDate(firstEvent.event_date) : null;
-  }, [events]);
-
-  const visibleAgendaEvents = useMemo(() => {
-    return [...filteredEvents]
-      .sort((a, b) => {
-        const dateCompare = formatLocalDate(a.event_date).localeCompare(formatLocalDate(b.event_date));
-        if (dateCompare !== 0) return dateCompare;
-        return String(a.event_time).localeCompare(String(b.event_time));
       });
   }, [filteredEvents]);
 
@@ -362,10 +346,15 @@ export default function AgendaGreat() {
         </div>
       )}
 
+      {events.length === 0 && !hasActiveFilters && (
+        <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+          A seção "Agenda carregada" está limitada para mostrar apenas os eventos de 31/07/2026 e 01/08/2026.
+        </div>
+      )}
+
       {viewMode === 'day' && (
         <AgendaDayTimeline
           events={filteredEvents}
-          initialDate={initialFocusDate || undefined}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
         />
@@ -374,7 +363,6 @@ export default function AgendaGreat() {
       {viewMode === 'week' && (
         <AgendaWeekTimeline
           events={filteredEvents}
-          initialDate={initialFocusDate || undefined}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
         />
@@ -383,7 +371,6 @@ export default function AgendaGreat() {
       {viewMode === 'month' && (
         <AgendaMonthCalendar
           events={filteredEvents}
-          initialDate={initialFocusDate || undefined}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
         />
