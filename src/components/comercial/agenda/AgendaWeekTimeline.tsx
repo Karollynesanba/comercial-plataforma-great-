@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
@@ -20,7 +20,6 @@ import { EventCardTooltip } from './EventCardTooltip';
 
 interface AgendaWeekTimelineProps {
   events: AgendaEvent[];
-  initialDate?: Date;
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
 }
@@ -38,17 +37,8 @@ interface PositionedEvent {
   height: number;
 }
 
-const getDateKey = (value: string) => String(value || '').trim().slice(0, 10);
-
-export function AgendaWeekTimeline({ events, initialDate, onEventClick, onAddEvent }: AgendaWeekTimelineProps) {
+export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaWeekTimelineProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const hasAppliedInitialDate = useRef(false);
-
-  useEffect(() => {
-    if (!initialDate || hasAppliedInitialDate.current) return;
-    setCurrentDate(initialDate);
-    hasAppliedInitialDate.current = true;
-  }, [initialDate]);
 
   const getScheduledByLabel = (event: AgendaEvent) =>
     event.scheduled_by
@@ -65,7 +55,7 @@ export function AgendaWeekTimeline({ events, initialDate, onEventClick, onAddEve
     const map = new Map<string, AgendaEvent[]>();
     weekDays.forEach((day) => {
       const dateKey = format(day, 'yyyy-MM-dd');
-      map.set(dateKey, events.filter((e) => getDateKey(e.event_date) === dateKey));
+      map.set(dateKey, events.filter((e) => e.event_date === dateKey));
     });
     return map;
   }, [events, weekDays]);
@@ -153,12 +143,12 @@ export function AgendaWeekTimeline({ events, initialDate, onEventClick, onAddEve
   const goToToday = () => setCurrentDate(new Date());
 
   const now = new Date();
-  const currentTimeTop = (() => {
+  const currentTimeTop = useMemo(() => {
     const hours = now.getHours();
     const minutes = now.getMinutes();
     if (hours < START_HOUR || hours >= END_HOUR) return -1;
     return (((hours - START_HOUR) * 60 + minutes) / 60) * HOUR_HEIGHT;
-  })();
+  }, [now]);
 
   const weekStart = weekDays[0];
   const weekEnd = weekDays[6];
