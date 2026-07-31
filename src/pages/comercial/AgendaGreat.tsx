@@ -59,7 +59,7 @@ export default function AgendaGreat() {
   }, [selectedColors]);
 
   const filteredEvents = useMemo(() => {
-    let result = events.filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date));
+    let result = events;
 
     if (selectedTeamId !== 'all') {
       result = result.filter((e) => e.team_id === selectedTeamId);
@@ -116,11 +116,13 @@ export default function AgendaGreat() {
   };
 
   const visibleAgendaEvents = useMemo(() => {
-    return [...filteredEvents].sort((a, b) => {
+    return filteredEvents
+      .filter((event) => AGENDA_VISIBLE_DATES.has(event.event_date))
+      .sort((a, b) => {
       const dateCompare = String(a.event_date).localeCompare(String(b.event_date));
       if (dateCompare !== 0) return dateCompare;
       return String(a.event_time).localeCompare(String(b.event_time));
-    });
+      });
   }, [filteredEvents]);
 
   return (
@@ -346,7 +348,7 @@ export default function AgendaGreat() {
 
       {events.length === 0 && !hasActiveFilters && (
         <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          A agenda está limitada para mostrar apenas os eventos de 31/07/2026 e 01/08/2026.
+          A seção "Agenda carregada" está limitada para mostrar apenas os eventos de 31/07/2026 e 01/08/2026.
         </div>
       )}
 
