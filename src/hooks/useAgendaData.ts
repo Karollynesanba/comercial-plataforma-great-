@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useCommercialSafe } from '@/contexts/CommercialContext';
@@ -5,9 +6,45 @@ import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { isCustomMeetingTitle, matchMeetingName, normalizeMeetingTitle } from '@/lib/agendaTitle';
+import { normalizeAgendaColor, normalizeAgendaDateKey, normalizeAgendaTimeKey } from '@/lib/agendaDate';
+
+const PRIMARY_AGENDA_TABLE = 'nova_agenda';
+const LEGACY_AGENDA_TABLE = 'agenda_events';
+const AGENDA_QUERY_KEY = ['agenda-events'];
+const AGENDA_SYNC_CHANNEL = 'agenda-events-sync';
+
+const CORE_EVENT_KEYS = new Set([
+  'id',
+  'source_table',
+  'title',
+  'description',
+  'notes',
+  'client_name',
+  'client_phone',
+  'clinic_name',
+  'event_date',
+  'event_time',
+  'duration_minutes',
+  'meeting_link',
+  'scheduled_by',
+  'lead_stage',
+  'creative_source',
+  'color',
+  'reminder_2h_sent',
+  'reminder_30min_sent',
+  'created_by_user_id',
+  'assigned_closer_id',
+  'team_id',
+  'created_at',
+  'updated_at',
+  'pipeline_client_id',
+  'title_locked',
+  'raw_record',
+]);
 
 export interface AgendaEvent {
   id: string;
+  source_table?: string;
   pipeline_client_id?: string | null;
   title: string;
   description: string | null;
@@ -30,6 +67,7 @@ export interface AgendaEvent {
   team_id: string | null;
   created_at: string;
   updated_at: string;
+  raw_record?: Record<string, unknown>;
   assigned_closer?: {
     id: string;
     full_name: string;
@@ -42,7 +80,18 @@ export interface AgendaEvent {
 
 export type AgendaEventInsert = Omit<
   AgendaEvent,
-  'id' | 'created_at' | 'updated_at' | 'reminder_2h_sent' | 'reminder_30min_sent' | 'assigned_closer' | 'clinic_name' | 'scheduled_by' | 'lead_stage' | 'creative_source'
+  | 'id'
+  | 'created_at'
+  | 'updated_at'
+  | 'reminder_2h_sent'
+  | 'reminder_30min_sent'
+  | 'assigned_closer'
+  | 'clinic_name'
+  | 'scheduled_by'
+  | 'lead_stage'
+  | 'creative_source'
+  | 'raw_record'
+  | 'source_table'
 > & {
   clinic_name?: string | null;
   scheduled_by?: string | null;
@@ -68,7 +117,123 @@ const LOCAL_TEAMS = [
   { id: 'team-tropa-de-elite', name: 'Tropa de Elite' },
 ];
 
-function enrichEvent(event: any): AgendaEvent {
+type AgendaRow = Record<string, any>;
+
+function toTrimmedString(value: unknown) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function toOptionalString(value: unknown) {
+  const text = toTrimmedString(value);
+  return text || null;
+}
+
+function toNumber(value: unknown, fallback = 60) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  const parsed = Number.parseInt(toTrimmedString(value), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toBoolean(value: unknown, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  const text = toTrimmedString(value).toLowerCase();
+  if (!text) return fallback;
+  if (['true', 't', '1', 'yes', 'sim', 'y'].includes(text)) return true;
+  if (['false', 'f', '0', 'no', 'nao', 'n', 'não'].includes(text)) return false;
+  return fallback;
+}
+
+function pickValue(record: AgendaRow, keys: string[]) {
+  for (const key of keys) {
+    if (!(key in record)) continue;
+    const value = record[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string' && !value.trim()) continue;
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeTitle(record: AgendaRow) {
+  const title = toTrimmedString(
+    pickValue(record, ['title', 'agenda_event_title', 'event_title', 'nome_evento', 'nome', 'client_name'])
+  );
+  const clientName = toTrimmedString(
+    pickValue(record, ['client_name', 'nome_cliente', 'nome', 'patient_name', 'paciente'])
+  );
+
+  return title || (clientName ? `Reuniao com ${clientName}` : 'Evento sem titulo');
+}
+
+function normalizeAgendaRecord(record: AgendaRow, sourceTable: string): AgendaEvent {
+  const rawRecord = Object.fromEntries(
+    Object.entries(record).filter(([key, value]) => {
+      if (CORE_EVENT_KEYS.has(key)) return false;
+      if (value === null || value === undefined) return false;
+      if (typeof value === 'string' && !value.trim()) return false;
+      return true;
+    })
+  );
+
+  const eventDate = normalizeAgendaDateKey(
+    toTrimmedString(pickValue(record, ['event_date', 'agenda_event_date', 'data', 'date', 'scheduled_date']))
+  );
+  const eventTime = normalizeAgendaTimeKey(
+    toTrimmedString(pickValue(record, ['event_time', 'agenda_event_time', 'horario', 'hour', 'time', 'start_time']))
+  );
+  const title = normalizeTitle(record);
+  const clientName =
+    toTrimmedString(pickValue(record, ['client_name', 'nome_cliente', 'nome', 'patient_name', 'paciente'])) ||
+    title.replace(/^Reuniao com\s+/i, '').trim() ||
+    'Sem nome';
+  const clientPhone = formatPhoneForWhatsApp(
+    toTrimmedString(pickValue(record, ['client_phone', 'telefone', 'phone', 'whatsapp', 'celular']))
+  );
+  const color = normalizeAgendaColor(
+    toTrimmedString(pickValue(record, ['color', 'event_color', 'background_color', 'category_color']))
+  );
+
+  return {
+    id: toTrimmedString(record.id || record.event_id || record.uuid || crypto.randomUUID()),
+    source_table: toTrimmedString(record.source_table || sourceTable),
+    pipeline_client_id: toOptionalString(record.pipeline_client_id),
+    title,
+    description: toOptionalString(pickValue(record, ['description', 'descricao', 'details', 'observacoes', 'observations'])),
+    notes: toOptionalString(pickValue(record, ['notes', 'observations', 'observacoes', 'anotacoes', 'anotações'])),
+    client_name: clientName,
+    client_phone: clientPhone,
+    clinic_name: toOptionalString(pickValue(record, ['clinic_name', 'salao_ou_clinica', 'salon_name', 'company_name'])),
+    event_date: eventDate,
+    event_time: eventTime,
+    duration_minutes: toNumber(
+      pickValue(record, ['duration_minutes', 'duration', 'duracao', 'duração', 'meeting_duration']),
+      60
+    ),
+    meeting_link: toOptionalString(pickValue(record, ['meeting_link', 'link', 'meeting_url', 'url'])),
+    scheduled_by: toOptionalString(pickValue(record, ['scheduled_by', 'agendado_por', 'responsavel', 'responsável'])),
+    lead_stage: toOptionalString(pickValue(record, ['lead_stage', 'stage', 'status'])),
+    creative_source: toOptionalString(pickValue(record, ['creative_source', 'criativo', 'origin', 'origem'])),
+    color: color || '#3B82F6',
+    reminder_2h_sent: toBoolean(pickValue(record, ['reminder_2h_sent', 'lembrete_2h_enviado'])),
+    reminder_30min_sent: toBoolean(pickValue(record, ['reminder_30min_sent', 'lembrete_30min_enviado'])),
+    created_by_user_id: toOptionalString(pickValue(record, ['created_by_user_id', 'user_id', 'criado_por'])),
+    assigned_closer_id: toOptionalString(pickValue(record, ['assigned_closer_id', 'closer_id', 'responsavel_id'])),
+    team_id: toOptionalString(pickValue(record, ['team_id', 'equipe_id', 'team'])),
+    created_at: toTrimmedString(pickValue(record, ['created_at', 'inserted_at', 'data_criacao'])) || new Date().toISOString(),
+    updated_at: toTrimmedString(pickValue(record, ['updated_at', 'modified_at', 'data_atualizacao'])) || new Date().toISOString(),
+    raw_record: rawRecord,
+    assigned_closer: null,
+    team: record.team_id ? LOCAL_TEAMS.find((team) => team.id === record.team_id) || null : null,
+  };
+}
+
+function enrichEvent(event: AgendaEvent): AgendaEvent {
   return {
     ...event,
     title: String(event.title || event.client_name || '').trim() || event.title,
@@ -96,6 +261,42 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
+function sortAgendaEvents(events: AgendaEvent[]) {
+  return [...events].sort((a, b) => {
+    const dateCompare = a.event_date.localeCompare(b.event_date);
+    if (dateCompare !== 0) return dateCompare;
+
+    const timeCompare = a.event_time.localeCompare(b.event_time);
+    if (timeCompare !== 0) return timeCompare;
+
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function mergeAgendaEvents(primary: AgendaEvent[], legacy: AgendaEvent[], fallback: AgendaEvent[]) {
+  const merged = new Map<string, AgendaEvent>();
+
+  const put = (event: AgendaEvent) => {
+    const current = merged.get(event.id);
+    if (!current) {
+      merged.set(event.id, event);
+      return;
+    }
+
+    if (current.source_table !== PRIMARY_AGENDA_TABLE && event.source_table === PRIMARY_AGENDA_TABLE) {
+      merged.set(event.id, event);
+      return;
+    }
+
+    if (current.source_table === event.source_table) {
+      merged.set(event.id, event);
+    }
+  };
+
+  sortAgendaEvents([...fallback, ...legacy, ...primary]).forEach(put);
+  return sortAgendaEvents(Array.from(merged.values()));
+}
+
 function upsertAgendaEventLocally(event: AgendaEvent) {
   updateCommercialLocalData((current) => {
     const exists = current.agendaEvents.some((item: any) => item.id === event.id);
@@ -115,67 +316,99 @@ function upsertAgendaEventLocally(event: AgendaEvent) {
 async function syncRelatedRecords(event: AgendaEvent) {
   if (!isSupabaseConfigured) return;
 
-  const target = samePersonFilter(event.client_name, event.client_phone);
-  const eventPipelineClientId = (event as any).pipeline_client_id || null;
-  const { data: clients } = await supabase.from('pipeline_clients').select('id, client_name, telefone').limit(1000);
-  const { data: linkedEvents } = await supabase
-    .from('agenda_events')
-    .select('id, pipeline_client_id')
-    .eq('pipeline_client_id', eventPipelineClientId || '')
-    .limit(10);
+  try {
+    const supabaseAny = supabase as any;
+    const targetTable = event.source_table || PRIMARY_AGENDA_TABLE;
+    const target = samePersonFilter(event.client_name, event.client_phone);
+    const eventPipelineClientId = event.pipeline_client_id || null;
 
-  const matchingClients = (clients || []).filter((client) => {
-    const clientDigits = String(client.telefone || '').replace(/\D/g, '');
-    return matchMeetingName(client.client_name || '') === matchMeetingName(target.name || '') || (target.digits && clientDigits === target.digits);
-  });
-  const selectedClient =
-    (eventPipelineClientId
-      ? matchingClients.find((client) => client.id === eventPipelineClientId) || null
-      : null) ||
-    matchingClients.find((client) => String(client.telefone || '').replace(/\D/g, '') === target.digits) ||
-    matchingClients.find((client) => matchMeetingName(client.client_name || '') === matchMeetingName(target.name || '')) ||
-    null;
-  const linkedPipelineClientId = selectedClient?.id || eventPipelineClientId || null;
+    const { data: clients } = await supabaseAny.from('pipeline_clients').select('id, client_name, telefone').limit(1000);
+    const { data: linkedEvents } = await supabaseAny
+      .from(targetTable)
+      .select('id, pipeline_client_id')
+      .eq('pipeline_client_id', eventPipelineClientId || '')
+      .limit(10);
 
-  if (linkedPipelineClientId) {
-    const anotherLinkedEvent = (linkedEvents || []).find((item) => item.id !== event.id);
-    if (anotherLinkedEvent) {
-      return;
+    const matchingClients = (clients || []).filter((client: any) => {
+      const clientDigits = String(client.telefone || '').replace(/\D/g, '');
+      return (
+        matchMeetingName(client.client_name || '') === matchMeetingName(target.name || '') ||
+        (target.digits && clientDigits === target.digits)
+      );
+    });
+
+    const selectedClient =
+      (eventPipelineClientId
+        ? matchingClients.find((client: any) => client.id === eventPipelineClientId) || null
+        : null) ||
+      matchingClients.find((client: any) => String(client.telefone || '').replace(/\D/g, '') === target.digits) ||
+      matchingClients.find((client: any) => matchMeetingName(client.client_name || '') === matchMeetingName(target.name || '')) ||
+      null;
+    const linkedPipelineClientId = selectedClient?.id || eventPipelineClientId || null;
+
+    if (linkedPipelineClientId) {
+      const anotherLinkedEvent = (linkedEvents || []).find((item: any) => item.id !== event.id);
+      if (anotherLinkedEvent) {
+        return;
+      }
+
+      await supabaseAny
+        .from(targetTable)
+        .update({
+          pipeline_client_id: linkedPipelineClientId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', event.id);
     }
-    await supabase.from('agenda_events').update({
-      pipeline_client_id: linkedPipelineClientId,
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', event.id);
+  } catch (error) {
+    console.warn('Agenda related sync skipped for event', event.id, error);
   }
+}
+
+async function fetchAgendaTable(tableName: string) {
+  const supabaseAny = supabase as any;
+  const { data, error } = await withTimeout(supabaseAny.from(tableName).select('*'), 8000, tableName);
+  if (error) throw error;
+  return (data || []).map((row: AgendaRow) => enrichEvent(normalizeAgendaRecord(row, tableName)));
 }
 
 export function useAgendaData() {
   const queryClient = useQueryClient();
   const commercial = useCommercialSafe();
-  const commercialFallbackEvents = (commercial?.agendaEvents || []).map(enrichEvent);
-  const localFallbackEvents = (readCommercialLocalData().agendaEvents || []).map(enrichEvent);
+  const commercialFallbackEvents = (commercial?.agendaEvents || []).map((event: any) =>
+    enrichEvent(normalizeAgendaRecord(event, LEGACY_AGENDA_TABLE))
+  );
+  const localFallbackEvents = (readCommercialLocalData().agendaEvents || []).map((event: any) =>
+    enrichEvent(normalizeAgendaRecord(event, LEGACY_AGENDA_TABLE))
+  );
   const fallbackEvents = commercialFallbackEvents.length > 0 ? commercialFallbackEvents : localFallbackEvents;
 
   const { data: events = [], isLoading, error } = useQuery({
-    queryKey: ['agenda-events'],
+    queryKey: AGENDA_QUERY_KEY,
     queryFn: async () => {
       if (!isSupabaseConfigured) {
         return fallbackEvents;
       }
-      try {
-        const { data, error } = await withTimeout(
-          supabase
-            .from('agenda_events')
-            .select('*')
-            .order('event_date', { ascending: true })
-            .order('event_time', { ascending: true }),
-          7000,
-          'agenda_events'
-        );
-        if (error) throw error;
 
-        const remoteEvents = (data || []).map(enrichEvent);
-        return remoteEvents.length > 0 ? remoteEvents : fallbackEvents;
+      try {
+        const [primaryResult, legacyResult] = await Promise.allSettled([
+          fetchAgendaTable(PRIMARY_AGENDA_TABLE),
+          fetchAgendaTable(LEGACY_AGENDA_TABLE),
+        ]);
+
+        const primaryEvents = primaryResult.status === 'fulfilled' ? primaryResult.value : [];
+        const legacyEvents = legacyResult.status === 'fulfilled' ? legacyResult.value : [];
+
+        if (primaryResult.status === 'rejected') {
+          console.warn('Agenda query failed for nova_agenda.', primaryResult.reason);
+        }
+
+        if (legacyResult.status === 'rejected') {
+          console.warn('Agenda query failed for agenda_events.', legacyResult.reason);
+        }
+
+        const mergedRemoteEvents = mergeAgendaEvents(primaryEvents, legacyEvents, fallbackEvents);
+        return mergedRemoteEvents.length > 0 ? mergedRemoteEvents : fallbackEvents;
       } catch (queryError) {
         console.warn('Agenda query failed, falling back to commercial/local cache.', queryError);
         return fallbackEvents;
@@ -183,15 +416,47 @@ export function useAgendaData() {
     },
   });
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const refreshAgenda = () => {
+      queryClient.invalidateQueries({ queryKey: AGENDA_QUERY_KEY });
+    };
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refreshAgenda();
+      }
+    };
+
+    const channel = (supabase as any)
+      .channel(AGENDA_SYNC_CHANNEL)
+      .on('postgres_changes', { event: '*', schema: 'public', table: PRIMARY_AGENDA_TABLE }, refreshAgenda)
+      .on('postgres_changes', { event: '*', schema: 'public', table: LEGACY_AGENDA_TABLE }, refreshAgenda)
+      .subscribe();
+
+    window.addEventListener('focus', refreshAgenda);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', refreshAgenda);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      (supabase as any).removeChannel(channel);
+    };
+  }, [queryClient]);
+
   const createEvent = useMutation({
     mutationFn: async (event: AgendaEventInsert) => {
       const { skip_related_sync, ...payloadBase } = event as AgendaEventInsert & { skip_related_sync?: boolean };
+      const supabaseAny = supabase as any;
+
       if (!isSupabaseConfigured) {
         const payload = {
           ...payloadBase,
           title: String(payloadBase.title || payloadBase.client_name || '').trim() || payloadBase.title,
           title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
           id: `agenda-${crypto.randomUUID()}`,
+          source_table: LEGACY_AGENDA_TABLE,
           client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
           reminder_2h_sent: false,
           reminder_30min_sent: false,
@@ -217,27 +482,44 @@ export function useAgendaData() {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase.from('agenda_events').insert(payload).select('*').single();
-      if (error) throw error;
+      const insertIntoTable = async (tableName: string) => {
+        const { data, error } = await supabaseAny.from(tableName).insert(payload).select('*').single();
+        if (error) throw error;
+        return enrichEvent(normalizeAgendaRecord(data, tableName));
+      };
 
-      const newEvent = enrichEvent(data);
-      if (!skip_related_sync) {
-        await syncRelatedRecords(newEvent);
+      try {
+        const newEvent = await insertIntoTable(PRIMARY_AGENDA_TABLE);
+        if (!skip_related_sync) {
+          await syncRelatedRecords(newEvent);
+        }
+        return newEvent;
+      } catch (primaryError) {
+        console.warn('Agenda insert failed in nova_agenda, trying agenda_events as fallback.', primaryError);
+        const fallbackEvent = await insertIntoTable(LEGACY_AGENDA_TABLE);
+        if (!skip_related_sync) {
+          await syncRelatedRecords(fallbackEvent);
+        }
+        return fallbackEvent;
       }
-      return newEvent;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: AGENDA_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
       toast.success('Evento criado com sucesso!');
     },
-    onError: () => {
+    onError: (mutationError) => {
+      console.error('Erro ao criar evento na agenda.', mutationError);
       toast.error('Erro ao criar evento');
     },
   });
 
   const updateEvent = useMutation({
     mutationFn: async ({ id, ...updates }: AgendaEventUpdate & { id: string }) => {
+      const supabaseAny = supabase as any;
+      const currentEvent = events.find((item) => item.id === id);
+      const sourceTable = currentEvent?.source_table || PRIMARY_AGENDA_TABLE;
+
       if (!isSupabaseConfigured) {
         let updated: AgendaEvent | null = null;
         updateCommercialLocalData((current) => {
@@ -265,7 +547,7 @@ export function useAgendaData() {
         return updated;
       }
 
-      const { data: previous, error: previousError } = await supabase.from('agenda_events').select('*').eq('id', id).single();
+      const { data: previous, error: previousError } = await supabaseAny.from(sourceTable).select('*').eq('id', id).single();
       if (previousError) throw previousError;
       if (!previous) {
         throw new Error('Evento nao encontrado');
@@ -274,50 +556,51 @@ export function useAgendaData() {
       const previousTitle = String(previous.title || '').trim();
       const previousClientName = String(previous.client_name || '').trim();
       const explicitTitle = typeof updates.title === 'string' ? String(updates.title).trim() : '';
-      const resolvedTitle = explicitTitle
-        ? explicitTitle
-        : previousTitle || `Reuniao com ${previousClientName || 'Lead sem nome'}`;
+      const resolvedTitle = explicitTitle ? explicitTitle : previousTitle || `Reuniao com ${previousClientName || 'Lead sem nome'}`;
       const currentDefaultTitle = `Reuniao com ${String(updates.client_name || previous.client_name || 'Lead sem nome').trim()}`;
 
       const payload = {
         ...previous,
         ...updates,
         title: resolvedTitle,
-        title_locked:
-          Boolean((previous as any).title_locked) ||
-          resolvedTitle !== currentDefaultTitle,
+        title_locked: Boolean((previous as any).title_locked) || resolvedTitle !== currentDefaultTitle,
         client_phone: updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : previous.client_phone,
         updated_at: new Date().toISOString(),
       };
 
-      const optimisticEvent = enrichEvent(payload);
+      const optimisticEvent = enrichEvent(normalizeAgendaRecord(payload, sourceTable));
       upsertAgendaEventLocally(optimisticEvent);
-      queryClient.setQueryData<AgendaEvent[]>(['agenda-events'], (current = []) =>
+      queryClient.setQueryData<AgendaEvent[]>(AGENDA_QUERY_KEY, (current = []) =>
         current.some((item) => item.id === optimisticEvent.id)
           ? current.map((item) => (item.id === optimisticEvent.id ? optimisticEvent : item))
           : [optimisticEvent, ...current]
       );
 
-      const { data, error } = await supabase.from('agenda_events').update(payload).eq('id', id).select('*').single();
+      const { data, error } = await supabaseAny.from(sourceTable).update(payload).eq('id', id).select('*').single();
       if (error) throw error;
 
-      const updatedEvent = enrichEvent(data);
+      const updatedEvent = enrichEvent(normalizeAgendaRecord(data, sourceTable));
       upsertAgendaEventLocally(updatedEvent);
       await syncRelatedRecords(updatedEvent);
       return updatedEvent;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: AGENDA_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
       toast.success('Evento atualizado com sucesso!');
     },
-    onError: () => {
+    onError: (mutationError) => {
+      console.error('Erro ao atualizar evento na agenda.', mutationError);
       toast.error('Erro ao atualizar evento');
     },
   });
 
   const deleteEvent = useMutation({
     mutationFn: async (id: string) => {
+      const supabaseAny = supabase as any;
+      const currentEvent = events.find((item) => item.id === id);
+      const sourceTable = currentEvent?.source_table || PRIMARY_AGENDA_TABLE;
+
       if (!isSupabaseConfigured) {
         updateCommercialLocalData((current) => ({
           ...current,
@@ -326,14 +609,16 @@ export function useAgendaData() {
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return;
       }
-      const { error } = await supabase.from('agenda_events').delete().eq('id', id);
+
+      const { error } = await supabaseAny.from(sourceTable).delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: AGENDA_QUERY_KEY });
       toast.success('Evento excluido com sucesso!');
     },
-    onError: () => {
+    onError: (mutationError) => {
+      console.error('Erro ao excluir evento na agenda.', mutationError);
       toast.error('Erro ao excluir evento');
     },
   });

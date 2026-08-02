@@ -58,6 +58,55 @@ function normalizeFaturamentoBucket(value?: string | null) {
   }
 }
 
+const CORE_EVENT_DETAIL_KEYS = new Set([
+  'id',
+  'source_table',
+  'title',
+  'description',
+  'notes',
+  'client_name',
+  'client_phone',
+  'clinic_name',
+  'event_date',
+  'event_time',
+  'duration_minutes',
+  'meeting_link',
+  'scheduled_by',
+  'lead_stage',
+  'creative_source',
+  'color',
+  'reminder_2h_sent',
+  'reminder_30min_sent',
+  'created_by_user_id',
+  'assigned_closer_id',
+  'team_id',
+  'created_at',
+  'updated_at',
+  'pipeline_client_id',
+  'raw_record',
+]);
+
+function formatDynamicFieldLabel(key: string) {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .trim();
+}
+
+function formatDynamicFieldValue(value: unknown) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return value.toLocaleString('pt-BR');
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => formatDynamicFieldValue(item))
+      .filter((item) => item.length > 0);
+    return items.join(', ');
+  }
+  return '';
+}
+
 const EVENT_COLOR_PRESET = EVENT_COLORS.map((color) => ({
   ...color,
   style: { backgroundColor: color.value },
@@ -186,6 +235,21 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   const recoveredStatus = leadForm.status === 'NO_SHOW' ? 'NOVO_LEAD' : leadForm.status;
   const recoveredStatusOption = STATUS_OPTIONS.find((option) => option.value === recoveredStatus);
   const recoveredPipelineStage = recoveredStatusOption?.pipelineStage || 'NOVO';
+  const extraEventFields = useMemo(() => {
+    if (!event?.raw_record) return [];
+
+    return Object.entries(event.raw_record)
+      .filter(([key, value]) => {
+        if (CORE_EVENT_DETAIL_KEYS.has(key)) return false;
+        return formatDynamicFieldValue(value).length > 0;
+      })
+      .map(([key, value]) => ({
+        key,
+        label: formatDynamicFieldLabel(key),
+        value: formatDynamicFieldValue(value),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [event?.raw_record]);
   if (!event) return null;
 
   const originalEventTitle = event.title?.trim() || '';
@@ -574,6 +638,27 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                     {event.description || event.notes || 'Sem observações registradas para esse agendamento.'}
                   </p>
                 </div>
+
+                {extraEventFields.length > 0 && (
+                  <div className="mt-6 rounded-[1.6rem] border border-slate-100 bg-white p-5 shadow-sm">
+                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                      <StickyNote className="h-4 w-4 text-primary" />
+                      Outros dados do banco
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {extraEventFields.map((field) => (
+                        <div key={field.key} className="rounded-[1rem] border border-slate-100 bg-slate-50 p-3">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                            {field.label}
+                          </p>
+                          <p className="mt-1 break-words text-sm font-medium leading-6 text-slate-800">
+                            {field.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-[2rem] border border-slate-100 bg-white p-7 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">

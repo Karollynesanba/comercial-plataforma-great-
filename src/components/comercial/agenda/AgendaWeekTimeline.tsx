@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
 import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { EventCardTooltip } from './EventCardTooltip';
+import { normalizeAgendaDateKey } from '@/lib/agendaDate';
 
 interface AgendaWeekTimelineProps {
   events: AgendaEvent[];
@@ -55,7 +56,7 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
     const map = new Map<string, AgendaEvent[]>();
     weekDays.forEach((day) => {
       const dateKey = format(day, 'yyyy-MM-dd');
-      map.set(dateKey, events.filter((e) => e.event_date === dateKey));
+      map.set(dateKey, events.filter((e) => normalizeAgendaDateKey(e.event_date) === dateKey));
     });
     return map;
   }, [events, weekDays]);

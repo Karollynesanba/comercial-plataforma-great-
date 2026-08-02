@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
 import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { EventCardTooltip } from './EventCardTooltip';
+import { normalizeAgendaDateKey } from '@/lib/agendaDate';
 
 interface AgendaDayTimelineProps {
   events: AgendaEvent[];
@@ -40,7 +41,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
 
   const dayEvents = useMemo(() => {
     const dateKey = format(currentDate, 'yyyy-MM-dd');
-    return events.filter((e) => e.event_date === dateKey);
+    return events.filter((e) => normalizeAgendaDateKey(e.event_date) === dateKey);
   }, [events, currentDate]);
 
   const getScheduledByLabel = (event: AgendaEvent) =>

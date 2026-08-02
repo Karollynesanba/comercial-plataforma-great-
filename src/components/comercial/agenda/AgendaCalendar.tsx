@@ -18,6 +18,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
+import { normalizeAgendaDateKey } from '@/lib/agendaDate';
 
 interface AgendaCalendarProps {
   events: AgendaEvent[];
@@ -41,7 +42,8 @@ export function AgendaCalendar({ events, onDayClick, onEventClick, onAddEvent }:
   const eventsByDate = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
     events.forEach((event) => {
-      const dateKey = event.event_date;
+      const dateKey = normalizeAgendaDateKey(event.event_date);
+      if (!dateKey) return;
       if (!map.has(dateKey)) {
         map.set(dateKey, []);
       }

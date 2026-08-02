@@ -22,6 +22,7 @@ import { AgendaEvent } from '@/hooks/useAgendaData';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EventCardTooltip } from './EventCardTooltip';
+import { normalizeAgendaDateKey } from '@/lib/agendaDate';
 
 interface AgendaMonthCalendarProps {
   events: AgendaEvent[];
@@ -47,7 +48,8 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
   const eventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
     events.forEach((event) => {
-      const key = event.event_date;
+      const key = normalizeAgendaDateKey(event.event_date);
+      if (!key) return;
       if (!map.has(key)) {
         map.set(key, []);
       }
