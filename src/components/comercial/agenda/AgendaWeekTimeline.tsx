@@ -17,12 +17,14 @@ import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
 import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { EventCardTooltip } from './EventCardTooltip';
-import { normalizeAgendaDateKey } from '@/lib/agendaDate';
+import { resolveAgendaDateKey, resolveAgendaTimeKey } from '@/lib/agendaDate';
 
 interface AgendaWeekTimelineProps {
   events: AgendaEvent[];
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
+  currentDate: Date;
+  onCurrentDateChange: (date: Date) => void;
 }
 
 const HOUR_HEIGHT = 50;
@@ -38,9 +40,7 @@ interface PositionedEvent {
   height: number;
 }
 
-export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaWeekTimelineProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-
+export function AgendaWeekTimeline({ events, onEventClick, onAddEvent, currentDate, onCurrentDateChange }: AgendaWeekTimelineProps) {
   const getScheduledByLabel = (event: AgendaEvent) =>
     event.scheduled_by
       ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
@@ -56,7 +56,7 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
     const map = new Map<string, AgendaEvent[]>();
     weekDays.forEach((day) => {
       const dateKey = format(day, 'yyyy-MM-dd');
-      map.set(dateKey, events.filter((e) => normalizeAgendaDateKey(e.event_date) === dateKey));
+      map.set(dateKey, events.filter((e) => resolveAgendaDateKey(e) === dateKey));
     });
     return map;
   }, [events, weekDays]);
@@ -64,16 +64,16 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
   const getPositionedEvents = (dayEvents: AgendaEvent[]): PositionedEvent[] => {
     if (dayEvents.length === 0) return [];
 
-    const sorted = [...dayEvents].sort((a, b) => a.event_time.localeCompare(b.event_time));
+    const sorted = [...dayEvents].sort((a, b) => resolveAgendaTimeKey(a).localeCompare(resolveAgendaTimeKey(b)));
 
     const groups: AgendaEvent[][] = [];
     let currentGroup: AgendaEvent[] = [];
     let currentGroupEnd = '';
 
     sorted.forEach((event) => {
-      const eventStart = event.event_time;
+      const eventStart = resolveAgendaTimeKey(event);
       const eventEnd = format(
-        addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
+        addMinutes(parseISO(`2000-01-01T${eventStart}`), event.duration_minutes || 60),
         'HH:mm:ss'
       );
 
@@ -100,12 +100,12 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
       const columns: AgendaEvent[][] = [];
 
       group.forEach((event) => {
-        const eventStart = event.event_time;
+        const eventStart = resolveAgendaTimeKey(event);
 
         let columnIndex = columns.findIndex((col) => {
           const lastEvent = col[col.length - 1];
           const lastEventEnd = format(
-            addMinutes(parseISO(`2000-01-01T${lastEvent.event_time}`), lastEvent.duration_minutes || 60),
+            addMinutes(parseISO(`2000-01-01T${resolveAgendaTimeKey(lastEvent)}`), lastEvent.duration_minutes || 60),
             'HH:mm:ss'
           );
           return eventStart >= lastEventEnd;
@@ -121,7 +121,7 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
 
       columns.forEach((col, colIndex) => {
         col.forEach((event) => {
-          const [hours, minutes] = event.event_time.split(':').map(Number);
+          const [hours, minutes] = resolveAgendaTimeKey(event).split(':').map(Number);
           const startMinutes = (hours - START_HOUR) * 60 + minutes;
           const duration = event.duration_minutes || 60;
 
@@ -139,9 +139,9 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent }: AgendaW
     return result;
   };
 
-  const goToPreviousWeek = () => setCurrentDate(subDays(currentDate, 7));
-  const goToNextWeek = () => setCurrentDate(addDays(currentDate, 7));
-  const goToToday = () => setCurrentDate(new Date());
+  const goToPreviousWeek = () => onCurrentDateChange(subDays(currentDate, 7));
+  const goToNextWeek = () => onCurrentDateChange(addDays(currentDate, 7));
+  const goToToday = () => onCurrentDateChange(new Date());
 
   const now = new Date();
   const currentTimeTop = useMemo(() => {

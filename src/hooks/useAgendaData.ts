@@ -46,6 +46,12 @@ export interface AgendaEvent {
   id: string;
   source_table?: string;
   pipeline_client_id?: string | null;
+  start?: string | null;
+  end?: string | null;
+  date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  allDay?: boolean;
   title: string;
   description: string | null;
   notes: string | null;

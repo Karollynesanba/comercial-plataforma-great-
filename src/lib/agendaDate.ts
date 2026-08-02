@@ -61,3 +61,53 @@ export function normalizeAgendaColor(value?: string | null) {
 
   return text.toUpperCase();
 }
+
+type AgendaLikeRecord = {
+  start?: string | null;
+  end?: string | null;
+  date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  event_date?: string | null;
+  event_time?: string | null;
+  raw_record?: Record<string, unknown> | null;
+};
+
+function readAgendaField(record: AgendaLikeRecord, keys: string[]) {
+  const raw = record.raw_record || {};
+
+  for (const key of keys) {
+    const directValue = record[key as keyof AgendaLikeRecord];
+    if (typeof directValue === 'string' && directValue.trim()) {
+      return directValue;
+    }
+    if (directValue === true || directValue === false) {
+      return String(directValue);
+    }
+
+    const rawValue = raw[key];
+    if (typeof rawValue === 'string' && rawValue.trim()) {
+      return rawValue;
+    }
+  }
+
+  return '';
+}
+
+export function resolveAgendaDateKey(record: AgendaLikeRecord) {
+  return normalizeAgendaDateKey(
+    readAgendaField(record, ['start', 'date', 'event_date', 'startDate', 'start_date', 'data', 'scheduled_date'])
+  );
+}
+
+export function resolveAgendaTimeKey(record: AgendaLikeRecord) {
+  return normalizeAgendaTimeKey(
+    readAgendaField(record, ['start_time', 'event_time', 'end_time', 'time', 'hour', 'horario', 'start'])
+  );
+}
+
+export function resolveAgendaEndTimeKey(record: AgendaLikeRecord) {
+  return normalizeAgendaTimeKey(
+    readAgendaField(record, ['end_time', 'end', 'event_end', 'fim'])
+  );
+}

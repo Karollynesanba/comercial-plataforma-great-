@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
-  addMinutes,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -11,30 +10,37 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
-  parseISO,
   startOfMonth,
   startOfWeek,
   subMonths,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EventCardTooltip } from './EventCardTooltip';
-import { normalizeAgendaDateKey } from '@/lib/agendaDate';
+import { resolveAgendaDateKey, resolveAgendaTimeKey } from '@/lib/agendaDate';
+import { cn } from '@/lib/utils';
 
 interface AgendaMonthCalendarProps {
   events: AgendaEvent[];
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
   onDayClick?: (date: Date) => void;
+  currentDate: Date;
+  onCurrentDateChange: (date: Date) => void;
 }
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayClick }: AgendaMonthCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+export function AgendaMonthCalendar({
+  events,
+  onEventClick,
+  onAddEvent,
+  onDayClick,
+  currentDate,
+  onCurrentDateChange,
+}: AgendaMonthCalendarProps) {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   const calendarDays = useMemo(() => {
@@ -48,7 +54,7 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
   const eventsByDay = useMemo(() => {
     const map = new Map<string, AgendaEvent[]>();
     events.forEach((event) => {
-      const key = normalizeAgendaDateKey(event.event_date);
+      const key = resolveAgendaDateKey(event);
       if (!key) return;
       if (!map.has(key)) {
         map.set(key, []);
@@ -56,16 +62,17 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
       map.get(key)!.push(event);
     });
     map.forEach((dayEvents) => {
-      dayEvents.sort((a, b) => a.event_time.localeCompare(b.event_time));
+      dayEvents.sort((a, b) => resolveAgendaTimeKey(a).localeCompare(resolveAgendaTimeKey(b)));
     });
     return map;
   }, [events]);
 
-  const goToPreviousMonth = () => setCurrentDate(subMonths(currentDate, 1));
-  const goToNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const goToPreviousMonth = () => onCurrentDateChange(subMonths(currentDate, 1));
+  const goToNextMonth = () => onCurrentDateChange(addMonths(currentDate, 1));
   const goToToday = () => {
-    setCurrentDate(new Date());
-    setSelectedDay(new Date());
+    const today = new Date();
+    onCurrentDateChange(today);
+    setSelectedDay(today);
   };
 
   const handleDayClick = (day: Date) => {
@@ -139,7 +146,6 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
               const isCurrentMonth = isSameMonth(day, currentDate);
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isDayToday = isToday(day);
-              const eventCount = dayEvents.length;
 
               return (
                 <div
@@ -162,9 +168,9 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                     >
                       {format(day, 'd')}
                     </span>
-                    {eventCount > 0 && (
+                    {dayEvents.length > 0 && (
                       <Badge variant="secondary" className="h-5 rounded-full px-1.5 text-[10px] font-semibold">
-                        {eventCount}
+                        {dayEvents.length}
                       </Badge>
                     )}
                   </div>
@@ -180,12 +186,12 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                           className="truncate rounded-lg px-2 py-1 text-[10px] font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                           style={{ backgroundColor: event.color || '#3b82f6' }}
                         >
-                          {event.event_time.slice(0, 5)} {event.title}
+                          {resolveAgendaTimeKey(event).slice(0, 5)} {event.title}
                         </div>
                       </EventCardTooltip>
                     ))}
-                    {eventCount > 3 && (
-                      <div className="px-2 text-[10px] font-medium text-slate-500">+{eventCount - 3} mais</div>
+                    {dayEvents.length > 3 && (
+                      <div className="px-2 text-[10px] font-medium text-slate-500">+{dayEvents.length - 3} mais</div>
                     )}
                   </div>
                 </div>
@@ -219,11 +225,6 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
               )}
 
               {selectedDayEvents.map((event) => {
-                const endTime = format(
-                  addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
-                  'HH:mm'
-                );
-
                 return (
                   <div
                     key={event.id}
@@ -238,7 +239,7 @@ export function AgendaMonthCalendar({ events, onEventClick, onAddEvent, onDayCli
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-slate-950">{event.title}</p>
                         <p className="text-xs text-slate-500">
-                          {event.event_time.slice(0, 5)} – {endTime}
+                          {resolveAgendaTimeKey(event).slice(0, 5)}
                         </p>
                         <p className="truncate text-xs text-slate-500">{event.client_name}</p>
                       </div>

@@ -15,12 +15,14 @@ import { cn } from '@/lib/utils';
 import { AgendaEvent } from '@/hooks/useAgendaData';
 import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { EventCardTooltip } from './EventCardTooltip';
-import { normalizeAgendaDateKey } from '@/lib/agendaDate';
+import { resolveAgendaDateKey, resolveAgendaTimeKey } from '@/lib/agendaDate';
 
 interface AgendaDayTimelineProps {
   events: AgendaEvent[];
   onEventClick: (event: AgendaEvent) => void;
   onAddEvent: (date: Date, time?: string) => void;
+  currentDate: Date;
+  onCurrentDateChange: (date: Date) => void;
 }
 
 const HOUR_HEIGHT = 60;
@@ -36,12 +38,10 @@ interface PositionedEvent {
   height: number;
 }
 
-export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDayTimelineProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-
+export function AgendaDayTimeline({ events, onEventClick, onAddEvent, currentDate, onCurrentDateChange }: AgendaDayTimelineProps) {
   const dayEvents = useMemo(() => {
     const dateKey = format(currentDate, 'yyyy-MM-dd');
-    return events.filter((e) => normalizeAgendaDateKey(e.event_date) === dateKey);
+    return events.filter((e) => resolveAgendaDateKey(e) === dateKey);
   }, [events, currentDate]);
 
   const getScheduledByLabel = (event: AgendaEvent) =>
@@ -52,15 +52,15 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
   const positionedEvents = useMemo(() => {
     if (dayEvents.length === 0) return [];
 
-    const sorted = [...dayEvents].sort((a, b) => a.event_time.localeCompare(b.event_time));
+    const sorted = [...dayEvents].sort((a, b) => resolveAgendaTimeKey(a).localeCompare(resolveAgendaTimeKey(b)));
     const groups: AgendaEvent[][] = [];
     let currentGroup: AgendaEvent[] = [];
     let currentGroupEnd = '';
 
     sorted.forEach((event) => {
-      const eventStart = event.event_time;
+      const eventStart = resolveAgendaTimeKey(event);
       const eventEnd = format(
-        addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
+        addMinutes(parseISO(`2000-01-01T${eventStart}`), event.duration_minutes || 60),
         'HH:mm:ss'
       );
 
@@ -87,11 +87,11 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
       const columns: AgendaEvent[][] = [];
 
       group.forEach((event) => {
-        const eventStart = event.event_time;
+        const eventStart = resolveAgendaTimeKey(event);
         let columnIndex = columns.findIndex((col) => {
           const lastEvent = col[col.length - 1];
           const lastEventEnd = format(
-            addMinutes(parseISO(`2000-01-01T${lastEvent.event_time}`), lastEvent.duration_minutes || 60),
+            addMinutes(parseISO(`2000-01-01T${resolveAgendaTimeKey(lastEvent)}`), lastEvent.duration_minutes || 60),
             'HH:mm:ss'
           );
           return eventStart >= lastEventEnd;
@@ -107,7 +107,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
 
       columns.forEach((col, colIndex) => {
         col.forEach((event) => {
-          const [hours, minutes] = event.event_time.split(':').map(Number);
+          const [hours, minutes] = resolveAgendaTimeKey(event).split(':').map(Number);
           const startMinutes = (hours - START_HOUR) * 60 + minutes;
           const duration = event.duration_minutes || 60;
 
@@ -147,7 +147,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
               variant="outline"
               size="icon"
               className="h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-              onClick={() => setCurrentDate(subDays(currentDate, 1))}
+              onClick={() => onCurrentDateChange(subDays(currentDate, 1))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -155,7 +155,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
               variant="outline"
               size="sm"
               className="h-10 rounded-xl border-slate-200 bg-white px-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-              onClick={() => setCurrentDate(new Date())}
+              onClick={() => onCurrentDateChange(new Date())}
             >
               Hoje
             </Button>
@@ -163,7 +163,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
               variant="outline"
               size="icon"
               className="h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-              onClick={() => setCurrentDate(addDays(currentDate, 1))}
+              onClick={() => onCurrentDateChange(addDays(currentDate, 1))}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -254,7 +254,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
                 const width = `calc((100% - 8px) / ${totalColumns})`;
                 const left = `calc(4px + (100% - 8px) / ${totalColumns} * ${column})`;
                 const endTime = format(
-                  addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
+                  addMinutes(parseISO(`2000-01-01T${resolveAgendaTimeKey(event)}`), event.duration_minutes || 60),
                   'HH:mm'
                 );
                 const scheduledByLabel = getScheduledByLabel(event);
@@ -281,7 +281,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent }: AgendaDa
                           {event.title}
                         </p>
                         <p className="text-xs font-medium opacity-90">
-                          {event.event_time.slice(0, 5)} – {endTime}
+                          {resolveAgendaTimeKey(event).slice(0, 5)} – {endTime}
                         </p>
                         {scheduledByLabel && (
                           <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">

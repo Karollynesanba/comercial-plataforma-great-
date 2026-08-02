@@ -31,7 +31,7 @@ export default function AgendaGreat() {
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [selectedTime, setSelectedTime] = useState<string | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
@@ -270,6 +270,8 @@ export default function AgendaGreat() {
           events={filteredEvents}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
+          currentDate={selectedDate}
+          onCurrentDateChange={setSelectedDate}
         />
       )}
 
@@ -278,6 +280,8 @@ export default function AgendaGreat() {
           events={filteredEvents}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
+          currentDate={selectedDate}
+          onCurrentDateChange={setSelectedDate}
         />
       )}
 
@@ -286,6 +290,12 @@ export default function AgendaGreat() {
           events={filteredEvents}
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
+          currentDate={selectedDate}
+          onCurrentDateChange={setSelectedDate}
+          onDayClick={(date) => {
+            setSelectedDate(date);
+            setViewMode('day');
+          }}
         />
       )}
 
@@ -295,7 +305,7 @@ export default function AgendaGreat() {
           setAddDialogOpen(open);
           if (!open) setDuplicatingEvent(null);
         }}
-        selectedDate={selectedDate || undefined}
+        selectedDate={selectedDate}
         selectedTime={selectedTime}
         duplicateFrom={duplicatingEvent}
       />
