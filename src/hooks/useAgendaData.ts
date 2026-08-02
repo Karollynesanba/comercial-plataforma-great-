@@ -188,10 +188,33 @@ function normalizeAgendaRecord(record: AgendaRow, sourceTable: string): AgendaEv
   );
 
   const eventDate = normalizeAgendaDateKey(
-    toTrimmedString(pickValue(record, ['event_date', 'agenda_event_date', 'data', 'date', 'scheduled_date']))
+    toTrimmedString(
+      pickValue(record, [
+        'event_date',
+        'agenda_event_date',
+        'data',
+        'date',
+        'scheduled_date',
+        'start_date',
+        'data_evento',
+      ])
+    )
   );
   const eventTime = normalizeAgendaTimeKey(
-    toTrimmedString(pickValue(record, ['event_time', 'agenda_event_time', 'horario', 'hour', 'time', 'start_time']))
+    toTrimmedString(
+      pickValue(record, [
+        'event_time',
+        'agenda_event_time',
+        'horario_especifico',
+        'horario',
+        'hour',
+        'time',
+        'start_time',
+      ])
+    )
+  );
+  const explicitEndTime = normalizeAgendaTimeKey(
+    toTrimmedString(pickValue(record, ['end_time', 'agenda_event_end_time', 'horario_final', 'end', 'finish_time']))
   );
   const title = normalizeTitle(record);
   const clientName =
@@ -209,6 +232,12 @@ function normalizeAgendaRecord(record: AgendaRow, sourceTable: string): AgendaEv
     id: toTrimmedString(record.id || record.event_id || record.uuid || crypto.randomUUID()),
     source_table: toTrimmedString(record.source_table || sourceTable),
     pipeline_client_id: toOptionalString(record.pipeline_client_id),
+    start: eventDate && eventTime ? `${eventDate}T${eventTime}` : eventDate || null,
+    end: explicitEndTime && eventDate ? `${eventDate}T${explicitEndTime}` : null,
+    date: eventDate || null,
+    start_time: eventTime || null,
+    end_time: explicitEndTime || null,
+    allDay: Boolean(pickValue(record, ['allDay', 'all_day'])),
     title,
     description: toOptionalString(pickValue(record, ['description', 'descricao', 'details', 'observacoes', 'observations'])),
     notes: toOptionalString(pickValue(record, ['notes', 'observations', 'observacoes', 'anotacoes', 'anotações'])),

@@ -6,7 +6,7 @@ export function normalizeAgendaDateKey(value?: string | null) {
   const text = String(value).trim();
   if (!text) return '';
 
-  const brazilianDateMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  const brazilianDateMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
   if (brazilianDateMatch) {
     const [, day, month, year] = brazilianDateMatch;
     return `${year}-${month}-${day}`;
@@ -96,13 +96,33 @@ function readAgendaField(record: AgendaLikeRecord, keys: string[]) {
 
 export function resolveAgendaDateKey(record: AgendaLikeRecord) {
   return normalizeAgendaDateKey(
-    readAgendaField(record, ['start', 'date', 'event_date', 'startDate', 'start_date', 'data', 'scheduled_date'])
+    readAgendaField(record, [
+      'start',
+      'date',
+      'event_date',
+      'agenda_event_date',
+      'startDate',
+      'start_date',
+      'data',
+      'scheduled_date',
+      'data_evento',
+    ])
   );
 }
 
 export function resolveAgendaTimeKey(record: AgendaLikeRecord) {
   return normalizeAgendaTimeKey(
-    readAgendaField(record, ['start_time', 'event_time', 'end_time', 'time', 'hour', 'horario', 'start'])
+    readAgendaField(record, [
+      'start_time',
+      'event_time',
+      'agenda_event_time',
+      'horario_especifico',
+      'end_time',
+      'time',
+      'hour',
+      'horario',
+      'start',
+    ])
   );
 }
 
