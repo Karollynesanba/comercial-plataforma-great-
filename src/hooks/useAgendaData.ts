@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useCommercialSafe } from '@/contexts/CommercialContext';
@@ -410,6 +410,7 @@ async function fetchAgendaTable(tableName: string) {
 export function useAgendaData() {
   const queryClient = useQueryClient();
   const commercial = useCommercialSafe();
+  const agendaChannelNameRef = useRef(`agenda-events-sync-${Math.random().toString(36).slice(2)}`);
   const commercialFallbackEvents = (commercial?.agendaEvents || []).map((event: any) =>
     enrichEvent(normalizeAgendaRecord(event, LEGACY_AGENDA_TABLE))
   );
@@ -465,7 +466,7 @@ export function useAgendaData() {
     };
 
     const channel = (supabase as any)
-      .channel(AGENDA_SYNC_CHANNEL)
+      .channel(agendaChannelNameRef.current)
       .on('postgres_changes', { event: '*', schema: 'public', table: PRIMARY_AGENDA_TABLE }, refreshAgenda)
       .on('postgres_changes', { event: '*', schema: 'public', table: LEGACY_AGENDA_TABLE }, refreshAgenda)
       .subscribe();
@@ -476,7 +477,7 @@ export function useAgendaData() {
     return () => {
       window.removeEventListener('focus', refreshAgenda);
       document.removeEventListener('visibilitychange', handleVisibility);
-      (supabase as any).removeChannel(channel);
+      void (supabase as any).removeChannel(channel);
     };
   }, [queryClient]);
 
