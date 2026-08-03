@@ -113,6 +113,7 @@ export function visitCommercial(
     client_name: client.client_name || client.clientName || 'Lead sem nome',
     clinic_name: client.clinic_name || client.clinicName || client.client_name || client.clientName || null,
     telefone: client.telefone || null,
+    profession: client.profession || null,
     vendedor: client.vendedor || null,
     criativo: client.criativo || client.funil || null,
     funil: client.funil || client.criativo || null,

@@ -137,7 +137,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   const leadData = useMemo(() => {
     if (!event) return null;
     return leads.find((lead) => {
-      const leadPhoneDigits = lead.telefone.replace(/\D/g, '');
+      const leadPhoneDigits = (lead.telefone || '').replace(/\D/g, '');
       const leadSlotTime = (lead.agenda_event_time || lead.horario_especifico || '').slice(0, 5);
       return (
         lead.agenda_event_id === event.id ||

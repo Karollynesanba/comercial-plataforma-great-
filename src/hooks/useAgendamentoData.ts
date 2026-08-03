@@ -472,11 +472,28 @@ export function useAgendamentoData() {
       if (leadsError) throw leadsError;
       if (agendaError) throw agendaError;
 
-      return (agendamentoLeads || []).map((lead: any) => buildLeadWithAgenda(
-        normalizeAgendamentoLeadAnswers({
+      const normalizedLeads = (agendamentoLeads || []).map((lead: any) => normalizeAgendamentoLeadAnswers({
+        ...lead,
+        faturamento: normalizeAgendamentoFaturamento(lead.faturamento),
+      }));
+
+      const pipelineFallbackLeads = (commercial?.pipelineClients || [])
+        .map((client: any) => pipelineClientToAgendamentoLead(client, agendaEvents || []))
+        .filter((lead): lead is NonNullable<typeof lead> => Boolean(lead))
+        .map((lead: any) => normalizeAgendamentoLeadAnswers({
           ...lead,
           faturamento: normalizeAgendamentoFaturamento(lead.faturamento),
-        }),
+        }));
+
+      const mergedLeads = [...normalizedLeads];
+      for (const fallbackLead of pipelineFallbackLeads) {
+        if (!mergedLeads.some((lead) => agendamentoLeadMatches(lead, fallbackLead))) {
+          mergedLeads.push(fallbackLead);
+        }
+      }
+
+      return mergedLeads.map((lead: any) => buildLeadWithAgenda(
+        lead,
         agendaEvents || []
       ));
     },
@@ -529,7 +546,7 @@ export function useAgendamentoData() {
       const normalizedName = normalizeMeetingClientName(lead.nome || '');
       const { data: existingLeads } = await supabase.from('agendamento_leads').select('id, telefone, nome').limit(1000);
       const duplicate = (existingLeads || []).find((item: any) =>
-        item.telefone.replace(/\D/g, '') === formattedPhone.replace(/\D/g, '') &&
+        String(item.telefone || '').replace(/\D/g, '') === formattedPhone.replace(/\D/g, '') &&
         normalizeMeetingClientName(item.nome || '') === normalizedName
       );
 
