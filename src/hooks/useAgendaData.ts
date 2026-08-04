@@ -319,8 +319,6 @@ const AGENDA_UPDATE_COLUMNS = [
   'created_by_user_id',
   'assigned_closer_id',
   'team_id',
-  'pipeline_client_id',
-  'title_locked',
   'updated_at',
 ] as const;
 
@@ -328,7 +326,6 @@ function pickAgendaUpdatePayload(previous: AgendaDbRow, updates: AgendaEventUpda
   const clientPhone = updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : previous.client_phone;
   return {
     title: resolvedTitle,
-    title_locked: Boolean((previous as any).title_locked) || resolvedTitle !== currentDefaultTitle,
     description: updates.description !== undefined ? updates.description : previous.description,
     notes: updates.notes !== undefined ? updates.notes : previous.notes,
     client_name: updates.client_name !== undefined ? updates.client_name : previous.client_name,
@@ -347,7 +344,6 @@ function pickAgendaUpdatePayload(previous: AgendaDbRow, updates: AgendaEventUpda
     created_by_user_id: previous.created_by_user_id ?? null,
     assigned_closer_id: previous.assigned_closer_id ?? null,
     team_id: updates.team_id !== undefined ? updates.team_id : previous.team_id ?? null,
-    pipeline_client_id: previous.pipeline_client_id ?? null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -568,7 +564,6 @@ export function useAgendaData() {
         const payload = {
           ...payloadBase,
           title: String(payloadBase.title || payloadBase.client_name || '').trim() || payloadBase.title,
-          title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
           id: `agenda-${crypto.randomUUID()}`,
           source_table: LEGACY_AGENDA_TABLE,
           client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
@@ -589,7 +584,6 @@ export function useAgendaData() {
       const payload = {
         ...payloadBase,
         title: String(payloadBase.title || payloadBase.client_name || '').trim() || payloadBase.title,
-        title_locked: isCustomMeetingTitle(payloadBase.title || payloadBase.client_name || '', payloadBase.client_name),
         client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
         reminder_2h_sent: false,
         reminder_30min_sent: false,
