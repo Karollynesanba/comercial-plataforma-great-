@@ -370,6 +370,48 @@ async function fetchAgendaRowById(supabaseAny: any, id: string, preferredTable?:
   return null;
 }
 
+async function clearAgendaSlotConflicts(
+  supabaseAny: any,
+  tableName: string,
+  currentEventId: string,
+  clientPhone?: string | null,
+  eventDate?: string | null,
+  eventTime?: string | null,
+) {
+  const phoneDigits = formatPhoneForWhatsApp(clientPhone || '').replace(/\D/g, '');
+  const normalizedDate = normalizeAgendaDateKey(eventDate || '');
+  const normalizedTime = normalizeAgendaTimeKey(eventTime || '');
+
+  if (!phoneDigits || !normalizedDate || !normalizedTime) {
+    return;
+  }
+
+  const { data: potentialConflicts, error } = await supabaseAny
+    .from(tableName)
+    .select('id, client_phone, event_date, event_time')
+    .eq('event_date', normalizedDate)
+    .eq('event_time', normalizedTime)
+    .neq('id', currentEventId)
+    .limit(50);
+
+  if (error) throw error;
+
+  const conflictingIds = (potentialConflicts || [])
+    .filter((row: any) => formatPhoneForWhatsApp(row.client_phone || '').replace(/\D/g, '') === phoneDigits)
+    .map((row: any) => row.id)
+    .filter(Boolean);
+
+  if (!conflictingIds.length) {
+    return;
+  }
+
+  await Promise.all(
+    conflictingIds.map((conflictId) =>
+      supabaseAny.from(tableName).delete().eq('id', conflictId)
+    )
+  );
+}
+
 function sortAgendaEvents(events: AgendaEvent[]) {
   return [...events].sort((a, b) => {
     const dateCompare = a.event_date.localeCompare(b.event_date);
@@ -668,6 +710,8 @@ export function useAgendaData() {
       const currentDefaultTitle = `Reuniao com ${String(updates.client_name || previous.client_name || 'Lead sem nome').trim()}`;
 
       const payload = pickAgendaUpdatePayload(previous, updates, resolvedTitle, currentDefaultTitle);
+      const nextEventDate = normalizeAgendaDateKey(String(payload.event_date || previous.event_date || ''));
+      const nextEventTime = normalizeAgendaTimeKey(String(payload.event_time || previous.event_time || ''));
 
       const optimisticEvent = enrichEvent(normalizeAgendaRecord(payload, sourceTable));
       upsertAgendaEventLocally(optimisticEvent);
@@ -690,7 +734,22 @@ export function useAgendaData() {
           break;
         }
 
-        if (error && error.code !== 'PGRST116') {
+        if (error && error.code === '23505') {
+          await clearAgendaSlotConflicts(
+            supabaseAny,
+            table,
+            id,
+            payload.client_phone,
+            nextEventDate,
+            nextEventTime,
+          );
+          const retry = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
+          data = retry.data;
+          error = retry.error;
+          if (!error && data) {
+            break;
+          }
+        } else if (error && error.code !== 'PGRST116') {
           break;
         }
       }
