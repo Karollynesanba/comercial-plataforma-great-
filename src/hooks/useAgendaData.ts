@@ -12,6 +12,7 @@ const PRIMARY_AGENDA_TABLE = 'nova_agenda';
 const LEGACY_AGENDA_TABLE = 'agenda_events';
 const AGENDA_QUERY_KEY = ['agenda-events'];
 const AGENDA_SYNC_CHANNEL = 'agenda-events-sync';
+const AGENDA_SOURCE_TABLES = [PRIMARY_AGENDA_TABLE, LEGACY_AGENDA_TABLE] as const;
 
 const CORE_EVENT_KEYS = new Set([
   'id',
@@ -294,6 +295,83 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       setTimeout(() => reject(new Error(`timeout:${label}`)), ms);
     }),
   ]);
+}
+
+type AgendaDbRow = Record<string, any> & { source_table?: string };
+
+const AGENDA_UPDATE_COLUMNS = [
+  'title',
+  'description',
+  'notes',
+  'client_name',
+  'client_phone',
+  'clinic_name',
+  'event_date',
+  'event_time',
+  'duration_minutes',
+  'meeting_link',
+  'scheduled_by',
+  'lead_stage',
+  'creative_source',
+  'color',
+  'reminder_2h_sent',
+  'reminder_30min_sent',
+  'created_by_user_id',
+  'assigned_closer_id',
+  'team_id',
+  'pipeline_client_id',
+  'title_locked',
+  'updated_at',
+] as const;
+
+function pickAgendaUpdatePayload(previous: AgendaDbRow, updates: AgendaEventUpdate, resolvedTitle: string, currentDefaultTitle: string) {
+  const clientPhone = updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : previous.client_phone;
+  return {
+    title: resolvedTitle,
+    title_locked: Boolean((previous as any).title_locked) || resolvedTitle !== currentDefaultTitle,
+    description: updates.description !== undefined ? updates.description : previous.description,
+    notes: updates.notes !== undefined ? updates.notes : previous.notes,
+    client_name: updates.client_name !== undefined ? updates.client_name : previous.client_name,
+    client_phone: clientPhone,
+    clinic_name: updates.clinic_name !== undefined ? updates.clinic_name : previous.clinic_name,
+    event_date: updates.event_date !== undefined ? updates.event_date : previous.event_date,
+    event_time: updates.event_time !== undefined ? updates.event_time : previous.event_time,
+    duration_minutes: updates.duration_minutes !== undefined ? updates.duration_minutes : previous.duration_minutes,
+    meeting_link: updates.meeting_link !== undefined ? updates.meeting_link : previous.meeting_link,
+    scheduled_by: updates.scheduled_by !== undefined ? updates.scheduled_by : previous.scheduled_by,
+    lead_stage: updates.lead_stage !== undefined ? updates.lead_stage : previous.lead_stage,
+    creative_source: updates.creative_source !== undefined ? updates.creative_source : previous.creative_source,
+    color: updates.color !== undefined ? updates.color : previous.color,
+    reminder_2h_sent: previous.reminder_2h_sent ?? false,
+    reminder_30min_sent: previous.reminder_30min_sent ?? false,
+    created_by_user_id: previous.created_by_user_id ?? null,
+    assigned_closer_id: previous.assigned_closer_id ?? null,
+    team_id: updates.team_id !== undefined ? updates.team_id : previous.team_id ?? null,
+    pipeline_client_id: previous.pipeline_client_id ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function fetchAgendaRowById(supabaseAny: any, id: string, preferredTable?: string) {
+  const tables = preferredTable
+    ? [preferredTable, ...AGENDA_SOURCE_TABLES.filter((table) => table !== preferredTable)]
+    : [...AGENDA_SOURCE_TABLES];
+
+  for (const table of tables) {
+    const { data, error } = await supabaseAny.from(table).select('*').eq('id', id).maybeSingle();
+    if (error) {
+      if (error.code === 'PGRST116') {
+        continue;
+      }
+      throw error;
+    }
+
+    if (data) {
+      return { table, row: data as AgendaDbRow };
+    }
+  }
+
+  return null;
 }
 
 function sortAgendaEvents(events: AgendaEvent[]) {
@@ -583,11 +661,11 @@ export function useAgendaData() {
         return updated;
       }
 
-      const { data: previous, error: previousError } = await supabaseAny.from(sourceTable).select('*').eq('id', id).single();
-      if (previousError) throw previousError;
-      if (!previous) {
+      const resolvedCurrent = await fetchAgendaRowById(supabaseAny, id, sourceTable);
+      if (!resolvedCurrent) {
         throw new Error('Evento nao encontrado');
       }
+      const { table: resolvedTable, row: previous } = resolvedCurrent;
 
       const previousTitle = String(previous.title || '').trim();
       const previousClientName = String(previous.client_name || '').trim();
@@ -595,14 +673,7 @@ export function useAgendaData() {
       const resolvedTitle = explicitTitle ? explicitTitle : previousTitle || `Reuniao com ${previousClientName || 'Lead sem nome'}`;
       const currentDefaultTitle = `Reuniao com ${String(updates.client_name || previous.client_name || 'Lead sem nome').trim()}`;
 
-      const payload = {
-        ...previous,
-        ...updates,
-        title: resolvedTitle,
-        title_locked: Boolean((previous as any).title_locked) || resolvedTitle !== currentDefaultTitle,
-        client_phone: updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : previous.client_phone,
-        updated_at: new Date().toISOString(),
-      };
+      const payload = pickAgendaUpdatePayload(previous, updates, resolvedTitle, currentDefaultTitle);
 
       const optimisticEvent = enrichEvent(normalizeAgendaRecord(payload, sourceTable));
       upsertAgendaEventLocally(optimisticEvent);
@@ -612,10 +683,28 @@ export function useAgendaData() {
           : [optimisticEvent, ...current]
       );
 
-      const { data, error } = await supabaseAny.from(sourceTable).update(payload).eq('id', id).select('*').single();
-      if (error) throw error;
+      let data: any = null;
+      let error: any = null;
+      let tableUsed = resolvedTable;
+      for (const table of [resolvedTable, ...AGENDA_SOURCE_TABLES.filter((table) => table !== resolvedTable)]) {
+        const result = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
+        data = result.data;
+        error = result.error;
+        tableUsed = table;
 
-      const updatedEvent = enrichEvent(normalizeAgendaRecord(data, sourceTable));
+        if (!error && data) {
+          break;
+        }
+
+        if (error && error.code !== 'PGRST116') {
+          break;
+        }
+      }
+
+      if (error) throw error;
+      if (!data) throw new Error('Evento nao encontrado');
+
+      const updatedEvent = enrichEvent(normalizeAgendaRecord(data, tableUsed));
       upsertAgendaEventLocally(updatedEvent);
       await syncRelatedRecords(updatedEvent);
       return updatedEvent;
@@ -646,8 +735,22 @@ export function useAgendaData() {
         return;
       }
 
-      const { error } = await supabaseAny.from(sourceTable).delete().eq('id', id);
-      if (error) throw error;
+      const deletions = [supabaseAny.from(sourceTable).delete().eq('id', id)];
+
+      if (currentEvent?.pipeline_client_id) {
+        deletions.push(supabaseAny.from('agendamento_leads').delete().eq('pipeline_client_id', currentEvent.pipeline_client_id));
+      } else {
+        deletions.push(
+          supabaseAny
+            .from('agendamento_leads')
+            .delete()
+            .eq('agenda_event_id', id)
+        );
+      }
+
+      const results = await Promise.all(deletions);
+      const mutationError = results.find((result) => result.error)?.error;
+      if (mutationError) throw mutationError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AGENDA_QUERY_KEY });

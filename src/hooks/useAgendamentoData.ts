@@ -812,15 +812,44 @@ export function useAgendamentoData() {
   const deleteLead = useMutation({
     mutationFn: async (id: string) => {
       if (!isSupabaseConfigured) {
-        updateCommercialLocalData((current) => ({
-          ...current,
-          agendamentoLeads: current.agendamentoLeads.filter((item: any) => item.id !== id),
-        }));
+        updateCommercialLocalData((current) => {
+          const lead = current.agendamentoLeads.find((item: any) => item.id === id);
+          const linkedEventId = lead?.agenda_event_id || null;
+          const linkedPipelineClientId = lead?.pipeline_client_id || null;
+
+          return {
+            ...current,
+            agendamentoLeads: current.agendamentoLeads.filter((item: any) => item.id !== id),
+            agendaEvents: current.agendaEvents.filter((event: any) =>
+              event.id !== linkedEventId &&
+              event.pipeline_client_id !== linkedPipelineClientId
+            ),
+          };
+        });
         window.dispatchEvent(new Event('great-commercial-local-data-updated'));
         return;
       }
 
-      await supabase.from('agendamento_leads').delete().eq('id', id);
+      const { data: lead, error: leadError } = await supabase
+        .from('agendamento_leads')
+        .select('id, agenda_event_id, pipeline_client_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (leadError) throw leadError;
+
+      const deletions = [
+        supabase.from('agendamento_leads').delete().eq('id', id),
+      ];
+
+      if (lead?.agenda_event_id) {
+        deletions.push(supabase.from('agenda_events').delete().eq('id', lead.agenda_event_id));
+      } else if (lead?.pipeline_client_id) {
+        deletions.push(supabase.from('agenda_events').delete().eq('pipeline_client_id', lead.pipeline_client_id));
+      }
+
+      const results = await Promise.all(deletions);
+      const mutationError = results.find((result) => result.error)?.error;
+      if (mutationError) throw mutationError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
