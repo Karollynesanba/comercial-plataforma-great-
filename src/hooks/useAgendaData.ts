@@ -156,6 +156,16 @@ function toBoolean(value: unknown, fallback = false) {
   return fallback;
 }
 
+function toNullableUuid(value: unknown) {
+  if (value === null || value === undefined) return null;
+
+  const text = toTrimmedString(value);
+  if (!text) return null;
+
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(text) ? text : null;
+}
+
 function pickValue(record: AgendaRow, keys: string[]) {
   for (const key of keys) {
     if (!(key in record)) continue;
@@ -324,8 +334,12 @@ const AGENDA_UPDATE_COLUMNS = [
 
 function pickAgendaUpdatePayload(previous: AgendaDbRow, updates: AgendaEventUpdate, resolvedTitle: string, currentDefaultTitle: string) {
   const clientPhone = updates.client_phone ? formatPhoneForWhatsApp(updates.client_phone) : previous.client_phone;
+  const previousTeamId = toNullableUuid(previous.team_id);
+  const previousAssignedCloserId = toNullableUuid(previous.assigned_closer_id);
+  const previousCreatedByUserId = toNullableUuid(previous.created_by_user_id);
+  const previousPipelineClientId = toNullableUuid(previous.pipeline_client_id);
   return {
-    title: resolvedTitle,
+    title: resolvedTitle || currentDefaultTitle || previous.title,
     description: updates.description !== undefined ? updates.description : previous.description,
     notes: updates.notes !== undefined ? updates.notes : previous.notes,
     client_name: updates.client_name !== undefined ? updates.client_name : previous.client_name,
@@ -341,9 +355,14 @@ function pickAgendaUpdatePayload(previous: AgendaDbRow, updates: AgendaEventUpda
     color: updates.color !== undefined ? updates.color : previous.color,
     reminder_2h_sent: previous.reminder_2h_sent ?? false,
     reminder_30min_sent: previous.reminder_30min_sent ?? false,
-    created_by_user_id: previous.created_by_user_id ?? null,
-    assigned_closer_id: previous.assigned_closer_id ?? null,
-    team_id: updates.team_id !== undefined ? updates.team_id : previous.team_id ?? null,
+    created_by_user_id: previousCreatedByUserId,
+    assigned_closer_id: updates.assigned_closer_id !== undefined
+      ? toNullableUuid(updates.assigned_closer_id)
+      : previousAssignedCloserId,
+    team_id: updates.team_id !== undefined ? toNullableUuid(updates.team_id) : previousTeamId,
+    pipeline_client_id: updates.pipeline_client_id !== undefined
+      ? toNullableUuid(updates.pipeline_client_id)
+      : previousPipelineClientId,
     updated_at: new Date().toISOString(),
   };
 }
@@ -724,34 +743,49 @@ export function useAgendaData() {
       let data: any = null;
       let error: any = null;
       let tableUsed = resolvedTable;
-      for (const table of [resolvedTable, ...AGENDA_SOURCE_TABLES.filter((table) => table !== resolvedTable)]) {
-        const result = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
-        data = result.data;
-        error = result.error;
-        tableUsed = table;
 
-        if (!error && data) {
-          break;
-        }
+      const rpcResult = await supabaseAny.rpc('commercial_update_agenda_event_secure', {
+        table_name: resolvedTable,
+        event_id: id,
+        payload,
+      });
 
-        if (error && error.code === '23505') {
-          await clearAgendaSlotConflicts(
-            supabaseAny,
-            table,
-            id,
-            payload.client_phone,
-            nextEventDate,
-            nextEventTime,
-          );
-          const retry = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
-          data = retry.data;
-          error = retry.error;
+      data = rpcResult.data;
+      error = rpcResult.error;
+
+      if (error || !data) {
+        let lastError: any = error;
+        for (const table of [resolvedTable, ...AGENDA_SOURCE_TABLES.filter((table) => table !== resolvedTable)]) {
+          const result = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
+          data = result.data;
+          error = result.error;
+          tableUsed = table;
+          lastError = error;
+
           if (!error && data) {
             break;
           }
-        } else if (error && error.code !== 'PGRST116') {
-          break;
+
+          if (error && error.code === '23505') {
+            await clearAgendaSlotConflicts(
+              supabaseAny,
+              table,
+              id,
+              payload.client_phone,
+              nextEventDate,
+              nextEventTime,
+            );
+            const retry = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
+            data = retry.data;
+            error = retry.error;
+            lastError = error;
+            if (!error && data) {
+              break;
+            }
+          }
         }
+
+        if (lastError) error = lastError;
       }
 
       if (error) throw error;
@@ -759,7 +793,6 @@ export function useAgendaData() {
 
       const updatedEvent = enrichEvent(normalizeAgendaRecord(data, tableUsed));
       upsertAgendaEventLocally(updatedEvent);
-      await syncRelatedRecords(updatedEvent);
       return updatedEvent;
     },
     onSuccess: () => {

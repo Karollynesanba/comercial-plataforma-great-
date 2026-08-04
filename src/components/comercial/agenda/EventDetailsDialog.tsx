@@ -327,12 +327,16 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
       if (resolvedLeadStatus !== leadData.status) leadPatch.status = resolvedLeadStatus;
 
       if (Object.keys(leadPatch).length > 0) {
-        await updateLead.mutateAsync({
-          id: leadData.id,
-          agenda_event_id: event.id,
-          pipeline_client_id: leadData.pipeline_client_id || pipelineClient?.id || null,
-          ...leadPatch,
-        });
+        try {
+          await updateLead.mutateAsync({
+            id: leadData.id,
+            agenda_event_id: event.id,
+            pipeline_client_id: leadData.pipeline_client_id || pipelineClient?.id || null,
+            ...leadPatch,
+          });
+        } catch (leadError) {
+          console.warn('Lead update failed after event save, keeping event changes.', leadError);
+        }
       }
     }
 
@@ -341,7 +345,29 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   };
 
   const handleSaveEvent = async () => {
-    await saveCurrentChanges();
+    try {
+      const eventPatch: Record<string, any> = {};
+      if (titleWasEdited) eventPatch.title = nextEventTitle;
+      if (eventClientChanged) eventPatch.client_name = nextClientName;
+      if (eventPhoneChanged) eventPatch.client_phone = formatPhoneForWhatsApp(eventForm.client_phone);
+      if (eventForm.event_date !== event.event_date) eventPatch.event_date = eventForm.event_date;
+      if ((eventForm.event_time || '').slice(0, 5) !== (event.event_time || '').slice(0, 5)) eventPatch.event_time = eventForm.event_time;
+      if (eventForm.color !== event.color) eventPatch.color = eventForm.color;
+      if (eventForm.description !== (event.description || '')) eventPatch.description = eventForm.description || null;
+      if (eventForm.notes !== (event.notes || '')) eventPatch.notes = eventForm.notes || null;
+      if (eventForm.meeting_link !== (event.meeting_link || '')) eventPatch.meeting_link = eventForm.meeting_link || null;
+
+      if (Object.keys(eventPatch).length > 0) {
+        await updateEvent.mutateAsync({
+          id: event.id,
+          ...eventPatch,
+        });
+      }
+
+      setIsEditingEvent(false);
+    } catch (error) {
+      console.error('Falha ao salvar evento.', error);
+    }
   };
 
   const handleColorChange = async (color: string) => {
@@ -355,8 +381,35 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   };
 
   const handleSaveLead = async () => {
-    await saveCurrentChanges();
-    toast.success('Informações do lead atualizadas!');
+    try {
+      if (!leadData) {
+        setIsEditingLead(false);
+        return;
+      }
+
+      const resolvedLeadStatus = leadForm.status;
+
+      const leadPatch: Record<string, any> = {};
+      if (leadForm.faturamento !== leadData.faturamento) leadPatch.faturamento = leadForm.faturamento;
+      if (leadForm.tem_socio !== leadData.tem_socio) leadPatch.tem_socio = leadForm.tem_socio;
+      if (leadForm.tem_mkt !== leadData.tem_mkt) leadPatch.tem_mkt = leadForm.tem_mkt;
+      if (leadForm.tem_secretaria !== leadData.tem_secretaria) leadPatch.tem_secretaria = leadForm.tem_secretaria;
+      if (leadForm.salao_ou_clinica !== leadData.salao_ou_clinica) leadPatch.salao_ou_clinica = leadForm.salao_ou_clinica;
+      if (leadForm.notes !== (leadData.notes || '')) leadPatch.notes = leadForm.notes || null;
+      if (resolvedLeadStatus !== leadData.status) leadPatch.status = resolvedLeadStatus;
+
+      if (Object.keys(leadPatch).length > 0) {
+        await updateLead.mutateAsync({
+          id: leadData.id,
+          ...leadPatch,
+        });
+      }
+
+      setIsEditingLead(false);
+      toast.success('Informações do lead atualizadas!');
+    } catch (error) {
+      console.error('Falha ao salvar lead.', error);
+    }
   };
 
   const handleDelete = async () => {
