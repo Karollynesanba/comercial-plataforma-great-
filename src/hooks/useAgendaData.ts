@@ -467,22 +467,6 @@ function mergeAgendaEvents(primary: AgendaEvent[], legacy: AgendaEvent[], fallba
   return sortAgendaEvents(Array.from(merged.values()));
 }
 
-function upsertAgendaEventLocally(event: AgendaEvent) {
-  updateCommercialLocalData((current) => {
-    const exists = current.agendaEvents.some((item: any) => item.id === event.id);
-    return {
-      ...current,
-      agendaEvents: exists
-        ? current.agendaEvents.map((item: any) => (item.id === event.id ? event : item))
-        : [event, ...current.agendaEvents],
-    };
-  });
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event('great-commercial-local-data-updated'));
-  }
-}
-
 async function syncRelatedRecords(event: AgendaEvent) {
   if (!isSupabaseConfigured) return;
 
@@ -561,29 +545,27 @@ export function useAgendaData() {
         return fallbackEvents;
       }
 
-      try {
-        const [primaryResult, legacyResult] = await Promise.allSettled([
-          fetchAgendaTable(PRIMARY_AGENDA_TABLE),
-          fetchAgendaTable(LEGACY_AGENDA_TABLE),
-        ]);
+      const [primaryResult, legacyResult] = await Promise.allSettled([
+        fetchAgendaTable(PRIMARY_AGENDA_TABLE),
+        fetchAgendaTable(LEGACY_AGENDA_TABLE),
+      ]);
 
-        const primaryEvents = primaryResult.status === 'fulfilled' ? primaryResult.value : [];
-        const legacyEvents = legacyResult.status === 'fulfilled' ? legacyResult.value : [];
+      const primaryEvents = primaryResult.status === 'fulfilled' ? primaryResult.value : [];
+      const legacyEvents = legacyResult.status === 'fulfilled' ? legacyResult.value : [];
 
-        if (primaryResult.status === 'rejected') {
-          console.warn('Agenda query failed for nova_agenda.', primaryResult.reason);
-        }
-
-        if (legacyResult.status === 'rejected') {
-          console.warn('Agenda query failed for agenda_events.', legacyResult.reason);
-        }
-
-        const mergedRemoteEvents = mergeAgendaEvents(primaryEvents, legacyEvents, fallbackEvents);
-        return mergedRemoteEvents.length > 0 ? mergedRemoteEvents : fallbackEvents;
-      } catch (queryError) {
-        console.warn('Agenda query failed, falling back to commercial/local cache.', queryError);
-        return fallbackEvents;
+      if (primaryResult.status === 'rejected') {
+        console.warn('Agenda query failed for nova_agenda.', primaryResult.reason);
       }
+
+      if (legacyResult.status === 'rejected') {
+        console.warn('Agenda query failed for agenda_events.', legacyResult.reason);
+      }
+
+      if (primaryResult.status === 'rejected' && legacyResult.status === 'rejected') {
+        throw new Error('Falha ao consultar a agenda central.');
+      }
+
+      return mergeAgendaEvents(primaryEvents, legacyEvents, []);
     },
   });
 
@@ -733,7 +715,6 @@ export function useAgendaData() {
       const nextEventTime = normalizeAgendaTimeKey(String(payload.event_time || previous.event_time || ''));
 
       const optimisticEvent = enrichEvent(normalizeAgendaRecord(payload, sourceTable));
-      upsertAgendaEventLocally(optimisticEvent);
       queryClient.setQueryData<AgendaEvent[]>(AGENDA_QUERY_KEY, (current = []) =>
         current.some((item) => item.id === optimisticEvent.id)
           ? current.map((item) => (item.id === optimisticEvent.id ? optimisticEvent : item))
@@ -792,7 +773,6 @@ export function useAgendaData() {
       if (!data) throw new Error('Evento nao encontrado');
 
       const updatedEvent = enrichEvent(normalizeAgendaRecord(data, tableUsed));
-      upsertAgendaEventLocally(updatedEvent);
       return updatedEvent;
     },
     onSuccess: () => {

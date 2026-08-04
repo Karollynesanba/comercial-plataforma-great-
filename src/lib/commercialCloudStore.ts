@@ -160,137 +160,6 @@ function normalizePhone(value?: string | null) {
   return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
-function normalizePipelineIdentityName(value?: string | null) {
-  return normalizeMeetingClientName(value || '').trim().toLowerCase();
-}
-
-function hasExactPipelineIdentity(left: { telefone?: string | null; clientName?: string | null }, right: { telefone?: string | null; clientName?: string | null }) {
-  const leftPhone = normalizePhone(left.telefone);
-  const rightPhone = normalizePhone(right.telefone);
-  const leftName = normalizePipelineIdentityName(left.clientName);
-  const rightName = normalizePipelineIdentityName(right.clientName);
-
-  if (leftPhone && rightPhone && leftName && rightName) {
-    return leftPhone === rightPhone && leftName === rightName;
-  }
-
-  if (leftPhone && rightPhone) {
-    return leftPhone === rightPhone;
-  }
-
-  if (leftName && rightName) {
-    return leftName === rightName;
-  }
-
-  return false;
-}
-
-async function findExistingPipelineClientByIdentity(client: Partial<PipelineClient>) {
-  if (!isSupabaseConfigured) return null;
-
-  const normalizedPhone = normalizePhone(client.telefone);
-  const normalizedName = normalizePipelineIdentityName(client.clientName || '');
-  if (!normalizedPhone && !normalizedName) return null;
-
-  const { data, error } = await supabase
-    .from('pipeline_clients')
-    .select('id, telefone, client_name, created_at, updated_at, ativo, stage, last_stage_change')
-    .limit(5000);
-
-  if (error) throw error;
-
-  return (data || []).find((row: any) => {
-    return hasExactPipelineIdentity(
-      { telefone: row.telefone, clientName: row.client_name },
-      { telefone: normalizedPhone, clientName: normalizedName }
-    );
-  }) || null;
-}
-
-async function findReusableDeletedPipelineClientId(client: Partial<PipelineClient>) {
-  if (!isSupabaseConfigured) return null;
-
-  const normalizedPhone = normalizePhone(client.telefone);
-  const normalizedName = normalizePipelineIdentityName(client.clientName || '');
-  const leadDate = dateOnly(client.meetingDate || client.dataEntrada || client.createdAt);
-  const leadTime = toTime(client.meetingTime);
-
-  if (!normalizedPhone && !normalizedName) return null;
-
-  const [agendaEventsResult, agendamentoLeadsResult] = await Promise.all([
-    supabase
-      .from('agenda_events')
-      .select('pipeline_client_id, client_phone, client_name, event_date, event_time, created_at, updated_at')
-      .limit(5000),
-    supabase
-      .from('agendamento_leads')
-      .select('pipeline_client_id, telefone, nome, data, horario_especifico, created_at, updated_at')
-      .limit(5000),
-  ]);
-
-  if (agendaEventsResult.error) throw agendaEventsResult.error;
-  if (agendamentoLeadsResult.error) throw agendamentoLeadsResult.error;
-
-  const agendaEventCandidate = (agendaEventsResult.data || []).find((row: any) => {
-    if (!row.pipeline_client_id) return false;
-    if (leadDate && row.event_date && String(row.event_date).slice(0, 10) !== leadDate) return false;
-    if (leadTime && toTime(row.event_time) !== leadTime) return false;
-    return hasExactPipelineIdentity(
-      { telefone: row.client_phone, clientName: row.client_name },
-      { telefone: normalizedPhone, clientName: normalizedName }
-    );
-  }) || null;
-
-  const agendamentoLeadCandidate = (agendamentoLeadsResult.data || []).find((row: any) => {
-    if (!row.pipeline_client_id) return false;
-    if (leadDate && row.data && normalizeLeadDateKey(row.data) !== leadDate) return false;
-    if (leadTime && normalizeLeadTimeKey(row.horario_especifico) !== leadTime) return false;
-    return hasExactPipelineIdentity(
-      { telefone: row.telefone, clientName: row.nome },
-      { telefone: normalizedPhone, clientName: normalizedName }
-    );
-  }) || null;
-
-  const candidateIds = [
-    agendaEventCandidate?.pipeline_client_id,
-    agendamentoLeadCandidate?.pipeline_client_id,
-  ].filter((value): value is string => Boolean(value));
-
-  for (const candidateId of candidateIds) {
-    const { data, error } = await supabase
-      .from('pipeline_clients')
-      .select('id')
-      .eq('id', candidateId)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data?.id) {
-      return candidateId;
-    }
-  }
-
-  return null;
-}
-
-function normalizeLeadDateKey(value?: string | null) {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parts = value.split('/');
-  if (parts.length === 3) {
-    const [day, month, year] = parts;
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
-}
-
-function normalizeLeadTimeKey(value?: string | null) {
-  if (!value) return '';
-  const match = String(value).match(/^(\d{1,2}):(\d{2})/);
-  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '';
-}
-
 function peopleMatch(recordPhone: string | null | undefined, recordName: string | null | undefined, targetPhone: string, targetName: string) {
   const recordDigits = normalizePhone(recordPhone);
   if (recordDigits && targetPhone && recordDigits === targetPhone) return true;
@@ -358,6 +227,46 @@ function matchPerson(recordPhone?: string | null, recordName?: string | null, ta
   const targetDigits = normalizePhone(targetPhone);
   if (recordDigits && targetDigits && recordDigits === targetDigits) return true;
   return Boolean(recordName && targetName && recordName.trim().toLowerCase() === targetName.trim().toLowerCase());
+}
+
+function mergeAgendaRows(primaryRows: any[], legacyRows: any[]) {
+  const merged = new Map<string, any>();
+  const put = (row: any, preferredSource: string) => {
+    if (!row?.id) return;
+    const current = merged.get(row.id);
+    const next = {
+      ...current,
+      ...row,
+      source_table: row.source_table || preferredSource,
+    };
+
+    if (!current) {
+      merged.set(row.id, next);
+      return;
+    }
+
+    const currentUpdatedAt = new Date(current.updated_at || current.created_at || 0).getTime();
+    const nextUpdatedAt = new Date(next.updated_at || next.created_at || 0).getTime();
+
+    if (preferredSource === 'nova_agenda' && current.source_table !== 'nova_agenda') {
+      merged.set(row.id, next);
+      return;
+    }
+
+    if (nextUpdatedAt >= currentUpdatedAt) {
+      merged.set(row.id, next);
+    }
+  };
+
+  for (const row of legacyRows) {
+    put(row, 'agenda_events');
+  }
+
+  for (const row of primaryRows) {
+    put(row, 'nova_agenda');
+  }
+
+  return Array.from(merged.values());
 }
 
 function dbPipelineToLocal(row: any): PipelineClient {
@@ -941,11 +850,12 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       closerLogs,
       reminders,
       criativos,
-      agendaEvents,
+      primaryAgendaEvents,
+      legacyAgendaEvents,
       agendamentoLeads,
       settings,
       teamPointer,
-    ] = await Promise.all([
+    ] = await Promise.allSettled([
       supabase.from('pipeline_clients').select('*').order('created_at', { ascending: false }),
       supabase.from('commercial_goals').select('*').order('month', { ascending: false }),
       supabase.from('sdr_goals').select('*').order('month', { ascending: false }),
@@ -953,28 +863,42 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       (supabase as any).from('closer_daily_logs').select('*').order('date', { ascending: false }),
       supabase.from('payment_reminders').select('*').order('payment_deadline', { ascending: true }),
       supabase.from('criativos').select('*').eq('is_active', true).order('name', { ascending: true }),
+      supabase.from('nova_agenda').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }),
       supabase.from('agenda_events').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }),
       supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
       supabase.from('commercial_settings').select('setting_key, setting_value, updated_at, updated_by_user_id'),
       getSetting('last_team_pointer'),
     ]);
 
-    if (pipeline.error) throw pipeline.error;
-    if (goals.error) throw goals.error;
-    if (sdrGoals.error) throw sdrGoals.error;
-    if (preSalesLogs.error) throw preSalesLogs.error;
-    if (closerLogs.error) throw closerLogs.error;
-    if (reminders.error) throw reminders.error;
-    if (criativos.error) throw criativos.error;
-    if (agendaEvents.error) throw agendaEvents.error;
-    if (agendamentoLeads.error) throw agendamentoLeads.error;
-    if (settings.error) throw settings.error;
+    const readResult = (result: PromiseSettledResult<any>, label: string) => {
+      if (result.status === 'rejected') {
+        throw result.reason instanceof Error ? result.reason : new Error(`${label}_query_failed`);
+      }
+      if (result.value && typeof result.value === 'object' && 'error' in result.value && result.value.error) {
+        throw result.value.error;
+      }
+      if (result.value && typeof result.value === 'object' && 'data' in result.value) {
+        return result.value.data;
+      }
+      return result.value;
+    };
 
-    const settingsRows = settings.data || [];
-    const tableSalesGoals = (goals.data || []).map(dbGoalToLocal);
-    const tableSdrGoals = (sdrGoals.data || []).map(dbSdrGoalToLocal);
-    const pipelineClients = (pipeline.data || []).map(dbPipelineToLocal);
-    const cloudCriativos = (criativos.data || []).map((item) => item.name.toUpperCase());
+    const pipelineData = readResult(pipeline, 'pipeline_clients');
+    const goalsData = readResult(goals, 'commercial_goals');
+    const sdrGoalsData = readResult(sdrGoals, 'sdr_goals');
+    const preSalesLogsData = readResult(preSalesLogs, 'pre_sales_daily_logs');
+    const closerLogsData = readResult(closerLogs, 'closer_daily_logs');
+    const remindersData = readResult(reminders, 'payment_reminders');
+    const criativosData = readResult(criativos, 'criativos');
+    const primaryAgendaData = readResult(primaryAgendaEvents, 'nova_agenda');
+    const legacyAgendaData = readResult(legacyAgendaEvents, 'agenda_events');
+    const agendamentoLeadsData = readResult(agendamentoLeads, 'agendamento_leads');
+    const settingsRows = readResult(settings, 'commercial_settings') || [];
+    const teamPointerValue = readResult(teamPointer, 'last_team_pointer') || DEFAULT_COMMERCIAL_LOCAL_DATA.teamPointer;
+    const tableSalesGoals = (goalsData || []).map(dbGoalToLocal);
+    const tableSdrGoals = (sdrGoalsData || []).map(dbSdrGoalToLocal);
+    const pipelineClients = (pipelineData || []).map(dbPipelineToLocal);
+    const cloudCriativos = (criativosData || []).map((item) => item.name.toUpperCase());
     const cloudFunis = settingsToFunis(settingsRows);
     const catalogVersion = settingsToCatalogVersion(settingsRows) || (cloudCriativos.length > 0 || cloudFunis.length > 0 ? 1 : 0);
 
@@ -984,15 +908,15 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       pipelineClients,
       salesGoals: mergeSalesGoals(tableSalesGoals, settingsToSalesGoals(settingsRows)),
       sdrGoals: mergeSdrGoals(tableSdrGoals, settingsToSdrGoals(settingsRows)),
-      preSalesDailyLogs: (preSalesLogs.data || []).map(dbPreSalesLogToLocal),
-      closerDailyLogs: (closerLogs.data || []).map(dbCloserLogToLocal),
-      paymentReminders: (reminders.data || []).map(dbReminderToLocal),
+      preSalesDailyLogs: (preSalesLogsData || []).map(dbPreSalesLogToLocal),
+      closerDailyLogs: (closerLogsData || []).map(dbCloserLogToLocal),
+      paymentReminders: (remindersData || []).map(dbReminderToLocal),
       criativos: settingsToCriativos(settingsRows, cloudCriativos),
       funis: cloudFunis,
       catalogVersion,
-      teamPointer: teamPointer || DEFAULT_COMMERCIAL_LOCAL_DATA.teamPointer,
-      agendaEvents: (agendaEvents.data || []),
-      agendamentoLeads: (agendamentoLeads.data || []),
+      teamPointer: teamPointerValue,
+      agendaEvents: mergeAgendaRows(primaryAgendaData || [], legacyAgendaData || []),
+      agendamentoLeads: (agendamentoLeadsData || []),
     };
   } catch (error) {
     console.warn('Commercial cloud read failed.', error);
@@ -1003,95 +927,8 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
 export async function savePipelineClientToCloud(client: Partial<PipelineClient>, userId?: string | null) {
   if (!isSupabaseConfigured) return null;
 
-  const hasCloudId = typeof client.id === 'string' && /^[0-9a-f-]{36}$/i.test(client.id);
-  let existingClientById: any = null;
-  let existingClient = null;
-  let reusableDeletedClientId: string | null = null;
-
-  if (hasCloudId) {
-    const { data, error } = await supabase
-      .from('pipeline_clients')
-      .select('*')
-      .eq('id', client.id!)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[commercial-cloud] pipeline lookup by id failed, continuing with incoming payload', {
-        error,
-        userId: toDbUserId(userId),
-        clientId: client.id,
-      });
-    } else {
-      existingClientById = data;
-    }
-  }
-
-  if (!hasCloudId) {
-    try {
-      existingClient = await findExistingPipelineClientByIdentity(client);
-    } catch (lookupError) {
-      console.warn('[commercial-cloud] pipeline identity lookup failed, continuing with a fresh save', {
-        error: lookupError,
-        userId: toDbUserId(userId),
-        clientName: client.clientName,
-        phone: client.telefone,
-      });
-    }
-
-    if (!existingClient) {
-      try {
-        reusableDeletedClientId = await findReusableDeletedPipelineClientId(client);
-      } catch (lookupError) {
-        console.warn('[commercial-cloud] reusable pipeline lookup failed, continuing with a fresh save', {
-          error: lookupError,
-          userId: toDbUserId(userId),
-          clientName: client.clientName,
-          phone: client.telefone,
-        });
-      }
-    }
-  }
-
-  const baseClient = existingClientById
-    ? dbPipelineToLocal(existingClientById)
-    : existingClient
-      ? dbPipelineToLocal(existingClient)
-      : null;
-  const mergedClient = baseClient
-    ? {
-        ...baseClient,
-        ...client,
-        id: baseClient.id,
-      }
-    : client;
-
-  const payload = localPipelineToDb(mergedClient, userId);
-  const cleanPayload = hasCloudId || existingClient || reusableDeletedClientId
-    ? payload
-    : (() => {
-        const { id: _discardedId, ...rest } = payload;
-        return rest;
-      })();
-  const nextPayload = existingClient
-    ? {
-        ...cleanPayload,
-        ativo: true,
-        stage: client.stage || 'NOVO',
-        lost_reason: null,
-        no_show_reason: null,
-        last_stage_change: new Date().toISOString(),
-        created_at: existingClient.created_at,
-      }
-    : reusableDeletedClientId
-      ? {
-          ...cleanPayload,
-          id: reusableDeletedClientId,
-        }
-    : cleanPayload;
+  const nextPayload = localPipelineToDb(client, userId);
   console.info('[commercial-cloud] pipeline save requested', {
-    hasCloudId,
-    restoringExistingClient: Boolean(existingClient),
-    restoringDeletedClientId: reusableDeletedClientId,
     userId: toDbUserId(userId),
     clientName: client.clientName,
     stage: client.stage,
@@ -1100,62 +937,31 @@ export async function savePipelineClientToCloud(client: Partial<PipelineClient>,
     payload: nextPayload,
   });
 
-  const persistDirectly = async () => {
-    const query = hasCloudId
-      ? supabase.from('pipeline_clients').update(nextPayload).eq('id', client.id!).select('*').single()
-      : existingClient
-        ? supabase.from('pipeline_clients').update(nextPayload).eq('id', existingClient.id).select('*').single()
-        : supabase.from('pipeline_clients').insert(nextPayload).select('*').single();
+  const result: any = await (supabase as any)
+    .rpc('commercial_pipeline_client_upsert_secure', { payload: nextPayload })
+    .single();
 
-    return query;
-  };
-
-  let data: any = null;
-  let error: any = null;
-  let rpcError: any = null;
-
-  try {
-    const result = await supabase
-      .rpc('commercial_pipeline_client_upsert_secure', { payload: nextPayload })
-      .single();
-    data = result.data;
-    error = result.error;
-  } catch (caughtRpcError) {
-    rpcError = caughtRpcError;
-    error = caughtRpcError;
+  if (result.error) {
+    console.error('[commercial-cloud] pipeline save failed', {
+      error: result.error,
+      payload: nextPayload,
+      userId: toDbUserId(userId),
+    });
+    throw result.error;
   }
 
-  if (!error && !data) {
-    error = new Error('commercial_pipeline_rpc_returned_empty_result');
-  }
-
-  if (error) {
-    const directResult = await persistDirectly();
-    if (!directResult.error && directResult.data) {
-      console.warn('[commercial-cloud] secure pipeline RPC failed, but direct table save succeeded', {
-        rpcError: error,
-        userId: toDbUserId(userId),
-      });
-      data = directResult.data;
-      error = null;
-    } else {
-      console.error('[commercial-cloud] pipeline save failed', {
-        error: directResult.error || error,
-        rpcError,
-        payload: nextPayload,
-        userId: toDbUserId(userId),
-      });
-      throw directResult.error || error;
-    }
+  const savedRow = result.data;
+  if (!savedRow) {
+    throw new Error('commercial_pipeline_rpc_returned_empty_result');
   }
 
   console.info('[commercial-cloud] pipeline save succeeded', {
-    id: data?.id,
-    client_name: data?.client_name,
-    created_by_user_id: data?.created_by_user_id,
+    id: savedRow.id,
+    client_name: savedRow.client_name,
+    created_by_user_id: savedRow.created_by_user_id,
   });
 
-  const savedClient = dbPipelineToLocal(data);
+  const savedClient = dbPipelineToLocal(savedRow);
   try {
     await syncPipelineAutomationsToCloud(savedClient, userId);
   } catch (syncError) {
@@ -1168,8 +974,8 @@ export async function deletePipelineClientFromCloud(client: PipelineClient) {
   if (!isSupabaseConfigured) return;
 
   await Promise.all([
-    supabase.from('agenda_events').delete().eq('pipeline_client_id', client.id),
-    supabase.from('agendamento_leads').delete().eq('pipeline_client_id', client.id),
+    (supabase as any).from('agenda_events').delete().eq('pipeline_client_id', client.id),
+    (supabase as any).from('agendamento_leads').delete().eq('pipeline_client_id', client.id),
   ]);
   await supabase.from('pipeline_clients').delete().eq('id', client.id);
 }

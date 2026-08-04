@@ -231,7 +231,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   const funilLabel = pipelineClient?.criativo || 'Sem informação';
   const professionLabel = pipelineClient?.profession || leadData?.profession || 'Não identificado';
   const currentColorOption = EVENT_COLORS.find((color) => color.value === eventForm.color) || EVENT_COLORS[0];
-  const isNoShowColor = (color: string) => color.toUpperCase() === '#FF0000';
   const recoveredStatus = leadForm.status === 'NO_SHOW' ? 'NOVO_LEAD' : leadForm.status;
   const recoveredStatusOption = STATUS_OPTIONS.find((option) => option.value === recoveredStatus);
   const recoveredPipelineStage = recoveredStatusOption?.pipelineStage || 'NOVO';
@@ -262,87 +261,6 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     : originalEventTitle;
   const eventClientChanged = nextClientName !== originalClientName;
   const eventPhoneChanged = formatPhoneForWhatsApp(eventForm.client_phone) !== originalPhone;
-
-  const isLostLeadContext = pipelineClient?.stage === 'PERDIDO' || leadForm.status === 'PERDIDO';
-
-  const saveCurrentChanges = async () => {
-    const canonicalClientName = nextClientName;
-    const shouldBeNoShow = !isLostLeadContext && isNoShowColor(eventForm.color);
-    const resolvedLeadStatus = isLostLeadContext
-      ? 'PERDIDO'
-      : shouldBeNoShow
-      ? 'NO_SHOW'
-      : leadForm.status === 'NO_SHOW'
-        ? 'NOVO_LEAD'
-        : leadForm.status;
-
-    const eventPatch: Record<string, any> = {};
-    if (titleWasEdited) {
-      eventPatch.title = nextEventTitle;
-    }
-    if (eventClientChanged) {
-      eventPatch.client_name = canonicalClientName;
-    }
-    if (eventPhoneChanged) {
-      eventPatch.client_phone = formatPhoneForWhatsApp(eventForm.client_phone);
-    }
-    if (eventForm.event_date !== event.event_date) {
-      eventPatch.event_date = eventForm.event_date;
-    }
-    if ((eventForm.event_time || '').slice(0, 5) !== (event.event_time || '').slice(0, 5)) {
-      eventPatch.event_time = eventForm.event_time;
-    }
-    if (eventForm.color !== event.color) {
-      eventPatch.color = eventForm.color;
-    }
-    if (eventForm.description !== (event.description || '')) {
-      eventPatch.description = eventForm.description || null;
-    }
-    if (eventForm.notes !== (event.notes || '')) {
-      eventPatch.notes = eventForm.notes || null;
-    }
-    if (eventForm.meeting_link !== (event.meeting_link || '')) {
-      eventPatch.meeting_link = eventForm.meeting_link || null;
-    }
-
-    if (Object.keys(eventPatch).length > 0) {
-      await updateEvent.mutateAsync({
-        id: event.id,
-        ...eventPatch,
-      });
-    }
-
-    if (leadData) {
-      const leadPatch: Record<string, any> = {};
-
-      if (leadForm.faturamento !== leadData.faturamento) leadPatch.faturamento = leadForm.faturamento;
-      if (leadForm.tem_socio !== leadData.tem_socio) leadPatch.tem_socio = leadForm.tem_socio;
-      if (leadForm.tem_mkt !== leadData.tem_mkt) leadPatch.tem_mkt = leadForm.tem_mkt;
-      if (leadForm.tem_secretaria !== leadData.tem_secretaria) leadPatch.tem_secretaria = leadForm.tem_secretaria;
-      if (leadForm.salao_ou_clinica !== leadData.salao_ou_clinica) leadPatch.salao_ou_clinica = leadForm.salao_ou_clinica;
-      if (leadForm.notes !== (leadData.notes || '')) leadPatch.notes = leadForm.notes || null;
-      if (eventForm.event_date !== leadData.agenda_event_date) leadPatch.agenda_event_date = eventForm.event_date;
-      if (eventForm.event_time !== leadData.agenda_event_time) leadPatch.agenda_event_time = eventForm.event_time;
-      if (titleWasEdited) leadPatch.agenda_event_title = nextEventTitle;
-      if (resolvedLeadStatus !== leadData.status) leadPatch.status = resolvedLeadStatus;
-
-      if (Object.keys(leadPatch).length > 0) {
-        try {
-          await updateLead.mutateAsync({
-            id: leadData.id,
-            agenda_event_id: event.id,
-            pipeline_client_id: leadData.pipeline_client_id || pipelineClient?.id || null,
-            ...leadPatch,
-          });
-        } catch (leadError) {
-          console.warn('Lead update failed after event save, keeping event changes.', leadError);
-        }
-      }
-    }
-
-    setIsEditingEvent(false);
-    setIsEditingLead(false);
-  };
 
   const handleSaveEvent = async () => {
     try {
@@ -537,8 +455,8 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
             </div>
 
             <div className="sticky bottom-0 -mx-8 mt-6 flex justify-end gap-2 border-t border-slate-200/70 bg-white/95 px-8 py-4 backdrop-blur-xl">
-              <Button variant="outline" onClick={() => setIsEditingEvent(false)}>Cancelar</Button>
-              <Button onClick={handleSaveEvent} disabled={updateEvent.isPending}>
+              <Button type="button" variant="outline" onClick={() => setIsEditingEvent(false)}>Cancelar</Button>
+              <Button type="button" onClick={handleSaveEvent} disabled={updateEvent.isPending}>
                 {updateEvent.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Salvar
               </Button>
@@ -652,11 +570,11 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingLead((current) => !current)} className="rounded-full transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditingLead((current) => !current)} className="rounded-full transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100">
                       <Edit3 className="mr-2 h-4 w-4" />
                       {isEditingLead ? 'Fechar edição' : 'Editar lead'}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingEvent(true)} className="rounded-full transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditingEvent(true)} className="rounded-full transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100">
                       <Edit3 className="mr-2 h-4 w-4" />
                       Editar evento
                     </Button>
@@ -835,7 +753,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                         <Textarea value={leadForm.notes} onChange={(e) => setLeadForm((current) => ({ ...current, notes: e.target.value }))} />
                       </div>
                       <div className="md:col-span-2 flex justify-end">
-                        <Button onClick={handleSaveLead} disabled={updateLead.isPending}>
+                        <Button type="button" onClick={handleSaveLead} disabled={updateLead.isPending}>
                           {updateLead.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                           Salvar alterações
                         </Button>
@@ -846,17 +764,17 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
               </div>
             </div>
             <div className="sticky bottom-0 -mx-8 flex flex-col gap-3 border-t border-slate-200/70 bg-white/95 px-8 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
-              <Button variant="destructive" onClick={handleDelete} disabled={deleteEvent.isPending} className="shadow-sm transition duration-200 hover:-translate-y-0.5">
+              <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleteEvent.isPending} className="shadow-sm transition duration-200 hover:-translate-y-0.5">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Excluir
               </Button>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handleManualReminder} className="shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
+                <Button type="button" variant="outline" onClick={handleManualReminder} className="shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
                   <Bell className="h-4 w-4 mr-2" />
                   Lembrete manual
                 </Button>
                 {onDuplicate && (
-                  <Button variant="outline" onClick={() => {
+                  <Button type="button" variant="outline" onClick={() => {
                     onDuplicate(event);
                     onOpenChange(false);
                   }} className="shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
@@ -864,7 +782,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                     Duplicar
                   </Button>
                 )}
-                <Button onClick={() => setIsEditingEvent(true)} className="bg-red-600 text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:bg-red-700">Editar evento</Button>
+                <Button type="button" onClick={() => setIsEditingEvent(true)} className="bg-red-600 text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:bg-red-700">Editar evento</Button>
               </div>
             </div>
           </div>
