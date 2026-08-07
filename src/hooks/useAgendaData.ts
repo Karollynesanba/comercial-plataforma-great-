@@ -117,6 +117,7 @@ export const EVENT_COLORS = [
   { label: 'Ficou de Confirmar', value: '#FFA500', emoji: 'laranja' },
   { label: 'No Show Remarcado', value: '#8B5A2B', emoji: 'marrom' },
   { label: 'Reunioes - Great', value: '#808080', emoji: 'cinza' },
+  { label: 'Ligação', value: '#FACC15', emoji: 'amarelo' },
 ];
 
 const LOCAL_TEAMS = [

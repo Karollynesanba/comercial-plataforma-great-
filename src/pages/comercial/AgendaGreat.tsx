@@ -23,6 +23,7 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
   '#FFA500': 'Ficou de Confirmar',
   '#C8A27A': 'No Show Remarcado',
   '#808080': 'Reuniões - Great',
+  '#FACC15': 'Ligação',
 };
 
 export default function AgendaGreat() {
