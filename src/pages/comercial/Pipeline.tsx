@@ -736,7 +736,7 @@ export default function PipelinePage() {
                 </div>
 
                 <DragOverlay>
-                  {activeClient && <PipelineCard client={activeClient} />}
+                  {activeClient && <PipelineCard client={activeClient} disableDrag />}
                 </DragOverlay>
               </DndContext>
           </>

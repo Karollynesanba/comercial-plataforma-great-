@@ -19,6 +19,7 @@ interface PipelineCardProps {
   selected?: boolean;
   onSelectToggle?: (clientId: string) => void;
   selectionMode?: boolean;
+  disableDrag?: boolean;
 }
 
 const PERIODO_COLORS: Record<Periodo, string> = {
@@ -94,10 +95,11 @@ function clientIdFallback(value: string) {
   return value.replace(/\s+/g, '-').slice(0, 32);
 }
 
-export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSelectToggle, selectionMode }: PipelineCardProps) {
+export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSelectToggle, selectionMode, disableDrag = false }: PipelineCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: client.id,
     data: client,
+    disabled: disableDrag,
   });
 
   const style = {
@@ -178,9 +180,18 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
     >
       {/* Drag handle area */}
       <div 
-        className="absolute inset-0 cursor-grab active:cursor-grabbing" 
-        {...attributes}
-        {...listeners}
+        className={cn(
+          'absolute inset-0',
+          !disableDrag && 'cursor-grab active:cursor-grabbing'
+        )}
+        style={{
+          touchAction: disableDrag ? undefined : 'none',
+          userSelect: disableDrag ? undefined : 'none',
+          WebkitUserDrag: disableDrag ? undefined : 'none',
+        }}
+        draggable={false}
+        {...(!disableDrag ? attributes : {})}
+        {...(!disableDrag ? listeners : {})}
       />
       
       {/* Action buttons - positioned above the drag layer */}
