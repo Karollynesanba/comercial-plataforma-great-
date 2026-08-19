@@ -78,6 +78,15 @@ const getFunilColor = (funil: string) => {
   return colorMap[funil] || 'bg-muted text-muted-foreground border-border';
 };
 
+const formatAgendadoViaLabel = (value?: string | null) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '—';
+  if (normalized === 'LIGACAO') return 'Ligação';
+  if (normalized === 'MENSAGEM') return 'Mensagem';
+  if (normalized === 'CALENDLY') return 'Calendly';
+  return normalized;
+};
+
 export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
   const { updateLead, deleteLead, duplicateLead } = useAgendamentoData();
   const [searchQuery, setSearchQuery] = useState('');
@@ -506,7 +515,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                       >
                         <SelectTrigger className="h-8 text-xs border-0 bg-transparent hover:bg-muted/50">
                           <SelectValue>
-                            {lead.agendado_via === 'LIGACAO' ? 'Ligação' : lead.agendado_via === 'MENSAGEM' ? 'Mensagem' : '—'}
+                            {formatAgendadoViaLabel(lead.agendado_via)}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>

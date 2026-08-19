@@ -17,6 +17,18 @@ import { getPhoneMatchCandidates } from '@/lib/phoneUtils';
 import { AGENDADOR_OPTIONS, useCommercialSafe } from '@/contexts/CommercialContext';
 import { useAgendamentoData } from '@/hooks/useAgendamentoData';
 
+const AGENDADO_VIA_LABELS: Record<string, string> = {
+  LIGACAO: 'Ligação',
+  MENSAGEM: 'Mensagem',
+  CALENDLY: 'Calendly',
+};
+
+function formatAgendadoViaLabel(value?: string | null) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  return AGENDADO_VIA_LABELS[normalized] || normalized;
+}
+
 interface EventCardTooltipProps {
   event: AgendaEvent;
   children: ReactNode;
@@ -158,7 +170,7 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
     : pipelineClient?.agendadoPor
       ? AGENDADOR_OPTIONS.find((option) => option.value === pipelineClient.agendadoPor)?.label || pipelineClient.agendadoPor
       : null;
-  const scheduledViaLabel = agendamentoLead?.agendado_via || pipelineClient?.agendadoVia || null;
+  const scheduledViaLabel = formatAgendadoViaLabel(agendamentoLead?.agendado_via || pipelineClient?.agendadoVia);
   const endTime = format(
     addMinutes(parseISO(`2000-01-01T${event.event_time}`), event.duration_minutes || 60),
     'HH:mm'

@@ -112,6 +112,34 @@ const EVENT_COLOR_PRESET = EVENT_COLORS.map((color) => ({
   style: { backgroundColor: color.value },
 }));
 
+const AGENDADO_VIA_LABELS: Record<string, string> = {
+  LIGACAO: 'Ligação',
+  MENSAGEM: 'Mensagem',
+  CALENDLY: 'Calendly',
+};
+
+function pickFirstNonEmpty(...values: Array<string | null | undefined>) {
+  return values
+    .map((value) => String(value || '').trim())
+    .find((value) => value.length > 0) || null;
+}
+
+function formatAgendadoViaLabel(value?: string | null) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return 'Sem informação';
+  return AGENDADO_VIA_LABELS[normalized] || normalized;
+}
+
+function formatOptionLabel(
+  value?: string | null,
+  options?: readonly { value: string; label: string }[],
+  fallback = 'Sem informação',
+) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return fallback;
+  return options?.find((option) => option.value === normalized)?.label || normalized;
+}
+
 interface EventDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -215,21 +243,56 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     });
   }, [event?.notes, leadData, pipelineClient]);
 
-  const agendadoViaLabel = pipelineClient?.agendadoVia === 'LIGACAO'
-    ? 'Ligação'
-    : pipelineClient?.agendadoVia === 'MENSAGEM'
-      ? 'Mensagem'
-      : pipelineClient?.agendadoVia === 'CALENDLY'
-        ? 'Calendly'
-      : 'Sem informação';
-  const agendadorLabel = pipelineClient?.agendadoPor
-    ? AGENDADOR_OPTIONS.find((option) => option.value === pipelineClient.agendadoPor)?.label || pipelineClient.agendadoPor
-    : 'Sem informação';
-  const areaAtuacaoLabel = SALAO_OU_CLINICA_OPTIONS.find((option) => option.value === (leadForm.salao_ou_clinica || pipelineClient?.salaoOuClinica || ''))
-    ?.label || leadForm.salao_ou_clinica || pipelineClient?.salaoOuClinica || 'Sem informação';
-  const faturamentoLabel = FATURAMENTO_OPTIONS.find((option) => option.value === leadForm.faturamento)?.label || leadForm.faturamento || 'Sem informação';
-  const funilLabel = pipelineClient?.criativo || 'Sem informação';
-  const professionLabel = pipelineClient?.profession || leadData?.profession || 'Não identificado';
+  const leadDataRecord = leadData as any;
+  const pipelineClientRecord = pipelineClient as any;
+  const agendadoViaValue = pickFirstNonEmpty(
+    leadDataRecord?.agendado_via,
+    leadDataRecord?.agendadoVia,
+    pipelineClientRecord?.agendado_via,
+    pipelineClientRecord?.agendadoVia,
+  );
+  const agendadorValue = pickFirstNonEmpty(
+    leadDataRecord?.agendadoPor,
+    leadDataRecord?.agendado_por,
+    leadDataRecord?.assignedSDR,
+    pipelineClientRecord?.agendadoPor,
+    pipelineClientRecord?.agendado_por,
+    pipelineClientRecord?.assignedSDR,
+  );
+  const areaAtuacaoValue = pickFirstNonEmpty(
+    leadDataRecord?.salao_ou_clinica,
+    leadDataRecord?.salaoOuClinica,
+    pipelineClientRecord?.salao_ou_clinica,
+    pipelineClientRecord?.salaoOuClinica,
+  );
+  const faturamentoValue = pickFirstNonEmpty(
+    leadDataRecord?.faturamentoPersonalizado,
+    pipelineClientRecord?.faturamentoPersonalizado,
+    leadDataRecord?.faturamento,
+    pipelineClientRecord?.faturamento,
+  );
+  const funilValue = pickFirstNonEmpty(
+    leadDataRecord?.funil,
+    leadDataRecord?.creativeSource,
+    pipelineClientRecord?.funil,
+    pipelineClientRecord?.creativeSource,
+    pipelineClientRecord?.criativo,
+  );
+  const professionValue = pickFirstNonEmpty(
+    leadDataRecord?.profession,
+    pipelineClientRecord?.profession,
+  );
+  const agendadoViaLabel = formatAgendadoViaLabel(agendadoViaValue);
+  const agendadorLabel = formatOptionLabel(agendadorValue, AGENDADOR_OPTIONS);
+  const areaAtuacaoLabel = formatOptionLabel(areaAtuacaoValue, SALAO_OU_CLINICA_OPTIONS);
+  const faturamentoLabel = formatOptionLabel(
+    faturamentoValue === 'PERSONALIZADO'
+      ? pickFirstNonEmpty(leadDataRecord?.faturamentoPersonalizado, pipelineClientRecord?.faturamentoPersonalizado, faturamentoValue)
+      : faturamentoValue,
+    FATURAMENTO_OPTIONS,
+  );
+  const funilLabel = funilValue || 'Sem informação';
+  const professionLabel = professionValue || 'Não identificado';
   const currentColorOption = EVENT_COLORS.find((color) => color.value === eventForm.color) || EVENT_COLORS[0];
   const recoveredStatus = leadForm.status === 'NO_SHOW' ? 'NOVO_LEAD' : leadForm.status;
   const recoveredStatusOption = STATUS_OPTIONS.find((option) => option.value === recoveredStatus);
@@ -596,7 +659,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   </div>
                   <div className="rounded-[1.3rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Agendamento</p>
-                    <p className="mt-2 text-base font-black text-slate-950">{pipelineClient?.agendadoVia ? agendadoViaLabel : 'Sem informação'}</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{agendadoViaLabel}</p>
                   </div>
                 </div>
 
