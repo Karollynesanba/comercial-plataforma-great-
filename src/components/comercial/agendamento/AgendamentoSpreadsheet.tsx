@@ -179,6 +179,27 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
     return getHorarioLabel(derivedHorario || lead.horario);
   };
 
+  const getAppointmentTime = (lead: AgendamentoLead) => {
+    const rawTime = lead.agenda_event_time || lead.meetingTime || lead.horario_especifico || null;
+    if (!rawTime) return '-';
+
+    const timeMatch = String(rawTime).trim().match(/^(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+      return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+    }
+
+    try {
+      const parsed = new Date(rawTime);
+      if (!Number.isNaN(parsed.getTime())) {
+        return format(parsed, 'HH:mm');
+      }
+    } catch {
+      // Keep the raw value when it is not a valid date.
+    }
+
+    return String(rawTime);
+  };
+
   const normalizeSocioOrMktValue = (value?: string | null) => (value === 'SIM' ? 'SIM' : 'NAO');
 
   // Check if lead has agenda data
@@ -253,6 +274,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                 <TableHead className="w-[150px] font-semibold">NOME</TableHead>
                 <TableHead className="w-[130px] font-semibold">TELEFONE</TableHead>
                 <TableHead className="w-[100px] font-semibold">HORÁRIO</TableHead>
+                <TableHead className="w-[150px] font-semibold">HORÁRIO AGEND.</TableHead>
                 <TableHead className="w-[100px] font-semibold">TEM SÓCIO?</TableHead>
                 <TableHead className="w-[100px] font-semibold">TEM MKT?</TableHead>
                 <TableHead className="w-[110px] font-semibold">TEM SECRET.?</TableHead>
@@ -266,7 +288,7 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
             <TableBody>
               {filteredLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={13} className="h-32 text-center text-muted-foreground">
                     Nenhum registro encontrado
                   </TableCell>
                 </TableRow>
@@ -353,6 +375,22 @@ export function AgendamentoSpreadsheet({ leads }: AgendamentoSpreadsheetProps) {
                             {hasAgendaData(lead) 
                               ? `Horário exato da Agenda Great` 
                               : `Período genérico (MANHÃ/TARDE/NOITE)`}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+
+                    {/* HORÁRIO AGENDADO - Exibe o horário exato da reunião */}
+                    <TableCell className="p-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="px-2 py-1.5 rounded text-sm font-medium text-foreground">
+                              {getAppointmentTime(lead)}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Horário exato do agendamento
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>

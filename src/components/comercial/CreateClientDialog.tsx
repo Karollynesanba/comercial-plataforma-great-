@@ -488,11 +488,10 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="LIGACAO">Ligacao</SelectItem>
-                      <SelectItem value="MENSAGEM">Mensagem</SelectItem>
-                      <SelectItem value="CALENDLY">Calendly</SelectItem>
-                    </SelectContent>
+                      <SelectContent className="bg-popover">
+                        <SelectItem value="LIGACAO">Ligacao</SelectItem>
+                        <SelectItem value="MENSAGEM">Mensagem</SelectItem>
+                      </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>

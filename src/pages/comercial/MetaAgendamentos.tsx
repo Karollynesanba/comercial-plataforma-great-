@@ -48,6 +48,10 @@ function uniqueLeadsByIdentity(leads: any[]) {
   });
 }
 
+function normalizeAgendadoVia(value?: string | null) {
+  return String(value || '').trim().toUpperCase();
+}
+
 export default function MetaAgendamentos() {
   useAgendamentoRealtime();
   const authContext = useAuthSafe();
@@ -311,6 +315,12 @@ export default function MetaAgendamentos() {
               {AGENDADOR_OPTIONS.map((agendador) => {
                 const scheduledCount = sdrStats[agendador.value]?.scheduledCount || 0;
                 const todayCount = sdrStats[agendador.value]?.todayCount || 0;
+                const messageCount = uniqueFilteredLeads.filter((lead: any) => {
+                  return lead.agendadoPor === agendador.value && normalizeAgendadoVia(lead.agendadoVia) === 'MENSAGEM';
+                }).length;
+                const callCount = uniqueFilteredLeads.filter((lead: any) => {
+                  return lead.agendadoPor === agendador.value && normalizeAgendadoVia(lead.agendadoVia) === 'LIGACAO';
+                }).length;
                 const goalValue = parseInt(goals[agendador.value]) || 0;
                 const progress = goalValue > 0 ? Math.min((scheduledCount / goalValue) * 100, 100) : 0;
                 const isAchieved = goalValue > 0 && scheduledCount >= goalValue;
@@ -348,6 +358,18 @@ export default function MetaAgendamentos() {
                           <p className="text-2xl font-bold">{goalValue || '-'}</p>
                         </div>
                       </div>
+                      {isDailyTracked && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Agendamentos por mensagem</p>
+                            <p className="mt-1 text-2xl font-bold text-foreground">{messageCount}</p>
+                          </div>
+                          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Agendamentos por ligação</p>
+                            <p className="mt-1 text-2xl font-bold text-foreground">{callCount}</p>
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <div className="mb-1.5 flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Progresso</span>

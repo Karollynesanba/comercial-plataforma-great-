@@ -411,6 +411,23 @@ export function PipelineSpreadsheet({
     return createdDate ? differenceInDays(new Date(), createdDate) : 0;
   };
 
+  const getAppointmentTime = (client: PipelineClient) => {
+    const rawTime = client.meetingTime || (client as any).agenda_event_time || (client as any).horario_especifico || null;
+    if (!rawTime) return "-";
+
+    const directMatch = String(rawTime).trim().match(/^(\d{1,2}):(\d{2})/);
+    if (directMatch) {
+      return `${directMatch[1].padStart(2, "0")}:${directMatch[2]}`;
+    }
+
+    const parsed = new Date(rawTime);
+    if (!Number.isNaN(parsed.getTime())) {
+      return format(parsed, "HH:mm");
+    }
+
+    return String(rawTime);
+  };
+
   const exportToCSV = () => {
     const rows = filteredClients.map(c => [
       c.ativo ? 'ATIVO' : 'INATIVO',
@@ -613,6 +630,7 @@ export function PipelineSpreadsheet({
                   <TableHead className="w-[130px] text-sm font-semibold">PERÍODO</TableHead>
                   <TableHead className="w-[110px] text-sm font-semibold">INDICAÇÃO</TableHead>
                   <TableHead className="w-[130px] text-sm font-semibold">AGENDADO POR</TableHead>
+                  <TableHead className="w-[130px] text-sm font-semibold">HORARIO AGEND.</TableHead>
                   <TableHead className="w-[130px] text-sm font-semibold text-right">
                     <button 
                       className="flex items-center gap-2 hover:text-foreground transition-colors ml-auto"
@@ -637,7 +655,7 @@ export function PipelineSpreadsheet({
             <TableBody>
               {filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={showInactive ? 15 : 14} className="text-center text-muted-foreground py-12 text-sm">
+                  <TableCell colSpan={showInactive ? 16 : 15} className="text-center text-muted-foreground py-12 text-sm">
                     Nenhum lead encontrado
                   </TableCell>
                 </TableRow>
@@ -897,6 +915,13 @@ export function PipelineSpreadsheet({
                         </Select>
                       </TableCell>
 
+
+                      {/* HORARIO AGENDADO */}
+                      <TableCell className="p-2">
+                        <span className="text-xs font-medium text-slate-700">
+                          {getAppointmentTime(client)}
+                        </span>
+                      </TableCell>
 
                       {/* ENTRADA */}
                       <TableCell className="p-2 text-right">

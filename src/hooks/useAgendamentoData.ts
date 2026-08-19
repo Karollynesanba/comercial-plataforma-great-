@@ -101,6 +101,8 @@ export interface AgendamentoLead {
   agenda_event_date?: string | null;
   agenda_event_time?: string | null;
   agenda_event_title?: string | null;
+  meetingDate?: string | null;
+  meetingTime?: string | null;
 }
 
 export type AgendamentoLeadInsert = Omit<AgendamentoLead, 'id' | 'created_at' | 'updated_at' | 'created_by_user_id'> & { horario_especifico?: string; pode_investir?: 'SIM' | 'NAO' | null };

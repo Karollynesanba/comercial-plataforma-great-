@@ -29,6 +29,7 @@ import {
   DollarSign, 
   Users, 
   Target, 
+  Clock,
   ArrowUp,
   ArrowDown,
   Minus,
@@ -42,6 +43,7 @@ import {
 import { cn, formatBRL, formatBRLShort } from '@/lib/utils';
 import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/comercial/PeriodFilter';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
+import { getHour } from '@/lib/preVendaAnalytics';
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 const CATEGORY_COLORS: Record<string, string> = {
@@ -71,6 +73,14 @@ function getCreativeRevenue(client: PipelineClient) {
   return Number(client.entrada || client.dealValue || 0);
 }
 
+function getScheduledDate(client: PipelineClient) {
+  return client.meetingDate || (client as any).agenda_event_date || null;
+}
+
+function getScheduledVia(value?: string | null) {
+  return String(value || '').trim().toUpperCase();
+}
+
 export default function ComercialDashboards() {
   const { pipelineClients, currentGoal, getGoalStats, getPipelineStats } = useCommercial();
 
@@ -94,6 +104,45 @@ export default function ComercialDashboards() {
       return filterByPeriod(closeDate, periodFilter, customStart, customEnd);
     });
   }, [pipelineClients, periodFilter, customStart, customEnd, filterByPeriod]);
+
+  const scheduledClientsInPeriod = useMemo(() => {
+    return pipelineClients.filter((client) => {
+      const scheduleDate = getScheduledDate(client);
+      if (!scheduleDate) return false;
+      return filterByPeriod(scheduleDate, periodFilter, customStart, customEnd);
+    });
+  }, [customEnd, customStart, filterByPeriod, periodFilter, pipelineClients]);
+
+  const schedulingOriginStats = useMemo(() => {
+    const counts = scheduledClientsInPeriod.reduce((acc, client) => {
+      const via = getScheduledVia(client.agendadoVia);
+      if (via === 'LIGACAO' || via === 'MENSAGEM') {
+        acc[via] += 1;
+      }
+      return acc;
+    }, { LIGACAO: 0, MENSAGEM: 0 });
+
+    const total = counts.LIGACAO + counts.MENSAGEM;
+    return {
+      callCount: counts.LIGACAO,
+      messageCount: counts.MENSAGEM,
+    };
+  }, [scheduledClientsInPeriod]);
+
+  const busiestHour = useMemo(() => {
+    const hourCounts = scheduledClientsInPeriod.reduce((acc, client) => {
+      const hour = getHour(client);
+      if (hour === null || Number.isNaN(hour)) return acc;
+      acc[hour] = (acc[hour] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>);
+
+    const topHour = Object.entries(hourCounts)
+      .map(([hour, total]) => ({ hour: Number(hour), total }))
+      .sort((a, b) => b.total - a.total || a.hour - b.hour)[0] || null;
+
+    return topHour;
+  }, [scheduledClientsInPeriod]);
 
 
 
@@ -998,6 +1047,56 @@ export default function ComercialDashboards() {
             icon={<Target className="h-5 w-5" />}
             trend={pipelineStats.conversionRate >= 25 ? 'up' : pipelineStats.conversionRate >= 15 ? 'neutral' : 'down'}
           />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-cyan-500" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="h-9 w-9 rounded-full bg-sky-50 flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-sky-600" />
+                </div>
+                Taxa de Agendamento por Ligação ou Mensagem
+              </CardTitle>
+              <CardDescription>Baseado nos agendamentos do período selecionado</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ligação</p>
+                  <p className="mt-1 text-3xl font-bold text-foreground">{schedulingOriginStats.callCount.toLocaleString('pt-BR')}</p>
+                  <p className="text-xs text-muted-foreground">{schedulingOriginStats.callCount} agendamentos</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mensagem</p>
+                  <p className="mt-1 text-3xl font-bold text-foreground">{schedulingOriginStats.messageCount.toLocaleString('pt-BR')}</p>
+                  <p className="text-xs text-muted-foreground">{schedulingOriginStats.messageCount} agendamentos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="group relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="h-9 w-9 rounded-full bg-amber-50 flex items-center justify-center">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                </div>
+                Horário que mais agenda
+              </CardTitle>
+              <CardDescription>Faixa com maior volume de agendamentos no período</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-black tracking-tight text-foreground">
+                {busiestHour ? `${String(busiestHour.hour).padStart(2, '0')}:00` : '--:--'}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {busiestHour ? `${busiestHour.total} agendamentos no período` : 'Sem agendamentos no período'}
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Gráfico principal de evolução */}
