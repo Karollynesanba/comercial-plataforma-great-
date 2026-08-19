@@ -227,6 +227,23 @@ export function PipelineSpreadsheet({
   // New criativo input
   const [newCriativo, setNewCriativo] = useState('');
 
+  const getAppointmentHour = (client: PipelineClient) => {
+    const rawTime = client.meetingTime || (client as any).agenda_event_time || (client as any).horario_especifico || null;
+    if (!rawTime) return null;
+
+    const directMatch = String(rawTime).trim().match(/^(\d{1,2}):(\d{2})/);
+    if (directMatch) {
+      return Number(directMatch[1]);
+    }
+
+    const parsed = new Date(rawTime);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.getHours();
+    }
+
+    return null;
+  };
+
   // Filter and sort clients
   const filteredClients = useMemo(() => {
     let result = [...pipelineClients];
@@ -438,23 +455,6 @@ export function PipelineSpreadsheet({
     }
 
     return String(rawTime);
-  };
-
-  const getAppointmentHour = (client: PipelineClient) => {
-    const rawTime = client.meetingTime || (client as any).agenda_event_time || (client as any).horario_especifico || null;
-    if (!rawTime) return null;
-
-    const directMatch = String(rawTime).trim().match(/^(\d{1,2}):(\d{2})/);
-    if (directMatch) {
-      return Number(directMatch[1]);
-    }
-
-    const parsed = new Date(rawTime);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.getHours();
-    }
-
-    return null;
   };
 
   const exportToCSV = () => {
