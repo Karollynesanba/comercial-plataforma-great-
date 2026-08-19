@@ -90,6 +90,11 @@ interface PipelineSpreadsheetProps {
 type SortField = 'clientName' | 'vendedor' | 'entrada' | 'stage' | 'dataEntrada' | 'equipe';
 type SortDirection = 'asc' | 'desc';
 
+const TIME_FILTER_OPTIONS = Array.from({ length: 24 }, (_, hour) => {
+  const value = `${String(hour).padStart(2, '0')}:00`;
+  return { value, label: value };
+});
+
 // Color mappings for pills - based on category
 const ATIVO_COLORS = {
   true: 'bg-blue-50 text-blue-700 border-blue-100',
@@ -183,6 +188,7 @@ export function PipelineSpreadsheet({
   const [equipeFilter, setEquipeFilter] = useState<string>('all');
   const [periodoFilter, setPeriodoFilter] = useState<string>('all');
   const [pacoteFilter, setPacoteFilter] = useState<string>('all');
+  const [horarioFilter, setHorarioFilter] = useState<string>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>('current_month');
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
@@ -268,6 +274,12 @@ export function PipelineSpreadsheet({
       result = result.filter(c => c.pacote === pacoteFilter);
     }
 
+    // HorÃ¡rio filter - matches the full hour window, e.g. 17:00 through 17:59
+    if (horarioFilter !== 'all') {
+      const selectedHour = Number(horarioFilter.split(':')[0]);
+      result = result.filter((client) => getAppointmentHour(client) === selectedHour);
+    }
+
     // Period filter
     result = result.filter(c => {
       const clientDate = c.createdAt || c.dataEntrada || c.entryDate;
@@ -301,7 +313,7 @@ export function PipelineSpreadsheet({
     });
 
     return result;
-  }, [pipelineClients, searchQuery, sortField, sortDirection, stageFilter, vendedorFilter, equipeFilter, periodoFilter, pacoteFilter, periodFilter, customStart, customEnd, showInactive, filterByPeriod]);
+  }, [pipelineClients, searchQuery, sortField, sortDirection, stageFilter, vendedorFilter, equipeFilter, periodoFilter, pacoteFilter, horarioFilter, periodFilter, customStart, customEnd, showInactive, filterByPeriod]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -428,6 +440,23 @@ export function PipelineSpreadsheet({
     return String(rawTime);
   };
 
+  const getAppointmentHour = (client: PipelineClient) => {
+    const rawTime = client.meetingTime || (client as any).agenda_event_time || (client as any).horario_especifico || null;
+    if (!rawTime) return null;
+
+    const directMatch = String(rawTime).trim().match(/^(\d{1,2}):(\d{2})/);
+    if (directMatch) {
+      return Number(directMatch[1]);
+    }
+
+    const parsed = new Date(rawTime);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.getHours();
+    }
+
+    return null;
+  };
+
   const exportToCSV = () => {
     const rows = filteredClients.map(c => [
       c.ativo ? 'ATIVO' : 'INATIVO',
@@ -463,13 +492,14 @@ export function PipelineSpreadsheet({
     setEquipeFilter('all');
     setPeriodoFilter('all');
     setPacoteFilter('all');
+    setHorarioFilter('all');
     setPeriodFilter('current_month');
     setCustomStart(undefined);
     setCustomEnd(undefined);
     setSearchQuery('');
   };
 
-  const hasActiveFilters = stageFilter !== 'all' || vendedorFilter !== 'all' || equipeFilter !== 'all' || periodoFilter !== 'all' || pacoteFilter !== 'all' || periodFilter !== 'current_month' || searchQuery !== '';
+  const hasActiveFilters = stageFilter !== 'all' || vendedorFilter !== 'all' || equipeFilter !== 'all' || periodoFilter !== 'all' || pacoteFilter !== 'all' || horarioFilter !== 'all' || periodFilter !== 'current_month' || searchQuery !== '';
 
   return (
     <div className={cn(
@@ -534,6 +564,20 @@ export function PipelineSpreadsheet({
             <SelectItem value="all">Todos vendedores</SelectItem>
             {VENDEDOR_OPTIONS.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={horarioFilter} onValueChange={setHorarioFilter}>
+          <SelectTrigger className="h-10 w-[130px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
+            <SelectValue placeholder="HorÃ¡rio" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover">
+            <SelectItem value="all">Todos horÃ¡rios</SelectItem>
+            {TIME_FILTER_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -871,7 +915,7 @@ export function PipelineSpreadsheet({
 
 
                       {/* AGENDADO POR */}
-                      {/* INDICAÇÃO */}
+                      {/* INDICAï¿½ï¿½O */}
                       <TableCell className="p-2">
                         <Select
                           value={client.indicacao || 'NAO'}
@@ -879,7 +923,7 @@ export function PipelineSpreadsheet({
                         >
                           <SelectTrigger className="h-8 w-full border-0 p-0">
                             <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', client.indicacao === 'SIM' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200')}>
-                              {client.indicacao || 'Não'}
+                              {client.indicacao || 'Nï¿½o'}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
@@ -1078,6 +1122,7 @@ export function PipelineSpreadsheet({
     </div>
   );
 }
+
 
 
 
