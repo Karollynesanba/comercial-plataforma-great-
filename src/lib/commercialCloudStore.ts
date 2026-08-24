@@ -320,6 +320,7 @@ function dbPipelineToLocal(row: any): PipelineClient {
 
 function localPipelineToDb(client: Partial<PipelineClient>, userId?: string | null) {
   return {
+    id: client.id || undefined,
     ativo: client.ativo ?? true,
     client_name: client.clientName || 'Lead sem nome',
     clinic_name: client.clinicName || client.clientName || null,
