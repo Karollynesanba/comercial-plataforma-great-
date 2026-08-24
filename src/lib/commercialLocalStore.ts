@@ -165,7 +165,9 @@ function findAgendaEventForSync(events: AgendaEventLike[], phone: string, name: 
   );
 
   if (exactMatch) return exactMatch;
-  return null;
+
+  const personMatch = events.find((event) => peopleMatch(event.client_phone, event.client_name, phone, name));
+  return personMatch || null;
 }
 
 function toLocalIsoDate(value?: string | Date | null) {
