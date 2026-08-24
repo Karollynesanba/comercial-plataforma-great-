@@ -7,6 +7,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  MouseSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -116,6 +117,11 @@ export default function PipelinePage() {
   // Clear day filter when period filter changes to a preset
 
   const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
@@ -261,44 +267,6 @@ export default function PipelinePage() {
     const client = pipelineClients.find(c => c.id === clientId);
 
     if (!client || client.stage === newStage) return;
-
-    // If moving to PERDIDO, ask for reason
-    if (newStage === 'PERDIDO') {
-      setPendingMove({ id: clientId, clientName: client.clientName });
-      setLostDialogOpen(true);
-      return;
-    }
-
-    // If moving to NO_SHOW, ask for reason
-    if (newStage === 'NO_SHOW') {
-      setPendingNoShow({ id: clientId, clientName: client.clientName });
-      setNoShowDialogOpen(true);
-      return;
-    }
-
-    // If moving to TAXA_INTERESSE, ask for closer
-    if (newStage === 'TAXA_INTERESSE') {
-      setPendingTaxa({ id: clientId, clientName: client.clientName });
-      setTaxaVendedor('');
-      setTaxaValor('');
-      setTaxaDialogOpen(true);
-      return;
-    }
-
-    // If moving to NEGOCIACAO, ask for details (if not already set)
-    if (newStage === 'NEGOCIACAO' && client.entrada === 0) {
-      setPendingNegotiation({ id: clientId, clientName: client.clientName, targetStage: 'NEGOCIACAO' });
-      setNegotiationDialogOpen(true);
-      return;
-    }
-
-    // If moving to FECHADO, ask for details
-    if (newStage === 'FECHADO') {
-      setPendingNegotiation({ id: clientId, clientName: client.clientName, clinicName: client.clinicName, targetStage: 'FECHADO' });
-      setNegotiationDialogOpen(true);
-      return;
-    }
-
     movePipelineClient(clientId, newStage);
   };
 

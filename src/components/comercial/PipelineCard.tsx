@@ -181,7 +181,7 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
       {/* Drag handle area */}
       <div 
         className={cn(
-          'absolute inset-0',
+          'absolute inset-0 z-10',
           !disableDrag && 'cursor-grab active:cursor-grabbing'
         )}
         style={{
@@ -195,7 +195,7 @@ export function PipelineCard({ client, onEdit, onDelete, onNotes, selected, onSe
       />
       
       {/* Action buttons - positioned above the drag layer */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
         <Button 
           variant="ghost" 
           size="icon-sm" 

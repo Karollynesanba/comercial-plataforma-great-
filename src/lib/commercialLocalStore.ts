@@ -341,7 +341,7 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
     pode_investir: existingAgendamentoLead?.pode_investir || client.podeInvestir || null,
     agendado_via: existingAgendamentoLead?.agendado_via || client.agendadoVia || null,
     funil: existingAgendamentoLead?.funil || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil, creative_source: null }) || 'NAO IDENTIFICADO',
-    status: existingAgendamentoLead?.status || STAGE_TO_AGENDAMENTO_STATUS[client.stage] || 'NOVO_LEAD',
+    status: STAGE_TO_AGENDAMENTO_STATUS[client.stage] || existingAgendamentoLead?.status || 'NOVO_LEAD',
     created_by_user_id: existingAgendamentoLead?.created_by_user_id || client.createdByUserId || 'local-user',
     created_at: existingAgendamentoLead?.created_at || now,
     updated_at: now,

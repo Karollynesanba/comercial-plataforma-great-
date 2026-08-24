@@ -1140,7 +1140,7 @@ export async function syncPipelineAutomationsToCloud(client: PipelineClient, use
     pode_investir: existingAgendamentoLead?.pode_investir || client.podeInvestir || null,
     agendado_via: existingAgendamentoLead?.agendado_via || client.agendadoVia || null,
     funil: existingAgendamentoLead?.funil || getCommercialLeadOrigin({ criativo: client.criativo, funil: client.funil }),
-    status: existingAgendamentoLead?.status || pipelineToAgendamentoStatus(leadStage),
+    status: pipelineToAgendamentoStatus(leadStage) || existingAgendamentoLead?.status || 'NOVO_LEAD',
     agenda_event_id: existingAgendamentoLead?.agenda_event_id || existingAgendaEvent?.id || null,
     agenda_event_date: leadDateIso,
     agenda_event_time: leadTime,
