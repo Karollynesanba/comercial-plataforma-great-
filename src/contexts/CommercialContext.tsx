@@ -690,6 +690,10 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       ...current,
       pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
     }));
+    updateCommercialLocalData((current) => ({
+      ...current,
+      pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
+    }));
     try {
       await Promise.race([
         savePipelineClientToCloud(updatedClient, user?.id),
