@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCommercial, PERIODO_OPTIONS, Periodo, type PipelineClient } from '@/contexts/CommercialContext';
@@ -81,6 +82,38 @@ function getScheduledVia(value?: string | null) {
   return String(value || '').trim().toUpperCase();
 }
 
+function getCallStatus(client: PipelineClient) {
+  const rawStatus = String((client as any).status || client.stage || '').trim().toUpperCase();
+
+  if (rawStatus === 'NO_SHOW') return 'CALL_NAO_COMPARECIDA';
+  if (['NEGOCIACAO', 'TAXA_INTERESSE', 'PERDIDO', 'FECHADO'].includes(rawStatus)) return 'CALL_FEITA';
+  return null;
+}
+
+function parseScheduleDate(value: string | Date | null | undefined) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  const text = String(value).trim();
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getScheduledDateLabel(value: string | Date) {
+  const parsed = parseScheduleDate(value);
+  return parsed ? format(parsed, 'dd/MM') : String(value);
+}
+
+function getHourLabel(hour: number) {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
 export default function ComercialDashboards() {
   const { pipelineClients, currentGoal, getGoalStats, getPipelineStats } = useCommercial();
 
@@ -142,6 +175,57 @@ export default function ComercialDashboards() {
       .sort((a, b) => b.total - a.total || a.hour - b.hour)[0] || null;
 
     return topHour;
+  }, [scheduledClientsInPeriod]);
+
+  const appointmentByDayChartData = useMemo(() => {
+    const dayMap = new Map<string, { date: Date; callFeita: number; callNaoComparecida: number }>();
+
+    scheduledClientsInPeriod.forEach((client) => {
+      const parsedDate = parseScheduleDate(getScheduledDate(client));
+      if (!parsedDate) return;
+
+      const key = format(parsedDate, 'yyyy-MM-dd');
+      const status = getCallStatus(client);
+      const current = dayMap.get(key) || { date: parsedDate, callFeita: 0, callNaoComparecida: 0 };
+
+      if (status === 'CALL_FEITA') current.callFeita += 1;
+      if (status === 'CALL_NAO_COMPARECIDA') current.callNaoComparecida += 1;
+
+      dayMap.set(key, current);
+    });
+
+    return Array.from(dayMap.values())
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .map((item) => ({
+        day: getScheduledDateLabel(item.date),
+        callFeita: item.callFeita,
+        callNaoComparecida: item.callNaoComparecida,
+      }));
+  }, [scheduledClientsInPeriod]);
+
+  const appointmentByHourChartData = useMemo(() => {
+    const hourMap = new Map<number, { callFeita: number; callNaoComparecida: number }>();
+
+    scheduledClientsInPeriod.forEach((client) => {
+      const hour = getHour(client);
+      if (hour === null || Number.isNaN(hour)) return;
+
+      const status = getCallStatus(client);
+      const current = hourMap.get(hour) || { callFeita: 0, callNaoComparecida: 0 };
+
+      if (status === 'CALL_FEITA') current.callFeita += 1;
+      if (status === 'CALL_NAO_COMPARECIDA') current.callNaoComparecida += 1;
+
+      hourMap.set(hour, current);
+    });
+
+    return Array.from(hourMap.entries())
+      .sort(([hourA], [hourB]) => hourA - hourB)
+      .map(([hour, item]) => ({
+        hour: getHourLabel(hour),
+        callFeita: item.callFeita,
+        callNaoComparecida: item.callNaoComparecida,
+      }));
   }, [scheduledClientsInPeriod]);
 
 
@@ -1095,6 +1179,100 @@ export default function ComercialDashboards() {
               <p className="mt-2 text-sm text-muted-foreground">
                 {busiestHour ? `${busiestHour.total} agendamentos no período` : 'Sem agendamentos no período'}
               </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card className="overflow-hidden bg-white/95">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Dias com mais agendamentos
+              </CardTitle>
+              <CardDescription>Comparativo diário entre Call feita e Call não comparecida no período selecionado</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={appointmentByDayChartData}>
+                  <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                  <XAxis dataKey="day" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                  <YAxis className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" allowDecimals={false} />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                    }}
+                    formatter={(value: number, name: string) => [value, name]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="callFeita"
+                    name="Call feita"
+                    stroke="#22c55e"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#22c55e' }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="callNaoComparecida"
+                    name="Call não comparecida"
+                    stroke="#ef4444"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#ef4444' }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden bg-white/95">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Horários que mais agendam
+              </CardTitle>
+              <CardDescription>Comparativo por horário entre Call feita e Call não comparecida no período selecionado</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={appointmentByHourChartData}>
+                  <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
+                  <XAxis dataKey="hour" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                  <YAxis className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" allowDecimals={false} />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                    }}
+                    formatter={(value: number, name: string) => [value, name]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="callFeita"
+                    name="Call feita"
+                    stroke="#22c55e"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#22c55e' }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="callNaoComparecida"
+                    name="Call não comparecida"
+                    stroke="#ef4444"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#ef4444' }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>
