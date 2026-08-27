@@ -1,0 +1,107 @@
+[
+  {
+    "id": "bb52c53c-030f-45ed-b3ad-713a22b81116",
+    "setting_key": "commercial_funis_v1",
+    "setting_value": "[\"FORMULARIO\",\"INDICACAO\",\"INSTAGRAM\",\"MENSAGEM(WHATSAPP)\"]",
+    "updated_at": "2026-05-18T13:52:00.157+00:00",
+    "updated_by_user_id": "3adfdd68-831e-4ed8-976e-9c0bb4b4153b"
+  },
+  {
+    "id": "15643291-4bf1-4b1d-8f10-ea1f6e5a6803",
+    "setting_key": "commercial_catalog_version_v1",
+    "setting_value": "1",
+    "updated_at": "2026-05-18T13:52:23.643+00:00",
+    "updated_by_user_id": "3adfdd68-831e-4ed8-976e-9c0bb4b4153b"
+  },
+  {
+    "id": "2ce2c399-7b57-4690-9a83-648369d8511d",
+    "setting_key": "local_commercial_migration_v1",
+    "setting_value": "done",
+    "updated_at": "2026-05-06T16:21:32.329+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "e7cc6889-5f3e-4bb4-9ef7-4f9a3b734eab",
+    "setting_key": "commercial_catalog_seed_v1",
+    "setting_value": "done",
+    "updated_at": "2026-05-18T13:52:56.418+00:00",
+    "updated_by_user_id": "3adfdd68-831e-4ed8-976e-9c0bb4b4153b"
+  },
+  {
+    "id": "0d3f473c-e1b3-49b9-a928-b3ab83fe7dfb",
+    "setting_key": "sdr_goal:CLED:2026-05",
+    "setting_value": "0",
+    "updated_at": "2026-05-08T21:02:12.871+00:00",
+    "updated_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80"
+  },
+  {
+    "id": "ea35ccc0-8616-4f91-93cd-7150b860dc3a",
+    "setting_key": "commercial_projection_state_v2",
+    "setting_value": "{\"ticketMedian\":3400,\"schedulingCost\":50,\"adInvestment\":60000,\"desiredRevenue\":150000,\"schedulingRate\":[30],\"showRate\":[54.5],\"pitchRate\":[90],\"conversionRate\":[50],\"fixedMetrics\":{\"ticketMedian\":true,\"schedulingCost\":true,\"adInvestment\":true,\"desiredRevenue\":true}}",
+    "updated_at": "2026-05-12T12:30:15.414+00:00",
+    "updated_by_user_id": "91e0b665-1758-40d1-bc4d-0192c9e55abc"
+  },
+  {
+    "id": "6015c58a-5e30-4e3a-b832-1079aa34fb80",
+    "setting_key": "last_team_pointer",
+    "setting_value": "team-equipe-7",
+    "updated_at": "2026-05-06T22:22:48.164+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "e6d67420-d5b3-424d-95bd-413a99182426",
+    "setting_key": "great_pipeline_csv_import_version",
+    "setting_value": "pipeline-clientes-completo-2026-05-06-v8",
+    "updated_at": "2026-05-06T22:22:48.301+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "6e65a1e6-8af4-42cd-922e-5d310e4f074c",
+    "setting_key": "commercial_goal:2026-05",
+    "setting_value": "200000",
+    "updated_at": "2026-05-07T11:52:46.704+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "c5d736b8-4e98-4186-a42a-47ca029e79ee",
+    "setting_key": "great_may_backup_import_version",
+    "setting_value": "may-2026-backup-v7",
+    "updated_at": "2026-05-07T02:16:58.164+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "1585fa35-fdf4-467e-aa57-4d729739ec74",
+    "setting_key": "sdr_goal:PEDRO_JUAN:2026-05",
+    "setting_value": "0",
+    "updated_at": "2026-05-08T21:02:12.871+00:00",
+    "updated_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80"
+  },
+  {
+    "id": "4bfcbc53-e571-4741-90c2-7d1da2c37da5",
+    "setting_key": "sdr_goal:HEBERT:2026-05",
+    "setting_value": "183",
+    "updated_at": "2026-05-08T21:02:12.871+00:00",
+    "updated_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80"
+  },
+  {
+    "id": "c30a1157-9f71-4174-8f7a-79505cfa8e1c",
+    "setting_key": "sdr_goal:CAETANO:2026-05",
+    "setting_value": "50",
+    "updated_at": "2026-05-08T21:02:12.871+00:00",
+    "updated_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80"
+  },
+  {
+    "id": "f376b001-d93c-4526-9c13-6c07ec93ee62",
+    "setting_key": "sdr_goal:PEDRO_H:2026-05",
+    "setting_value": "50",
+    "updated_at": "2026-05-08T21:02:12.871+00:00",
+    "updated_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80"
+  },
+  {
+    "id": "65ef49f1-4d9b-4c73-9fd3-6476e6b58e5e",
+    "setting_key": "commercial_data_reset_version",
+    "setting_value": "commercial-data-reset-2026-04-29-v3",
+    "updated_at": "2026-05-18T13:51:06.869+00:00",
+    "updated_by_user_id": "3adfdd68-831e-4ed8-976e-9c0bb4b4153b"
+  }
+]

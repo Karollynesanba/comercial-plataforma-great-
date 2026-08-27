@@ -1,9 +1,10 @@
-import { writeCommercialLocalData, DEFAULT_COMMERCIAL_LOCAL_DATA, type CommercialLocalData } from '@/lib/commercialLocalStore';
-import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
+import { syncAllCommercialAutomations, writeCommercialLocalData, DEFAULT_COMMERCIAL_LOCAL_DATA, type CommercialLocalData } from '@/lib/commercialLocalStore';
+import { safeGetItem, safeRemoveItem, safeSetItem } from '@/lib/safeStorage';
 
 const LOCAL_BACKUP_BASE = '/local-backup/supabase-data-backup-local-20260630_201655';
 const LOCAL_BACKUP_SEED_VERSION = 'agenda-backup-local-20260630_225500';
 const LOCAL_BACKUP_MARKER_KEY = 'great_local_backup_seed_version';
+const LOCAL_DEMO_MARKER_KEY = 'great_local_demo_seed_version';
 
 type BackupRow = Record<string, any>;
 
@@ -130,7 +131,7 @@ async function loadJson<T>(relativePath: string): Promise<T[]> {
   return (await response.json()) as T[];
 }
 
-function buildLocalUser() {
+export function buildLocalUser() {
   return {
     id: '00000000-0000-4000-8000-000000000001',
     name: 'Local Backup',
@@ -139,6 +140,20 @@ function buildLocalUser() {
     active: true,
     createdAt: new Date().toISOString(),
   };
+}
+
+function isDemoPipelineClient(client: any) {
+  const id = String(client?.id || '').trim().toLowerCase();
+  const notes = String(client?.notes || '').trim().toLowerCase();
+  const name = String(client?.clientName || client?.nome || '').trim().toLowerCase();
+
+  return (
+    id.startsWith('demo-') ||
+    notes.includes('demo local |') ||
+    notes.includes('lead de teste') ||
+    name.includes('demo') ||
+    name.includes('seed')
+  );
 }
 
 export async function seedLocalCommercialBackup(): Promise<boolean> {
@@ -163,8 +178,21 @@ export async function seedLocalCommercialBackup(): Promise<boolean> {
       return false;
     }
   })());
+  const currentHasDemoPipeline = Boolean(currentRaw && (() => {
+    try {
+      const parsed = JSON.parse(currentRaw) as CommercialLocalData;
+      return Array.isArray(parsed?.pipelineClients) && parsed.pipelineClients.some(isDemoPipelineClient);
+    } catch {
+      return false;
+    }
+  })());
 
-  if (seededVersion === LOCAL_BACKUP_SEED_VERSION && currentHasAgenda && currentHasGoals) {
+  if (
+    seededVersion === LOCAL_BACKUP_SEED_VERSION &&
+    currentHasAgenda &&
+    currentHasGoals &&
+    !currentHasDemoPipeline
+  ) {
     return false;
   }
 
@@ -195,7 +223,13 @@ export async function seedLocalCommercialBackup(): Promise<boolean> {
     ),
   };
 
-  writeCommercialLocalData(localData);
+  const nextData = syncAllCommercialAutomations({
+    ...localData,
+    pipelineClients: localData.pipelineClients.filter((client) => !isDemoPipelineClient(client)),
+  });
+
+  writeCommercialLocalData(nextData);
+  safeRemoveItem(LOCAL_DEMO_MARKER_KEY);
   safeSetItem('great_test_session_bypass', 'true');
   safeSetItem('great_local_auth_bypass', 'true');
   safeSetItem('great_enable_localhost_fallback', 'true');

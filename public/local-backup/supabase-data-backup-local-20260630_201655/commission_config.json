@@ -1,0 +1,112 @@
+[
+  {
+    "id": "05a5042e-1bed-4f6d-bf40-e44897e6363c",
+    "config_key": "HERBERT_RATE",
+    "config_value": 0.03,
+    "label": "Herbert - Taxa Própria",
+    "category": "commercial",
+    "description": "3% sobre vendas próprias",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "eb05dd48-11b3-43f8-b3ab-4b816c6a77dd",
+    "config_key": "CLED_DIRECT_RATE",
+    "config_value": 0.015,
+    "label": "Cled - Taxa Direta",
+    "category": "commercial",
+    "description": "1.5% sobre vendas próprias",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "1245c2c0-c3d3-4132-82ef-74f9f60b6171",
+    "config_key": "CLED_BONUS_RATE",
+    "config_value": 0.03,
+    "label": "Cled - Bônus sobre Herbert",
+    "category": "commercial",
+    "description": "3% sobre vendas do Herbert",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "85dfffd0-4668-4190-9fd8-0ab334166ddc",
+    "config_key": "RENEWAL_RATE",
+    "config_value": 0.03,
+    "label": "Taxa de Renovação",
+    "category": "operational",
+    "description": "3% sobre renovações (clientes mensais 3+ meses)",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "c6202286-75d0-43b0-bf92-252e9c1f76fa",
+    "config_key": "PRODUCT_SALES_RATE",
+    "config_value": 0.25,
+    "label": "Taxa Vendas de Produtos",
+    "category": "operational",
+    "description": "25% sobre vendas de produtos",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "0f8370a8-d486-4132-8d23-44b5b9ee24d1",
+    "config_key": "GESTOR_COUNT",
+    "config_value": 4,
+    "label": "Número de Gestores",
+    "category": "operational",
+    "description": "Quantidade de gestores para divisão de comissão",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "a1b0e3a8-a69d-4320-89e9-42b11f68a72c",
+    "config_key": "IA_AGENDA_SALES_RATE",
+    "config_value": 0.2,
+    "label": "IA - Vendas Agenda",
+    "category": "ia",
+    "description": "20% sobre vendas de agenda",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "9dd0dae5-1112-4a0b-9b7b-37f6c9f71e96",
+    "config_key": "IA_AGENDA_RECURRENCE_RATE",
+    "config_value": 0.2,
+    "label": "IA - Recorrência Agenda",
+    "category": "ia",
+    "description": "20% sobre recorrência de agenda",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "2cac077e-1cfc-486a-b1ce-5a9bad1c29b2",
+    "config_key": "IA_RENEWAL_RATE",
+    "config_value": 0.03,
+    "label": "IA - Renovações Mensais",
+    "category": "ia",
+    "description": "3% sobre renovações mensais",
+    "updated_at": "2026-04-16T16:34:43.979593+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "30a70069-ffc8-4686-9ae6-e531fe910a2e",
+    "config_key": "SDR_COMMISSION_RATE",
+    "config_value": 0.005,
+    "label": "Comissão SDR (%)",
+    "category": "commercial",
+    "description": "Percentual de comissão para SDRs (Felipe e Miguel) sobre vendas fechadas",
+    "updated_at": "2026-04-16T16:34:46.501948+00:00",
+    "updated_by_user_id": null
+  },
+  {
+    "id": "517882a3-f021-429a-8a55-f158929b5f29",
+    "config_key": "SDR_COMMISSION_START_DATE",
+    "config_value": 20260203,
+    "label": "Data início comissão SDR",
+    "category": "commercial",
+    "description": "Data a partir da qual a comissão SDR passa a valer (formato: YYYYMMDD)",
+    "updated_at": "2026-04-16T16:34:46.501948+00:00",
+    "updated_by_user_id": null
+  }
+]

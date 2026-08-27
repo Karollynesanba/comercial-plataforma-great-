@@ -1,0 +1,321 @@
+{
+  "createdAt": "2026-05-18T13:53:34.881Z",
+  "source": "https://bwucqiqnxwdqapunbwip.supabase.co",
+  "tables": [
+    {
+      "table": "activity_logs",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "ad_creatives",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "agenda_events",
+      "rows": 177,
+      "error": null
+    },
+    {
+      "table": "agendamento_leads",
+      "rows": 128,
+      "error": null
+    },
+    {
+      "table": "announcements",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "challenges",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "championship_events",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "championship_monthly_history",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "championship_teams",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "client_activity_tracking",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "client_files",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "client_start_form_responses",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "commercial_goals",
+      "rows": 1,
+      "error": null
+    },
+    {
+      "table": "commercial_settings",
+      "rows": 15,
+      "error": null
+    },
+    {
+      "table": "commission_config",
+      "rows": 11,
+      "error": null
+    },
+    {
+      "table": "criativos",
+      "rows": 51,
+      "error": null
+    },
+    {
+      "table": "crm_events",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "exec_boards",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "exec_cards",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "exec_columns",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "exec_comments",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "exec_views",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "expense_categories",
+      "rows": 10,
+      "error": null
+    },
+    {
+      "table": "expenses",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "finance_simulations",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "knowledge_base_docs",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "meeting_action_items",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "meetings",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "my_day_items",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "notifications",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "operational_clients",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "payment_reminders",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "pipeline_clients",
+      "rows": 126,
+      "error": null
+    },
+    {
+      "table": "profiles",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "project_deliverables",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "project_goals",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "project_milestones",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "project_phases",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "project_risks",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "project_updates",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "projects",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "role_cost_defaults",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "sdr_goals",
+      "rows": 5,
+      "error": null
+    },
+    {
+      "table": "strategic_decisions",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "strategic_tasks",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_ai_conversations",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_ai_messages",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_categories",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_collections",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_quiz_attempts",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_quizzes",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "study_resources",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "team_cost_config",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "team_cost_overrides",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "team_member_costs",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "teams",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "tech_deployments",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "tech_tasks",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "user_roles",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "user_study_progress",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "whatsapp_reminder_logs",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "work_items",
+      "rows": 0,
+      "error": null
+    },
+    {
+      "table": "workspaces",
+      "rows": 0,
+      "error": null
+    }
+  ]
+}

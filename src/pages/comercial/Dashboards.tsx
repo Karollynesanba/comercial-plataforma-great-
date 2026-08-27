@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useCommercial, PERIODO_OPTIONS, Periodo, type PipelineClient } from '@/contexts/CommercialContext';
@@ -45,6 +46,7 @@ import { cn, formatBRL, formatBRLShort } from '@/lib/utils';
 import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/comercial/PeriodFilter';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import { getHour } from '@/lib/preVendaAnalytics';
+import { useAgendaData, type AgendaEvent } from '@/hooks/useAgendaData';
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 const CATEGORY_COLORS: Record<string, string> = {
@@ -82,11 +84,54 @@ function getScheduledVia(value?: string | null) {
   return String(value || '').trim().toUpperCase();
 }
 
-function getCallStatus(client: PipelineClient) {
-  const rawStatus = String((client as any).status || client.stage || '').trim().toUpperCase();
+function normalizeText(value?: unknown) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
 
-  if (rawStatus === 'NO_SHOW') return 'CALL_NAO_COMPARECIDA';
-  if (['NEGOCIACAO', 'TAXA_INTERESSE', 'PERDIDO', 'FECHADO'].includes(rawStatus)) return 'CALL_FEITA';
+function getAgendaCallStatus(event: AgendaEvent) {
+  const candidates = [
+    event.lead_stage,
+    event.color,
+    (event.raw_record as any)?.status,
+    (event.raw_record as any)?.lead_stage,
+    (event.raw_record as any)?.color,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeText(candidate);
+    if (!normalized) continue;
+
+    if (
+      normalized === 'CALL_FEITA' ||
+      normalized === 'CALL FEITA' ||
+      normalized.includes('CALL FEITA') ||
+      normalized === '#66FF00' ||
+      normalized === '66FF00' ||
+      normalized === 'FECHADO' ||
+      normalized === 'NEGOCIACAO' ||
+      normalized === 'TAXA_INTERESSE'
+    ) {
+      return 'CALL_FEITA';
+    }
+
+    if (
+      normalized === 'CALL_NAO_COMPARECIDA' ||
+      normalized === 'CALL NAO COMPARECIDA' ||
+      normalized.includes('NAO COMPARECIDA') ||
+      normalized.includes('NAO_COMPARECIDA') ||
+      normalized === '#FF0000' ||
+      normalized === 'FF0000' ||
+      normalized === 'NO_SHOW' ||
+      normalized === 'NO SHOW'
+    ) {
+      return 'CALL_NAO_COMPARECIDA';
+    }
+  }
+
   return null;
 }
 
@@ -114,8 +159,73 @@ function getHourLabel(hour: number) {
   return `${String(hour).padStart(2, '0')}:00`;
 }
 
+const WEEKDAY_ORDER = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'] as const;
+const HOUR_ORDER = Array.from({ length: 14 }, (_, index) => index + 9);
+
+function getWeekdayKey(value: string | Date) {
+  const parsed = parseScheduleDate(value);
+  if (!parsed) return null;
+
+  const weekday = format(parsed, 'EEEE', { locale: ptBR }).toLowerCase();
+  if (weekday.startsWith('seg')) return 'segunda';
+  if (weekday.startsWith('ter')) return 'terça';
+  if (weekday.startsWith('qua')) return 'quarta';
+  if (weekday.startsWith('qui')) return 'quinta';
+  if (weekday.startsWith('sex')) return 'sexta';
+  if (weekday.startsWith('sáb') || weekday.startsWith('sab')) return 'sábado';
+  if (weekday.startsWith('dom')) return 'domingo';
+  return null;
+}
+
+function getWeekdayLabel(key: string) {
+  const labels: Record<string, string> = {
+    segunda: 'Segunda',
+    terça: 'Terça',
+    quarta: 'Quarta',
+    quinta: 'Quinta',
+    sexta: 'Sexta',
+    sábado: 'Sábado',
+    domingo: 'Domingo',
+  };
+
+  return labels[key] || key;
+}
+
+function GroupedBarTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  label?: string;
+  payload?: Array<{ name?: string; value?: number; color?: string }>;
+}) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg">
+      <p className="mb-2 text-sm font-medium text-foreground">{label}</p>
+      <div className="space-y-1 text-sm">
+        {payload.map((entry) => (
+          <div key={entry.name} className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: entry.color || '#999' }}
+              />
+              <span>{entry.name}</span>
+            </div>
+            <span className="font-semibold text-foreground">{entry.value ?? 0}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ComercialDashboards() {
   const { pipelineClients, currentGoal, getGoalStats, getPipelineStats } = useCommercial();
+  const { events: agendaEvents } = useAgendaData();
 
   // Period filter state
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>('current_month');
@@ -138,16 +248,8 @@ export default function ComercialDashboards() {
     });
   }, [pipelineClients, periodFilter, customStart, customEnd, filterByPeriod]);
 
-  const scheduledClientsInPeriod = useMemo(() => {
-    return pipelineClients.filter((client) => {
-      const scheduleDate = getScheduledDate(client);
-      if (!scheduleDate) return false;
-      return filterByPeriod(scheduleDate, periodFilter, customStart, customEnd);
-    });
-  }, [customEnd, customStart, filterByPeriod, periodFilter, pipelineClients]);
-
   const schedulingOriginStats = useMemo(() => {
-    const counts = scheduledClientsInPeriod.reduce((acc, client) => {
+    const counts = pipelineClients.reduce((acc, client) => {
       const via = getScheduledVia(client.agendadoVia);
       if (via === 'LIGACAO' || via === 'MENSAGEM') {
         acc[via] += 1;
@@ -160,10 +262,10 @@ export default function ComercialDashboards() {
       callCount: counts.LIGACAO,
       messageCount: counts.MENSAGEM,
     };
-  }, [scheduledClientsInPeriod]);
+  }, [pipelineClients]);
 
   const busiestHour = useMemo(() => {
-    const hourCounts = scheduledClientsInPeriod.reduce((acc, client) => {
+    const hourCounts = pipelineClients.reduce((acc, client) => {
       const hour = getHour(client);
       if (hour === null || Number.isNaN(hour)) return acc;
       acc[hour] = (acc[hour] || 0) + 1;
@@ -175,58 +277,83 @@ export default function ComercialDashboards() {
       .sort((a, b) => b.total - a.total || a.hour - b.hour)[0] || null;
 
     return topHour;
-  }, [scheduledClientsInPeriod]);
+  }, [pipelineClients]);
+
+  const agendaEventsInPeriod = useMemo(() => {
+    return agendaEvents.filter((event) => {
+      if (!event.event_date) return false;
+      return filterByPeriod(event.event_date, periodFilter, customStart, customEnd);
+    });
+  }, [agendaEvents, customEnd, customStart, filterByPeriod, periodFilter]);
 
   const appointmentByDayChartData = useMemo(() => {
-    const dayMap = new Map<string, { date: Date; callFeita: number; callNaoComparecida: number }>();
+    const dayMap = new Map<string, { order: number; callFeita: number; callNaoComparecida: number }>(
+      WEEKDAY_ORDER.map((key, order) => [
+        key,
+        {
+          order,
+          callFeita: 0,
+          callNaoComparecida: 0,
+        },
+      ])
+    );
 
-    scheduledClientsInPeriod.forEach((client) => {
-      const parsedDate = parseScheduleDate(getScheduledDate(client));
+    agendaEventsInPeriod.forEach((event) => {
+      const parsedDate = parseScheduleDate(event.event_date);
       if (!parsedDate) return;
 
-      const key = format(parsedDate, 'yyyy-MM-dd');
-      const status = getCallStatus(client);
-      const current = dayMap.get(key) || { date: parsedDate, callFeita: 0, callNaoComparecida: 0 };
+      const key = getWeekdayKey(parsedDate);
+      if (!key) return;
+      const status = getAgendaCallStatus(event);
+      const current = dayMap.get(key);
+      if (!current) return;
 
       if (status === 'CALL_FEITA') current.callFeita += 1;
       if (status === 'CALL_NAO_COMPARECIDA') current.callNaoComparecida += 1;
-
-      dayMap.set(key, current);
     });
 
     return Array.from(dayMap.values())
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .map((item) => ({
-        day: getScheduledDateLabel(item.date),
-        callFeita: item.callFeita,
-        callNaoComparecida: item.callNaoComparecida,
-      }));
-  }, [scheduledClientsInPeriod]);
+      .sort((a, b) => a.order - b.order)
+      .map((item) => {
+        const key = WEEKDAY_ORDER[item.order] || 'segunda';
+        return {
+          day: getWeekdayLabel(key),
+          callFeita: item.callFeita,
+          callNaoComparecida: item.callNaoComparecida,
+        };
+      });
+  }, [agendaEventsInPeriod]);
 
   const appointmentByHourChartData = useMemo(() => {
-    const hourMap = new Map<number, { callFeita: number; callNaoComparecida: number }>();
+    const hourMap = new Map<number, { callFeita: number; callNaoComparecida: number }>(
+      HOUR_ORDER.map((hour) => [
+        hour,
+        {
+          callFeita: 0,
+          callNaoComparecida: 0,
+        },
+      ])
+    );
 
-    scheduledClientsInPeriod.forEach((client) => {
-      const hour = getHour(client);
-      if (hour === null || Number.isNaN(hour)) return;
+    agendaEventsInPeriod.forEach((event) => {
+      const hour = Number(String(event.event_time || '').slice(0, 2));
+      if (hour === null || Number.isNaN(hour) || !hourMap.has(hour)) return;
 
-      const status = getCallStatus(client);
-      const current = hourMap.get(hour) || { callFeita: 0, callNaoComparecida: 0 };
+      const status = getAgendaCallStatus(event);
+      const current = hourMap.get(hour);
+      if (!current) return;
 
       if (status === 'CALL_FEITA') current.callFeita += 1;
       if (status === 'CALL_NAO_COMPARECIDA') current.callNaoComparecida += 1;
-
-      hourMap.set(hour, current);
     });
 
     return Array.from(hourMap.entries())
-      .sort(([hourA], [hourB]) => hourA - hourB)
-      .map(([hour, item]) => ({
-        hour: getHourLabel(hour),
-        callFeita: item.callFeita,
-        callNaoComparecida: item.callNaoComparecida,
-      }));
-  }, [scheduledClientsInPeriod]);
+        .map(([hour, item]) => ({
+          hour: getHourLabel(hour),
+          callFeita: item.callFeita,
+          callNaoComparecida: item.callNaoComparecida,
+        }));
+  }, [agendaEventsInPeriod]);
 
 
 
@@ -1143,7 +1270,9 @@ export default function ComercialDashboards() {
                 </div>
                 Taxa de Agendamento por Ligação ou Mensagem
               </CardTitle>
-              <CardDescription>Baseado nos agendamentos do período selecionado</CardDescription>
+              <CardDescription>
+                Baseado nos registros da Agenda no período selecionado
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -1170,7 +1299,9 @@ export default function ComercialDashboards() {
                 </div>
                 Horário que mais agenda
               </CardTitle>
-              <CardDescription>Faixa com maior volume de agendamentos no período</CardDescription>
+              <CardDescription>
+                Faixa com maior volume de registros da Agenda no período
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-4xl font-black tracking-tight text-foreground">
@@ -1190,42 +1321,47 @@ export default function ComercialDashboards() {
                 <Activity className="h-5 w-5 text-primary" />
                 Dias com mais agendamentos
               </CardTitle>
-              <CardDescription>Comparativo diário entre Call feita e Call não comparecida no período selecionado</CardDescription>
+              <CardDescription>
+                Comparativo por dia da semana entre Call feita e Call não comparecida no período selecionado
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={appointmentByDayChartData}>
+              <ResponsiveContainer width="100%" height={360}>
+                <BarChart data={appointmentByDayChartData} barCategoryGap="28%" barGap={8}>
                   <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                  <XAxis dataKey="day" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                  <XAxis
+                    dataKey="day"
+                    className="text-xs"
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="#94a3b8"
+                    interval={0}
+                    tickMargin={12}
+                  />
                   <YAxis className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" allowDecimals={false} />
                   <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number, name: string) => [value, name]}
+                    content={<GroupedBarTooltip />}
                   />
-                  <Legend />
-                  <Line
-                    type="monotone"
+                  <Legend verticalAlign="bottom" height={36} />
+                  <Bar
                     dataKey="callFeita"
                     name="Call feita"
-                    stroke="#22c55e"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#22c55e' }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line
-                    type="monotone"
+                    fill="#22c55e"
+                    radius={[6, 6, 0, 0]}
+                    barSize={20}
+                  >
+                    <LabelList dataKey="callFeita" position="top" className="fill-foreground text-xs" />
+                  </Bar>
+                  <Bar
                     dataKey="callNaoComparecida"
                     name="Call não comparecida"
-                    stroke="#ef4444"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#ef4444' }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
+                    fill="#ef4444"
+                    radius={[6, 6, 0, 0]}
+                    barSize={20}
+                  >
+                    <LabelList dataKey="callNaoComparecida" position="top" className="fill-foreground text-xs" />
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
@@ -1236,42 +1372,47 @@ export default function ComercialDashboards() {
                 <Clock className="h-5 w-5 text-primary" />
                 Horários que mais agendam
               </CardTitle>
-              <CardDescription>Comparativo por horário entre Call feita e Call não comparecida no período selecionado</CardDescription>
+              <CardDescription>
+                Comparativo por horário entre Call feita e Call não comparecida no período selecionado
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={appointmentByHourChartData}>
+              <ResponsiveContainer width="100%" height={360}>
+                <BarChart data={appointmentByHourChartData} barCategoryGap="28%" barGap={8}>
                   <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" />
+                  <XAxis
+                    dataKey="hour"
+                    className="text-xs"
+                    tickLine={false}
+                    axisLine={false}
+                    stroke="#94a3b8"
+                    interval={0}
+                    tickMargin={12}
+                  />
                   <YAxis className="text-xs" tickLine={false} axisLine={false} stroke="#94a3b8" allowDecimals={false} />
                   <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number, name: string) => [value, name]}
+                    content={<GroupedBarTooltip />}
                   />
-                  <Legend />
-                  <Line
-                    type="monotone"
+                  <Legend verticalAlign="bottom" height={36} />
+                  <Bar
                     dataKey="callFeita"
                     name="Call feita"
-                    stroke="#22c55e"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#22c55e' }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line
-                    type="monotone"
+                    fill="#22c55e"
+                    radius={[6, 6, 0, 0]}
+                    barSize={20}
+                  >
+                    <LabelList dataKey="callFeita" position="top" className="fill-foreground text-xs" />
+                  </Bar>
+                  <Bar
                     dataKey="callNaoComparecida"
                     name="Call não comparecida"
-                    stroke="#ef4444"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#ef4444' }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
+                    fill="#ef4444"
+                    radius={[6, 6, 0, 0]}
+                    barSize={20}
+                  >
+                    <LabelList dataKey="callNaoComparecida" position="top" className="fill-foreground text-xs" />
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>

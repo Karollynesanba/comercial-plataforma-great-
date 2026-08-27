@@ -7,6 +7,7 @@ const COMMERCIAL_LOCAL_DATA_KEY = 'great_commercial_local_data_v1';
 const COMMERCIAL_LOCAL_CRIATIVOS_KEY = 'great_commercial_criativos_v1';
 const COMMERCIAL_LOCAL_FUNIS_KEY = 'great_commercial_funis_v1';
 const COMMERCIAL_LOCAL_CATALOG_VERSION_KEY = 'great_commercial_catalog_version_v1';
+let runtimeCommercialData: CommercialLocalData | null = null;
 
 export interface CommercialLocalData {
   pipelineClients: any[];
@@ -519,6 +520,10 @@ export function readCommercialLocalData(): CommercialLocalData {
   const catalogVersionRaw = safeGetItem(COMMERCIAL_LOCAL_CATALOG_VERSION_KEY);
   const storedCatalogVersion = Number(catalogVersionRaw || 0) || 0;
 
+  if (!raw && runtimeCommercialData) {
+    return runtimeCommercialData;
+  }
+
   if (!raw) {
     const criativos = normalizeUniqueList(parseStringList(criativosRaw) || [...DEFAULT_COMERCIAL_CRIATIVOS]);
     const funis = normalizeUniqueList(parseStringList(funisRaw) || [...DEFAULT_COMERCIAL_FUNIS]);
@@ -555,6 +560,7 @@ export function readCommercialLocalData(): CommercialLocalData {
 }
 
 export function writeCommercialLocalData(data: CommercialLocalData) {
+  runtimeCommercialData = data;
   safeSetItem(COMMERCIAL_LOCAL_DATA_KEY, JSON.stringify(data));
   safeSetItem(COMMERCIAL_LOCAL_CRIATIVOS_KEY, JSON.stringify(data.criativos || []));
   safeSetItem(COMMERCIAL_LOCAL_FUNIS_KEY, JSON.stringify(data.funis || []));
@@ -565,6 +571,7 @@ export function writeCommercialLocalData(data: CommercialLocalData) {
 }
 
 export function clearCommercialLocalData() {
+  runtimeCommercialData = null;
   safeRemoveItem(COMMERCIAL_LOCAL_DATA_KEY);
   safeRemoveItem(COMMERCIAL_LOCAL_CRIATIVOS_KEY);
   safeRemoveItem(COMMERCIAL_LOCAL_FUNIS_KEY);

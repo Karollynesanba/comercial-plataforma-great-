@@ -4,6 +4,7 @@ import { User, UserRole, Module, ActivityLog, Team } from '@/types';
 import { COMMERCIAL_LOGIN_EMAILS, COMMERCIAL_LOGIN_PASSWORD, TEAM_USERS, canEditPlatform, getUserByEmail, getUserByName, isCoordinator } from '@/lib/userMapping';
 import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { safeGetItem, safeSetItem, safeRemoveItem } from '@/lib/safeStorage';
+import { buildLocalUser } from '@/lib/localBackupBootstrap';
 
 interface AuthContextType {
   user: User | null;
@@ -326,6 +327,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error('Failed to parse test auth user:', error);
         }
+      } else if (isLocalhost) {
+        createLocalAuthState(buildLocalUser());
       }
       setIsLoading(false);
       return () => {};
@@ -343,6 +346,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error('Failed to parse local auth user:', error);
         }
+      } else if (isLocalhost) {
+        createLocalAuthState(buildLocalUser());
       }
       setIsLoading(false);
       return () => {};

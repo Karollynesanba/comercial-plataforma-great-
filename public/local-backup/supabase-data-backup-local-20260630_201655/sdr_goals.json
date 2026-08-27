@@ -1,0 +1,47 @@
+[
+  {
+    "id": "50a8631b-a866-48a7-9fec-7b974a23624d",
+    "agendador": "PEDRO_JUAN",
+    "month": "2026-05",
+    "goal_count": 0,
+    "created_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80",
+    "created_at": "2026-05-08T18:22:20.580813+00:00",
+    "updated_at": "2026-05-08T21:02:13.122+00:00"
+  },
+  {
+    "id": "e473bd06-1383-420a-ba8d-1cb90dfc3166",
+    "agendador": "PEDRO_H",
+    "month": "2026-05",
+    "goal_count": 50,
+    "created_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80",
+    "created_at": "2026-05-08T17:59:07.993205+00:00",
+    "updated_at": "2026-05-08T21:02:13.126+00:00"
+  },
+  {
+    "id": "ef6cb91e-9d42-46c4-817c-3eb30e13d02f",
+    "agendador": "CAETANO",
+    "month": "2026-05",
+    "goal_count": 50,
+    "created_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80",
+    "created_at": "2026-05-08T17:58:55.616336+00:00",
+    "updated_at": "2026-05-08T21:02:13.135+00:00"
+  },
+  {
+    "id": "a5344152-34b4-4254-9bc1-14b2fabc8617",
+    "agendador": "HEBERT",
+    "month": "2026-05",
+    "goal_count": 183,
+    "created_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80",
+    "created_at": "2026-05-08T17:58:46.10616+00:00",
+    "updated_at": "2026-05-08T21:02:13.132+00:00"
+  },
+  {
+    "id": "6e6ba81e-aa3e-449a-b4ed-07737a76c37a",
+    "agendador": "CLED",
+    "month": "2026-05",
+    "goal_count": 0,
+    "created_by_user_id": "f9239aa5-4a60-48d4-9e1f-61aff8db2b80",
+    "created_at": "2026-05-08T18:22:20.575619+00:00",
+    "updated_at": "2026-05-08T21:02:13.138+00:00"
+  }
+]
