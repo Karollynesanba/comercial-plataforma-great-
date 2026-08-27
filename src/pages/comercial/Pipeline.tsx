@@ -256,7 +256,7 @@ export default function PipelinePage() {
     setActiveClient(client || null);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveClient(null);
 
@@ -267,7 +267,11 @@ export default function PipelinePage() {
     const client = pipelineClients.find(c => c.id === clientId);
 
     if (!client || client.stage === newStage) return;
-    movePipelineClient(clientId, newStage);
+
+    const saved = await movePipelineClient(clientId, newStage);
+    if (!saved) {
+      toast.error('Não foi possível salvar a movimentação do card.');
+    }
   };
 
   const handleLostConfirm = (reason: string, vendedor: string) => {
@@ -401,7 +405,8 @@ export default function PipelinePage() {
 
     try {
       for (const id of selectedCardIds) {
-        await movePipelineClient(id, targetStage);
+        const saved = await movePipelineClient(id, targetStage);
+        if (!saved) throw new Error('Falha ao salvar movimentação em massa');
       }
       toast.success(`${selectedCardIds.size} lead(s) movido(s) para ${STAGE_LABELS[targetStage]}`);
       setSelectedCardIds(new Set());

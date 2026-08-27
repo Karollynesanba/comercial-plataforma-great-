@@ -273,7 +273,7 @@ interface CommercialContextType {
   getNextTeamLabel: () => string;
   addPipelineClient: (client: Omit<PipelineClient, 'id' | 'createdByUserId'>, skipAgendamentoSync?: boolean) => Promise<void>;
   updatePipelineClient: (id: string, data: Partial<PipelineClient>) => Promise<void>;
-  movePipelineClient: (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => Promise<void>;
+  movePipelineClient: (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => Promise<boolean>;
   deletePipelineClient: (id: string) => Promise<void>;
   setSalesGoal: (month: string, goalValue: number) => Promise<void>;
   setSDRGoal: (agendador: Agendador, month: string, goalCount: number) => Promise<void>;
@@ -673,7 +673,7 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
 
   const movePipelineClient = useCallback(async (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
     const previousClient = pipelineClients.find((client) => client.id === id);
-    if (!previousClient) return;
+    if (!previousClient) return false;
     const latestClient = isSupabaseConfigured
       ? (await fetchCommercialCloudState(user?.id).then((state) => state.pipelineClients.find((client) => client.id === id) || previousClient).catch(() => previousClient))
       : previousClient;
@@ -703,8 +703,22 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
       queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
       await refreshCommercialState();
+      return true;
     } catch (error) {
       console.warn('Pipeline client move cloud sync failed or timed out.', error);
+      setCloudState((current) => ({
+        ...current,
+        pipelineClients: current.pipelineClients.map((client) => client.id === id ? previousClient : client),
+      }));
+      updateCommercialLocalData((current) => ({
+        ...current,
+        pipelineClients: current.pipelineClients.map((client) => client.id === id ? previousClient : client),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
+      await refreshCommercialState();
+      return false;
     }
   }, [pipelineClients, queryClient, refreshCommercialState, user?.id]);
 
