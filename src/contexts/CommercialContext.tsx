@@ -674,6 +674,31 @@ export function CommercialProvider({ children }: { children: React.ReactNode }) 
   const movePipelineClient = useCallback(async (id: string, newStage: PipelineStage, lostReason?: string, extraData?: Partial<PipelineClient>) => {
     const previousClient = pipelineClients.find((client) => client.id === id);
     if (!previousClient) return false;
+    if (!isSupabaseConfigured || shouldPreferLocalCommercialData()) {
+      const updatedClient: PipelineClient = {
+        ...previousClient,
+        ...extraData,
+        stage: newStage,
+        ativo: newStage !== 'PERDIDO',
+        lostReason: newStage === 'PERDIDO' ? lostReason || previousClient.lostReason : previousClient.lostReason,
+        lastStageChange: new Date(),
+      };
+
+      setCloudState((current) => ({
+        ...current,
+        pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
+      }));
+      updateCommercialLocalData((current) => ({
+        ...current,
+        pipelineClients: current.pipelineClients.map((client) => client.id === id ? updatedClient : client),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['agendamento-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-events'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline-clients-db'] });
+      await refreshCommercialState();
+      return true;
+    }
+
     const latestClient = isSupabaseConfigured
       ? (await fetchCommercialCloudState(user?.id).then((state) => state.pipelineClients.find((client) => client.id === id) || previousClient).catch(() => previousClient))
       : previousClient;
