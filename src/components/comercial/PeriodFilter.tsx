@@ -196,6 +196,16 @@ export function PeriodFilter({
 }
 
 export function usePeriodFilter() {
+  const parsePeriodDate = (value: string): Date => {
+    const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const [, year, month, day] = dateOnlyMatch;
+      return new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+    }
+
+    return new Date(value);
+  };
+
   const filterByPeriod = (
     date: Date | string | undefined | null,
     period: PeriodFilterValue,
@@ -205,7 +215,7 @@ export function usePeriodFilter() {
     if (period === 'all_time') return true;
     if (!date) return false;
 
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const dateObj = typeof date === 'string' ? parsePeriodDate(date) : date;
     if (Number.isNaN(dateObj.getTime())) return false;
 
     const now = new Date();
