@@ -77,7 +77,7 @@ function getCreativeRevenue(client: PipelineClient) {
 }
 
 function getScheduledDate(client: PipelineClient) {
-  return client.meetingDate || (client as any).agenda_event_date || null;
+  return (client as any).agenda_event_date || client.meetingDate || null;
 }
 
 function getScheduledVia(value?: string | null) {
@@ -249,20 +249,29 @@ export default function ComercialDashboards() {
   }, [pipelineClients, periodFilter, customStart, customEnd, filterByPeriod]);
 
   const schedulingOriginStats = useMemo(() => {
-    const counts = pipelineClients.reduce((acc, client) => {
-      const via = getScheduledVia(client.agendadoVia);
-      if (via === 'LIGACAO' || via === 'MENSAGEM') {
-        acc[via] += 1;
-      }
-      return acc;
-    }, { LIGACAO: 0, MENSAGEM: 0 });
+    const counts = pipelineClients
+      .filter((client) =>
+        filterByPeriod(
+          getScheduledDate(client),
+          periodFilter,
+          customStart,
+          customEnd
+        )
+      )
+      .reduce((acc, client) => {
+        const via = getScheduledVia(client.agendadoVia);
+        if (via === 'LIGACAO' || via === 'MENSAGEM') {
+          acc[via] += 1;
+        }
+        return acc;
+      }, { LIGACAO: 0, MENSAGEM: 0 });
 
     const total = counts.LIGACAO + counts.MENSAGEM;
     return {
       callCount: counts.LIGACAO,
       messageCount: counts.MENSAGEM,
     };
-  }, [pipelineClients]);
+  }, [pipelineClients, periodFilter, customStart, customEnd, filterByPeriod]);
 
   const busiestHour = useMemo(() => {
     const hourCounts = pipelineClients.reduce((acc, client) => {
