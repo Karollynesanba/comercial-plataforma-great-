@@ -60,6 +60,7 @@ function normalizeAgendaEventDateInput(value?: string | null) {
 
 export interface AgendamentoLead {
   id: string;
+  source?: 'agendamento_leads' | 'pipeline_fallback';
   pipeline_client_id?: string | null;
   agenda_event_id?: string | null;
   data: string;
@@ -461,7 +462,12 @@ export function useAgendamentoData() {
     queryKey: ['agendamento-leads'],
     queryFn: async () => {
       if (!isSupabaseConfigured) {
-        return (readCommercialLocalData().agendamentoLeads || []).map((lead: any) => normalizeAgendamentoLeadAnswers(lead)) as AgendamentoLead[];
+        return (readCommercialLocalData().agendamentoLeads || []).map((lead: any) =>
+          normalizeAgendamentoLeadAnswers({
+            ...lead,
+            source: 'agendamento_leads',
+          })
+        ) as AgendamentoLead[];
       }
       const [{ data: agendamentoLeads, error: leadsError }, { data: agendaEvents, error: agendaError }] = await withTimeout(
         Promise.all([
@@ -476,6 +482,7 @@ export function useAgendamentoData() {
 
       const normalizedLeads = (agendamentoLeads || []).map((lead: any) => normalizeAgendamentoLeadAnswers({
         ...lead,
+        source: 'agendamento_leads',
         faturamento: normalizeAgendamentoFaturamento(lead.faturamento),
       }));
 
@@ -484,6 +491,7 @@ export function useAgendamentoData() {
         .filter((lead): lead is NonNullable<typeof lead> => Boolean(lead))
         .map((lead: any) => normalizeAgendamentoLeadAnswers({
           ...lead,
+          source: 'pipeline_fallback',
           faturamento: normalizeAgendamentoFaturamento(lead.faturamento),
         }));
 

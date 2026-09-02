@@ -248,6 +248,7 @@ export default function ComercialDashboards() {
 
   const schedulingOriginStats = useMemo(() => {
     const counts = agendamentoLeads
+      .filter((lead) => lead.source === 'agendamento_leads')
       .filter((lead) =>
         filterByPeriod(
           lead.agenda_event_date,
