@@ -358,12 +358,6 @@ export function PipelineSpreadsheet({
       return;
     }
     
-    if (newStage === 'NO_SHOW') {
-      setPendingNoShowClient(client);
-      setNoShowDialogOpen(true);
-      return;
-    }
-
     if (newStage === 'TAXA_INTERESSE') {
       setPendingTaxaClient(client);
       setTaxaDialogOpen(true);

@@ -272,12 +272,6 @@ export default function PipelinePage() {
       return;
     }
 
-    if (newStage === 'NO_SHOW') {
-      setPendingNoShow({ id: clientId, clientName: client.clientName });
-      setNoShowDialogOpen(true);
-      return;
-    }
-
     if (newStage === 'TAXA_INTERESSE') {
       setPendingTaxa({ id: clientId, clientName: client.clientName });
       setTaxaDialogOpen(true);
@@ -423,7 +417,7 @@ export default function PipelinePage() {
   const handleBulkMove = async (targetStage: PipelineStage) => {
     if (selectedCardIds.size === 0) return;
 
-    if (['NO_SHOW', 'TAXA_INTERESSE', 'NEGOCIACAO', 'PERDIDO', 'FECHADO'].includes(targetStage)) {
+    if (['TAXA_INTERESSE', 'NEGOCIACAO', 'PERDIDO', 'FECHADO'].includes(targetStage)) {
       toast.error('Movimento em massa bloqueado: essa etapa exige dados obrigatorios por lead para manter as metricas corretas.');
       return;
     }
