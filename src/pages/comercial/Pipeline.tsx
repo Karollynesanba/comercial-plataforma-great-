@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   DndContext,
   DragEndEvent,
@@ -23,6 +22,7 @@ import { NoShowReasonDialog } from '@/components/comercial/NoShowReasonDialog';
 import { NotesDialog } from '@/components/comercial/NotesDialog';
 import { NegotiationDetailsDialog } from '@/components/comercial/NegotiationDetailsDialog';
 import { ClosedDetailsDialog } from '@/components/comercial/ClosedDetailsDialog';
+import { TaxaInterestDetailsDialog } from '@/components/comercial/TaxaInterestDetailsDialog';
 import { ManageCriativosDialog } from '@/components/comercial/ManageCriativosDialog';
 import { ManageFunisDialog } from '@/components/comercial/ManageFunisDialog';
 import { CelebrationAnimation } from '@/components/comercial/CelebrationAnimation';
@@ -82,8 +82,6 @@ export default function PipelinePage() {
   const [closedDialogOpen, setClosedDialogOpen] = useState(false);
   const [pendingTaxa, setPendingTaxa] = useState<{ id: string; clientName: string } | null>(null);
   const [taxaDialogOpen, setTaxaDialogOpen] = useState(false);
-  const [taxaVendedor, setTaxaVendedor] = useState<string>('');
-  const [taxaValor, setTaxaValor] = useState<string>('');
   const [criativosDialogOpen, setCriativosDialogOpen] = useState(false);
   const [funisDialogOpen, setFunisDialogOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -268,6 +266,36 @@ export default function PipelinePage() {
 
     if (!client || client.stage === newStage) return;
 
+    if (newStage === 'PERDIDO') {
+      setPendingMove({ id: clientId, clientName: client.clientName });
+      setLostDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'NO_SHOW') {
+      setPendingNoShow({ id: clientId, clientName: client.clientName });
+      setNoShowDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'TAXA_INTERESSE') {
+      setPendingTaxa({ id: clientId, clientName: client.clientName });
+      setTaxaDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'NEGOCIACAO' && client.entrada === 0) {
+      setPendingNegotiation({ id: clientId, clientName: client.clientName, targetStage: 'NEGOCIACAO' });
+      setNegotiationDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'FECHADO') {
+      setPendingNegotiation({ id: clientId, clientName: client.clientName, clinicName: client.clinicName, targetStage: 'FECHADO' });
+      setNegotiationDialogOpen(true);
+      return;
+    }
+
     const saved = await movePipelineClient(clientId, newStage);
     if (!saved) {
       toast.error('Não foi possível salvar a movimentação do card.');
@@ -290,11 +318,10 @@ export default function PipelinePage() {
     }
   };
 
-  const handleTaxaConfirm = () => {
-    const valor = Number(taxaValor.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-    if (pendingTaxa && taxaVendedor && valor > 0) {
+  const handleTaxaConfirm = ({ vendedor, valor }: { vendedor: Vendedor; valor: number }) => {
+    if (pendingTaxa) {
       movePipelineClient(pendingTaxa.id, 'TAXA_INTERESSE', undefined, {
-        vendedor: taxaVendedor as Vendedor,
+        vendedor,
         entrada: valor,
         periodo: 'TAXA_INTERESSE',
         isMrr: false,
@@ -304,8 +331,6 @@ export default function PipelinePage() {
       toast.success(`${pendingTaxa.clientName} movido para Taxa de Interesse`);
       setPendingTaxa(null);
       setTaxaDialogOpen(false);
-    } else {
-      toast.error('Informe o closer e o valor da taxa de interesse.');
     }
   };
 
@@ -771,39 +796,12 @@ export default function PipelinePage() {
         onOpenChange={setFunisDialogOpen}
       />
 
-      {/* Taxa de Interesse - Vendedor Selection */}
-      <Dialog open={taxaDialogOpen} onOpenChange={setTaxaDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Closer responsável</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Selecione o closer responsável por <strong>{pendingTaxa?.clientName}</strong>:
-          </p>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Valor da taxa de interesse</label>
-            <Input
-              value={taxaValor}
-              onChange={(event) => setTaxaValor(event.target.value)}
-              placeholder="Ex: 200,00"
-            />
-          </div>
-          <Select value={taxaVendedor} onValueChange={setTaxaVendedor}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o closer" />
-            </SelectTrigger>
-            <SelectContent>
-              {VENDEDOR_OPTIONS.map(v => (
-                <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTaxaDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleTaxaConfirm} disabled={!taxaVendedor || !taxaValor}>Confirmar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TaxaInterestDetailsDialog
+        open={taxaDialogOpen}
+        onOpenChange={setTaxaDialogOpen}
+        clientName={pendingTaxa?.clientName || ''}
+        onConfirm={handleTaxaConfirm}
+      />
 
 
       <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>

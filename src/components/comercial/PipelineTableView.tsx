@@ -27,7 +27,12 @@ import {
   useCommercial, 
   PipelineClient, 
   PipelineStage, 
-  STAGE_LABELS 
+  STAGE_LABELS,
+  Vendedor,
+  Pacote,
+  Periodo,
+  Equipe,
+  PagadorAnuncio,
 } from '@/contexts/CommercialContext';
 import { PlanType } from '@/types';
 import { 
@@ -46,6 +51,8 @@ import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn, formatBRL } from '@/lib/utils';
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
+import { NegotiationDetailsDialog } from './NegotiationDetailsDialog';
+import { TaxaInterestDetailsDialog } from './TaxaInterestDetailsDialog';
 
 interface PipelineTableViewProps {
   clients: PipelineClient[];
@@ -91,6 +98,10 @@ export function PipelineTableView({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
+  const [negotiationDialogOpen, setNegotiationDialogOpen] = useState(false);
+  const [pendingNegotiation, setPendingNegotiation] = useState<{ client: PipelineClient; targetStage: 'NEGOCIACAO' | 'FECHADO' } | null>(null);
+  const [taxaDialogOpen, setTaxaDialogOpen] = useState(false);
+  const [pendingTaxaClient, setPendingTaxaClient] = useState<PipelineClient | null>(null);
 
   const getClientEntryDate = (client: PipelineClient) => client.entryDate || client.dataEntrada || client.createdAt;
   const getClientValue = (client: PipelineClient) => client.dealValue ?? client.entrada ?? 0;
@@ -174,8 +185,57 @@ export function PipelineTableView({
       : <ArrowDown className="h-4 w-4 text-primary" />;
   };
 
-  const handleStageChange = (clientId: string, newStage: PipelineStage) => {
-    movePipelineClient(clientId, newStage);
+  const handleStageChange = (client: PipelineClient, newStage: PipelineStage) => {
+    if (newStage === 'TAXA_INTERESSE') {
+      setPendingTaxaClient(client);
+      setTaxaDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'NEGOCIACAO' && client.entrada === 0) {
+      setPendingNegotiation({ client, targetStage: 'NEGOCIACAO' });
+      setNegotiationDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'FECHADO') {
+      setPendingNegotiation({ client, targetStage: 'FECHADO' });
+      setNegotiationDialogOpen(true);
+      return;
+    }
+
+    movePipelineClient(client.id, newStage);
+  };
+
+  const handleTaxaConfirm = ({ vendedor, valor }: { vendedor: Vendedor; valor: number }) => {
+    if (!pendingTaxaClient) return;
+    movePipelineClient(pendingTaxaClient.id, 'TAXA_INTERESSE', undefined, {
+      vendedor,
+      entrada: valor,
+      periodo: 'TAXA_INTERESSE',
+      isMrr: false,
+      mrrEntrada: valor,
+      mrrRemaining: 0,
+    });
+    setPendingTaxaClient(null);
+  };
+
+  const handleNegotiationConfirm = (data: { vendedor: Vendedor; pacote: Pacote; periodo: Periodo; entrada: number; isMrr?: boolean; mrrRemaining?: number; clinicName?: string; equipe?: Equipe; pagadorAnuncio?: PagadorAnuncio }) => {
+    if (!pendingNegotiation) return;
+    const { client, targetStage } = pendingNegotiation;
+    movePipelineClient(client.id, targetStage, undefined, {
+      vendedor: data.vendedor,
+      pacote: data.pacote,
+      periodo: data.periodo,
+      entrada: data.entrada,
+      isMrr: data.isMrr || false,
+      mrrEntrada: data.entrada,
+      mrrRemaining: data.isMrr ? Number(data.mrrRemaining || 0) : 0,
+      ...(data.clinicName && { clinicName: data.clinicName }),
+      ...(data.equipe && { equipe: data.equipe }),
+      ...(data.pagadorAnuncio && { pagadorAnuncio: data.pagadorAnuncio }),
+    });
+    setPendingNegotiation(null);
   };
 
   const exportToCSV = () => {
@@ -369,7 +429,7 @@ export function PipelineTableView({
                       <TableCell>
                         <Select 
                           value={client.stage} 
-                          onValueChange={(value) => handleStageChange(client.id, value as PipelineStage)}
+                        onValueChange={(value) => handleStageChange(client, value as PipelineStage)}
                         >
                           <SelectTrigger className="w-[140px] h-8">
                             <Badge className={cn('text-xs', STAGE_COLORS[client.stage])}>
@@ -462,6 +522,22 @@ export function PipelineTableView({
           Total: {formatBRL(filteredClients.reduce((sum, c) => sum + getClientValue(c), 0))}
         </span>
       </div>
+
+      <NegotiationDetailsDialog
+        open={negotiationDialogOpen}
+        onOpenChange={setNegotiationDialogOpen}
+        clientName={pendingNegotiation?.client.clientName || ''}
+        currentClinicName={pendingNegotiation?.client.clinicName}
+        targetStage={pendingNegotiation?.targetStage || 'NEGOCIACAO'}
+        onConfirm={handleNegotiationConfirm}
+      />
+
+      <TaxaInterestDetailsDialog
+        open={taxaDialogOpen}
+        onOpenChange={setTaxaDialogOpen}
+        clientName={pendingTaxaClient?.clientName || ''}
+        onConfirm={handleTaxaConfirm}
+      />
     </div>
   );
 }

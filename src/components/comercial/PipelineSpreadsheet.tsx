@@ -75,7 +75,8 @@ import { ptBR } from 'date-fns/locale';
 import { cn, formatBRL } from '@/lib/utils';
 import { LostReasonDialog } from './LostReasonDialog';
 import { NoShowReasonDialog } from './NoShowReasonDialog';
-import { ClosedDetailsDialog } from './ClosedDetailsDialog';
+import { NegotiationDetailsDialog } from './NegotiationDetailsDialog';
+import { TaxaInterestDetailsDialog } from './TaxaInterestDetailsDialog';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { EditClientDialog } from './EditClientDialog';
 import { CelebrationAnimation } from './CelebrationAnimation';
@@ -204,9 +205,11 @@ export function PipelineSpreadsheet({
   const [noShowDialogOpen, setNoShowDialogOpen] = useState(false);
   const [pendingNoShowClient, setPendingNoShowClient] = useState<PipelineClient | null>(null);
 
-  // Closed details dialog
-  const [closedDialogOpen, setClosedDialogOpen] = useState(false);
-  const [pendingClosedClient, setPendingClosedClient] = useState<PipelineClient | null>(null);
+  // Stage details dialogs
+  const [negotiationDialogOpen, setNegotiationDialogOpen] = useState(false);
+  const [pendingNegotiation, setPendingNegotiation] = useState<{ client: PipelineClient; targetStage: 'NEGOCIACAO' | 'FECHADO' } | null>(null);
+  const [taxaDialogOpen, setTaxaDialogOpen] = useState(false);
+  const [pendingTaxaClient, setPendingTaxaClient] = useState<PipelineClient | null>(null);
 
   // Celebration animation
   const [showCelebration, setShowCelebration] = useState(false);
@@ -361,10 +364,21 @@ export function PipelineSpreadsheet({
       return;
     }
 
+    if (newStage === 'TAXA_INTERESSE') {
+      setPendingTaxaClient(client);
+      setTaxaDialogOpen(true);
+      return;
+    }
+
+    if (newStage === 'NEGOCIACAO' && client.entrada === 0) {
+      setPendingNegotiation({ client, targetStage: 'NEGOCIACAO' });
+      setNegotiationDialogOpen(true);
+      return;
+    }
+
     if (newStage === 'FECHADO') {
-      // Ask for pagador anÃºncio
-      setPendingClosedClient(client);
-      setClosedDialogOpen(true);
+      setPendingNegotiation({ client, targetStage: 'FECHADO' });
+      setNegotiationDialogOpen(true);
       return;
     }
 
@@ -390,20 +404,38 @@ export function PipelineSpreadsheet({
     }
   };
 
-  const handleClosedConfirm = (equipe: Equipe, pagadorAnuncio: PagadorAnuncio, clinicName: string) => {
-    if (pendingClosedClient) {
-      const extraData = { equipe, pagadorAnuncio, clinicName };
-      updatePipelineClient(pendingClosedClient.id, extraData);
-      movePipelineClient(pendingClosedClient.id, 'FECHADO', undefined, {
-        ...extraData,
-        periodo: pendingClosedClient.periodo,
-        entrada: pendingClosedClient.entrada,
-      });
-      // Trigger celebration animation
-      setCelebrationData({ clientName: pendingClosedClient.clientName, value: pendingClosedClient.entrada });
-      setShowCelebration(true);
-      setPendingClosedClient(null);
-    }
+  const handleTaxaConfirm = ({ vendedor, valor }: { vendedor: Vendedor; valor: number }) => {
+    if (!pendingTaxaClient) return;
+    movePipelineClient(pendingTaxaClient.id, 'TAXA_INTERESSE', undefined, {
+      vendedor,
+      entrada: valor,
+      periodo: 'TAXA_INTERESSE',
+      isMrr: false,
+      mrrEntrada: valor,
+      mrrRemaining: 0,
+    });
+    toast.success(`${pendingTaxaClient.clientName} movido para Taxa de Interesse`);
+    setPendingTaxaClient(null);
+  };
+
+  const handleNegotiationConfirm = (data: { vendedor: Vendedor; pacote: Pacote; periodo: Periodo; entrada: number; isMrr?: boolean; mrrRemaining?: number; clinicName?: string; equipe?: Equipe; pagadorAnuncio?: PagadorAnuncio }) => {
+    if (!pendingNegotiation) return;
+    const { client, targetStage } = pendingNegotiation;
+    const extraData = {
+      vendedor: data.vendedor,
+      pacote: data.pacote,
+      periodo: data.periodo,
+      entrada: data.entrada,
+      isMrr: data.isMrr || false,
+      mrrEntrada: data.entrada,
+      mrrRemaining: data.isMrr ? Number(data.mrrRemaining || 0) : 0,
+      ...(data.clinicName && { clinicName: data.clinicName }),
+      ...(data.equipe && { equipe: data.equipe }),
+      ...(data.pagadorAnuncio && { pagadorAnuncio: data.pagadorAnuncio }),
+    };
+    movePipelineClient(client.id, targetStage, undefined, extraData);
+    toast.success(`${client.clientName} movido para ${targetStage === 'FECHADO' ? 'Fechado' : 'Negociação'}`);
+    setPendingNegotiation(null);
   };
 
   const handleInlineEdit = (id: string, field: keyof PipelineClient, value: any) => {
@@ -1102,13 +1134,20 @@ export function PipelineSpreadsheet({
         client={clientToEdit}
       />
 
-      {/* Closed Details Dialog */}
-      <ClosedDetailsDialog
-        open={closedDialogOpen}
-        onOpenChange={setClosedDialogOpen}
-        clientName={pendingClosedClient?.clientName || ''}
-        currentClinicName={pendingClosedClient?.clinicName}
-        onConfirm={handleClosedConfirm}
+      <NegotiationDetailsDialog
+        open={negotiationDialogOpen}
+        onOpenChange={setNegotiationDialogOpen}
+        clientName={pendingNegotiation?.client.clientName || ''}
+        currentClinicName={pendingNegotiation?.client.clinicName}
+        targetStage={pendingNegotiation?.targetStage || 'NEGOCIACAO'}
+        onConfirm={handleNegotiationConfirm}
+      />
+
+      <TaxaInterestDetailsDialog
+        open={taxaDialogOpen}
+        onOpenChange={setTaxaDialogOpen}
+        clientName={pendingTaxaClient?.clientName || ''}
+        onConfirm={handleTaxaConfirm}
       />
 
       {/* Celebration Animation */}
