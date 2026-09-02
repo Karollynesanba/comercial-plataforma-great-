@@ -47,6 +47,7 @@ import { PeriodFilter, PeriodFilterValue, usePeriodFilter } from '@/components/c
 import { getCommercialLeadOrigin } from '@/lib/commercialOrigin';
 import { getHour } from '@/lib/preVendaAnalytics';
 import { useAgendaData, type AgendaEvent } from '@/hooks/useAgendaData';
+import { useAgendamentoData } from '@/hooks/useAgendamentoData';
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 const CATEGORY_COLORS: Record<string, string> = {
@@ -74,10 +75,6 @@ function getCreativeRevenue(client: PipelineClient) {
   }
 
   return Number(client.entrada || client.dealValue || 0);
-}
-
-function getScheduledDate(client: PipelineClient) {
-  return (client as any).agenda_event_date || client.meetingDate || null;
 }
 
 function getScheduledVia(value?: string | null) {
@@ -226,6 +223,7 @@ function GroupedBarTooltip({
 export default function ComercialDashboards() {
   const { pipelineClients, currentGoal, getGoalStats, getPipelineStats } = useCommercial();
   const { events: agendaEvents } = useAgendaData();
+  const { leads: agendamentoLeads } = useAgendamentoData();
 
   // Period filter state
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>('current_month');
@@ -249,17 +247,17 @@ export default function ComercialDashboards() {
   }, [pipelineClients, periodFilter, customStart, customEnd, filterByPeriod]);
 
   const schedulingOriginStats = useMemo(() => {
-    const counts = pipelineClients
-      .filter((client) =>
+    const counts = agendamentoLeads
+      .filter((lead) =>
         filterByPeriod(
-          getScheduledDate(client),
+          lead.agenda_event_date,
           periodFilter,
           customStart,
           customEnd
         )
       )
-      .reduce((acc, client) => {
-        const via = getScheduledVia(client.agendadoVia);
+      .reduce((acc, lead) => {
+        const via = getScheduledVia(lead.agendado_via);
         if (via === 'LIGACAO' || via === 'MENSAGEM') {
           acc[via] += 1;
         }
@@ -271,7 +269,7 @@ export default function ComercialDashboards() {
       callCount: counts.LIGACAO,
       messageCount: counts.MENSAGEM,
     };
-  }, [pipelineClients, periodFilter, customStart, customEnd, filterByPeriod]);
+  }, [agendamentoLeads, periodFilter, customStart, customEnd, filterByPeriod]);
 
   const busiestHour = useMemo(() => {
     const hourCounts = pipelineClients.reduce((acc, client) => {
