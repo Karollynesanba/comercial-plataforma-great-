@@ -394,7 +394,7 @@ export default function RankingPage() {
   }, [commissionConfigs]);
 
   // SDR Stats - count closed deals by official SDR agendador + commission calculation
-  const SDR_RANKING_ELIGIBLE: Agendador[] = ['HEBERT', 'ALAN'];
+  const SDR_RANKING_ELIGIBLE: Agendador[] = ['HEBERT', 'ALAN', 'XAVIER', 'JOAO_VITOR'];
   
   const sdrRankingData = useMemo(() => {
     return AGENDADOR_OPTIONS

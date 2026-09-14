@@ -19,6 +19,8 @@ const SPECIALIST_LABELS: Record<string, string> = {
   CAETANO: 'Bruno',
   HEBERT: 'Herbert',
   ALAN: 'Alan',
+  XAVIER: 'Xavier',
+  JOAO_VITOR: 'João Vitor',
 };
 
 function getSpecialistDisplayName(value?: string | null) {
@@ -41,12 +43,12 @@ export default function InteligenciaOperacional() {
     [filter, realPipelineClients]
   );
 
-  const specialistOptions = useMemo(() => ['Todos', ...CLOSERS_FROM_CALLS_SHEET, 'ALAN'], []);
+  const specialistOptions = useMemo(() => ['Todos', ...CLOSERS_FROM_CALLS_SHEET, 'ALAN', 'XAVIER', 'JOAO_VITOR'], []);
   const specialistClients = useMemo(() => (
     specialistFilter === 'Todos'
       ? clients
-      : specialistFilter === 'ALAN'
-        ? clients.filter((client) => client.agendadoPor === 'ALAN' || client.assignedSDR === 'ALAN')
+      : ['ALAN', 'XAVIER', 'JOAO_VITOR'].includes(specialistFilter)
+        ? clients.filter((client) => client.agendadoPor === specialistFilter || client.assignedSDR === specialistFilter)
       : clients.filter((client) => normalizeCloserName(client.assignedCloser || client.vendedor) === specialistFilter)
   ), [clients, specialistFilter]);
   const specialistScopedClients = useMemo(() => specialistClients.filter((client) => client.stage !== 'NOVO'), [specialistClients]);
@@ -67,7 +69,7 @@ export default function InteligenciaOperacional() {
   const callSheet = useMemo(() => buildCallsFromEditableSheet(closerDailyLogs, filter), [closerDailyLogs, filter]);
   const callCloserRows = useMemo(() => {
     const rows = callSheet.rows;
-    if (specialistFilter === 'ALAN') return [];
+    if (['ALAN', 'XAVIER', 'JOAO_VITOR'].includes(specialistFilter)) return [];
     return isCloserName(specialistFilter)
       ? rows.filter((row) => row.closer === specialistFilter)
       : rows;
