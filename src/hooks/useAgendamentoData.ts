@@ -9,6 +9,7 @@ import { agendamentoToPipeline, AGENDAMENTO_STATUS_TO_PIPELINE_STAGE } from './u
 import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, commercialAnswerToDb, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
 import { matchMeetingName, normalizeMeetingClientName, normalizeMeetingTitle } from '@/lib/agendaTitle';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 function normalizeAgendamentoLeadAnswers(lead: AgendamentoLead): AgendamentoLead {
   return {
@@ -471,8 +472,8 @@ export function useAgendamentoData() {
       }
       const [{ data: agendamentoLeads, error: leadsError }, { data: agendaEvents, error: agendaError }] = await withTimeout(
         Promise.all([
-          supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
-          supabase.from('agenda_events').select('*').order('event_date', { ascending: true }),
+          fetchAllRows((from, to) => supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }).order('id').range(from, to)),
+          fetchAllRows((from, to) => supabase.from('agenda_events').select('*').order('event_date', { ascending: true }).order('id').range(from, to)),
         ]),
         7000,
         'agendamento_leads'

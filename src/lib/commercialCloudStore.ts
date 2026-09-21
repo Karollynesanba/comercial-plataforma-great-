@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAllRows';
 import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
 import { DEFAULT_COMERCIAL_CRIATIVOS, DEFAULT_COMERCIAL_FUNIS, DEFAULT_COMMERCIAL_LOCAL_DATA, clearCommercialLocalData, readCommercialLocalData, type CloserDailyLog, type PreSalesDailyLog } from '@/lib/commercialLocalStore';
 import type { Agendador, Equipe, Faturamento, Pacote, PagadorAnuncio, PaymentReminder, Periodo, PipelineClient, PipelineStage, PodeInvestir, SalaoOuClinica, SDRGoal, TemMkt, TemSecretaria, TemSocio, Vendedor } from '@/contexts/CommercialContext';
@@ -864,9 +865,9 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       (supabase as any).from('closer_daily_logs').select('*').order('date', { ascending: false }),
       supabase.from('payment_reminders').select('*').order('payment_deadline', { ascending: true }),
       supabase.from('criativos').select('*').eq('is_active', true).order('name', { ascending: true }),
-      supabase.from('nova_agenda').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }),
-      supabase.from('agenda_events').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }),
-      supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }),
+      fetchAllRows((from, to) => supabase.from('nova_agenda').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }).order('id').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('agenda_events').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }).order('id').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }).order('id').range(from, to)),
       supabase.from('commercial_settings').select('setting_key, setting_value, updated_at, updated_by_user_id'),
       getSetting('last_team_pointer'),
     ]);

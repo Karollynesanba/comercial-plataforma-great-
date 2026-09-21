@@ -7,6 +7,7 @@ import { formatPhoneForWhatsApp } from '@/lib/phoneUtils';
 import { readCommercialLocalData, updateCommercialLocalData } from '@/lib/commercialLocalStore';
 import { isCustomMeetingTitle, matchMeetingName, normalizeMeetingTitle } from '@/lib/agendaTitle';
 import { normalizeAgendaColor, normalizeAgendaDateKey, normalizeAgendaTimeKey } from '@/lib/agendaDate';
+import { fetchAllRows } from '@/lib/fetchAllRows';
 
 const PRIMARY_AGENDA_TABLE = 'nova_agenda';
 const LEGACY_AGENDA_TABLE = 'agenda_events';
@@ -522,9 +523,14 @@ async function syncRelatedRecords(event: AgendaEvent) {
 
 async function fetchAgendaTable(tableName: string) {
   const supabaseAny = supabase as any;
-  const { data, error } = await withTimeout(supabaseAny.from(tableName).select('*'), 8000, tableName);
-  if (error) throw error;
-  return (data || []).map((row: AgendaRow) => enrichEvent(normalizeAgendaRecord(row, tableName)));
+  const { data } = await fetchAllRows<AgendaRow>((from, to) =>
+    withTimeout(
+      supabaseAny.from(tableName).select('*').order('id').range(from, to),
+      8000,
+      tableName
+    )
+  );
+  return data.map((row) => enrichEvent(normalizeAgendaRecord(row, tableName)));
 }
 
 export function useAgendaData() {
