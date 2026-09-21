@@ -9,11 +9,9 @@ import { isCustomMeetingTitle, matchMeetingName, normalizeMeetingTitle } from '@
 import { normalizeAgendaColor, normalizeAgendaDateKey, normalizeAgendaTimeKey } from '@/lib/agendaDate';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 
-const PRIMARY_AGENDA_TABLE = 'nova_agenda';
-const LEGACY_AGENDA_TABLE = 'agenda_events';
+const AGENDA_TABLE = 'agenda_events';
 const AGENDA_QUERY_KEY = ['agenda-events'];
 const AGENDA_SYNC_CHANNEL = 'agenda-events-sync';
-const AGENDA_SOURCE_TABLES = [PRIMARY_AGENDA_TABLE, LEGACY_AGENDA_TABLE] as const;
 
 const CORE_EVENT_KEYS = new Set([
   'id',
@@ -243,7 +241,7 @@ function normalizeAgendaRecord(record: AgendaRow, sourceTable: string): AgendaEv
 
   return {
     id: toTrimmedString(record.id || record.event_id || record.uuid || crypto.randomUUID()),
-    source_table: toTrimmedString(record.source_table || sourceTable),
+    source_table: sourceTable,
     pipeline_client_id: toOptionalString(record.pipeline_client_id),
     start: eventDate && eventTime ? `${eventDate}T${eventTime}` : eventDate || null,
     end: explicitEndTime && eventDate ? `${eventDate}T${explicitEndTime}` : null,
@@ -369,68 +367,10 @@ function pickAgendaUpdatePayload(previous: AgendaDbRow, updates: AgendaEventUpda
   };
 }
 
-async function fetchAgendaRowById(supabaseAny: any, id: string, preferredTable?: string) {
-  const tables = preferredTable
-    ? [preferredTable, ...AGENDA_SOURCE_TABLES.filter((table) => table !== preferredTable)]
-    : [...AGENDA_SOURCE_TABLES];
-
-  for (const table of tables) {
-    const { data, error } = await supabaseAny.from(table).select('*').eq('id', id).maybeSingle();
-    if (error) {
-      if (error.code === 'PGRST116') {
-        continue;
-      }
-      throw error;
-    }
-
-    if (data) {
-      return { table, row: data as AgendaDbRow };
-    }
-  }
-
-  return null;
-}
-
-async function clearAgendaSlotConflicts(
-  supabaseAny: any,
-  tableName: string,
-  currentEventId: string,
-  clientPhone?: string | null,
-  eventDate?: string | null,
-  eventTime?: string | null,
-) {
-  const phoneDigits = formatPhoneForWhatsApp(clientPhone || '').replace(/\D/g, '');
-  const normalizedDate = normalizeAgendaDateKey(eventDate || '');
-  const normalizedTime = normalizeAgendaTimeKey(eventTime || '');
-
-  if (!phoneDigits || !normalizedDate || !normalizedTime) {
-    return;
-  }
-
-  const { data: potentialConflicts, error } = await supabaseAny
-    .from(tableName)
-    .select('id, client_phone, event_date, event_time')
-    .eq('event_date', normalizedDate)
-    .eq('event_time', normalizedTime)
-    .neq('id', currentEventId)
-    .limit(50);
-
+async function fetchAgendaRowById(supabaseAny: any, id: string) {
+  const { data, error } = await supabaseAny.from(AGENDA_TABLE).select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-
-  const conflictingIds = (potentialConflicts || [])
-    .filter((row: any) => formatPhoneForWhatsApp(row.client_phone || '').replace(/\D/g, '') === phoneDigits)
-    .map((row: any) => row.id)
-    .filter(Boolean);
-
-  if (!conflictingIds.length) {
-    return;
-  }
-
-  await Promise.all(
-    conflictingIds.map((conflictId) =>
-      supabaseAny.from(tableName).delete().eq('id', conflictId)
-    )
-  );
+  return data ? { table: AGENDA_TABLE, row: data as AgendaDbRow } : null;
 }
 
 function sortAgendaEvents(events: AgendaEvent[]) {
@@ -445,36 +385,12 @@ function sortAgendaEvents(events: AgendaEvent[]) {
   });
 }
 
-function mergeAgendaEvents(primary: AgendaEvent[], legacy: AgendaEvent[], fallback: AgendaEvent[]) {
-  const merged = new Map<string, AgendaEvent>();
-
-  const put = (event: AgendaEvent) => {
-    const current = merged.get(event.id);
-    if (!current) {
-      merged.set(event.id, event);
-      return;
-    }
-
-    if (current.source_table !== PRIMARY_AGENDA_TABLE && event.source_table === PRIMARY_AGENDA_TABLE) {
-      merged.set(event.id, event);
-      return;
-    }
-
-    if (current.source_table === event.source_table) {
-      merged.set(event.id, event);
-    }
-  };
-
-  sortAgendaEvents([...fallback, ...legacy, ...primary]).forEach(put);
-  return sortAgendaEvents(Array.from(merged.values()));
-}
-
 async function syncRelatedRecords(event: AgendaEvent) {
   if (!isSupabaseConfigured) return;
 
   try {
     const supabaseAny = supabase as any;
-    const targetTable = event.source_table || PRIMARY_AGENDA_TABLE;
+    const targetTable = AGENDA_TABLE;
     const target = samePersonFilter(event.client_name, event.client_phone);
     const eventPipelineClientId = event.pipeline_client_id || null;
 
@@ -538,10 +454,10 @@ export function useAgendaData() {
   const commercial = useCommercialSafe();
   const agendaChannelNameRef = useRef(`agenda-events-sync-${Math.random().toString(36).slice(2)}`);
   const commercialFallbackEvents = (commercial?.agendaEvents || []).map((event: any) =>
-    enrichEvent(normalizeAgendaRecord(event, LEGACY_AGENDA_TABLE))
+    enrichEvent(normalizeAgendaRecord(event, AGENDA_TABLE))
   );
   const localFallbackEvents = (readCommercialLocalData().agendaEvents || []).map((event: any) =>
-    enrichEvent(normalizeAgendaRecord(event, LEGACY_AGENDA_TABLE))
+    enrichEvent(normalizeAgendaRecord(event, AGENDA_TABLE))
   );
   const fallbackEvents = commercialFallbackEvents.length > 0 ? commercialFallbackEvents : localFallbackEvents;
 
@@ -552,27 +468,7 @@ export function useAgendaData() {
         return fallbackEvents;
       }
 
-      const [primaryResult, legacyResult] = await Promise.allSettled([
-        fetchAgendaTable(PRIMARY_AGENDA_TABLE),
-        fetchAgendaTable(LEGACY_AGENDA_TABLE),
-      ]);
-
-      const primaryEvents = primaryResult.status === 'fulfilled' ? primaryResult.value : [];
-      const legacyEvents = legacyResult.status === 'fulfilled' ? legacyResult.value : [];
-
-      if (primaryResult.status === 'rejected') {
-        console.warn('Agenda query failed for nova_agenda.', primaryResult.reason);
-      }
-
-      if (legacyResult.status === 'rejected') {
-        console.warn('Agenda query failed for agenda_events.', legacyResult.reason);
-      }
-
-      if (primaryResult.status === 'rejected' && legacyResult.status === 'rejected') {
-        throw new Error('Falha ao consultar a agenda central.');
-      }
-
-      return mergeAgendaEvents(primaryEvents, legacyEvents, []);
+      return sortAgendaEvents(await fetchAgendaTable(AGENDA_TABLE));
     },
   });
 
@@ -591,8 +487,7 @@ export function useAgendaData() {
 
     const channel = (supabase as any)
       .channel(agendaChannelNameRef.current)
-      .on('postgres_changes', { event: '*', schema: 'public', table: PRIMARY_AGENDA_TABLE }, refreshAgenda)
-      .on('postgres_changes', { event: '*', schema: 'public', table: LEGACY_AGENDA_TABLE }, refreshAgenda)
+      .on('postgres_changes', { event: '*', schema: 'public', table: AGENDA_TABLE }, refreshAgenda)
       .subscribe();
 
     window.addEventListener('focus', refreshAgenda);
@@ -615,7 +510,7 @@ export function useAgendaData() {
           ...payloadBase,
           title: String(payloadBase.title || payloadBase.client_name || '').trim() || payloadBase.title,
           id: `agenda-${crypto.randomUUID()}`,
-          source_table: LEGACY_AGENDA_TABLE,
+          source_table: AGENDA_TABLE,
           client_phone: formatPhoneForWhatsApp(payloadBase.client_phone),
           reminder_2h_sent: false,
           reminder_30min_sent: false,
@@ -646,20 +541,9 @@ export function useAgendaData() {
         return enrichEvent(normalizeAgendaRecord(data, tableName));
       };
 
-      try {
-        const newEvent = await insertIntoTable(PRIMARY_AGENDA_TABLE);
-        if (!skip_related_sync) {
-          await syncRelatedRecords(newEvent);
-        }
-        return newEvent;
-      } catch (primaryError) {
-        console.warn('Agenda insert failed in nova_agenda, trying agenda_events as fallback.', primaryError);
-        const fallbackEvent = await insertIntoTable(LEGACY_AGENDA_TABLE);
-        if (!skip_related_sync) {
-          await syncRelatedRecords(fallbackEvent);
-        }
-        return fallbackEvent;
-      }
+      const newEvent = await insertIntoTable(AGENDA_TABLE);
+      if (!skip_related_sync) await syncRelatedRecords(newEvent);
+      return newEvent;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AGENDA_QUERY_KEY });
@@ -675,9 +559,6 @@ export function useAgendaData() {
   const updateEvent = useMutation({
     mutationFn: async ({ id, ...updates }: AgendaEventUpdate & { id: string }) => {
       const supabaseAny = supabase as any;
-      const currentEvent = events.find((item) => item.id === id);
-      const sourceTable = currentEvent?.source_table || PRIMARY_AGENDA_TABLE;
-
       if (!isSupabaseConfigured) {
         let updated: AgendaEvent | null = null;
         updateCommercialLocalData((current) => {
@@ -705,11 +586,11 @@ export function useAgendaData() {
         return updated;
       }
 
-      const resolvedCurrent = await fetchAgendaRowById(supabaseAny, id, sourceTable);
+      const resolvedCurrent = await fetchAgendaRowById(supabaseAny, id);
       if (!resolvedCurrent) {
         throw new Error('Evento nao encontrado');
       }
-      const { table: resolvedTable, row: previous } = resolvedCurrent;
+      const { row: previous } = resolvedCurrent;
 
       const previousTitle = String(previous.title || '').trim();
       const previousClientName = String(previous.client_name || '').trim();
@@ -718,68 +599,16 @@ export function useAgendaData() {
       const currentDefaultTitle = `Reuniao com ${String(updates.client_name || previous.client_name || 'Lead sem nome').trim()}`;
 
       const payload = pickAgendaUpdatePayload(previous, updates, resolvedTitle, currentDefaultTitle);
-      const nextEventDate = normalizeAgendaDateKey(String(payload.event_date || previous.event_date || ''));
-      const nextEventTime = normalizeAgendaTimeKey(String(payload.event_time || previous.event_time || ''));
-
-      const optimisticEvent = enrichEvent(normalizeAgendaRecord(payload, sourceTable));
-      queryClient.setQueryData<AgendaEvent[]>(AGENDA_QUERY_KEY, (current = []) =>
-        current.some((item) => item.id === optimisticEvent.id)
-          ? current.map((item) => (item.id === optimisticEvent.id ? optimisticEvent : item))
-          : [optimisticEvent, ...current]
-      );
-
-      let data: any = null;
-      let error: any = null;
-      let tableUsed = resolvedTable;
-
-      const rpcResult = await supabaseAny.rpc('commercial_update_agenda_event_secure', {
-        table_name: resolvedTable,
-        event_id: id,
-        payload,
-      });
-
-      data = rpcResult.data;
-      error = rpcResult.error;
-
-      if (error || !data) {
-        let lastError: any = error;
-        for (const table of [resolvedTable, ...AGENDA_SOURCE_TABLES.filter((table) => table !== resolvedTable)]) {
-          const result = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
-          data = result.data;
-          error = result.error;
-          tableUsed = table;
-          lastError = error;
-
-          if (!error && data) {
-            break;
-          }
-
-          if (error && error.code === '23505') {
-            await clearAgendaSlotConflicts(
-              supabaseAny,
-              table,
-              id,
-              payload.client_phone,
-              nextEventDate,
-              nextEventTime,
-            );
-            const retry = await supabaseAny.from(table).update(payload).eq('id', id).select('*').maybeSingle();
-            data = retry.data;
-            error = retry.error;
-            lastError = error;
-            if (!error && data) {
-              break;
-            }
-          }
-        }
-
-        if (lastError) error = lastError;
-      }
-
+      // Write only to the authoritative table; never fall back to another source.
+      // Apply only explicitly changed fields to avoid overwriting concurrent edits.
+      const patch = Object.fromEntries(Object.entries(payload).filter(([key]) =>
+        key === 'updated_at' || Object.prototype.hasOwnProperty.call(updates, key)
+      ));
+      const { data, error } = await supabaseAny.from(AGENDA_TABLE)
+        .update(patch).eq('id', id).select('*').maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error('Evento nao encontrado');
-
-      const updatedEvent = enrichEvent(normalizeAgendaRecord(data, tableUsed));
+      if (!data) throw new Error('Evento nao encontrado ou sem permissao para atualizar');
+      const updatedEvent = enrichEvent(normalizeAgendaRecord(data, AGENDA_TABLE));
       return updatedEvent;
     },
     onSuccess: () => {
@@ -797,7 +626,7 @@ export function useAgendaData() {
     mutationFn: async (id: string) => {
       const supabaseAny = supabase as any;
       const currentEvent = events.find((item) => item.id === id);
-      const sourceTable = currentEvent?.source_table || PRIMARY_AGENDA_TABLE;
+      const sourceTable = AGENDA_TABLE;
 
       if (!isSupabaseConfigured) {
         updateCommercialLocalData((current) => ({

@@ -27,7 +27,7 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
 };
 
 export default function AgendaGreat() {
-  const { events } = useAgendaData();
+  const { events, error } = useAgendaData();
 
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -240,13 +240,18 @@ export default function AgendaGreat() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          Não foi possível atualizar a agenda. Os últimos eventos carregados foram mantidos. Tente novamente em instantes.
+        </div>
+      )}
       {events.length > 0 && filteredEvents.length === 0 && (
         <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-semibold">Os eventos do Supabase estão carregando, mas os filtros estão ocultando tudo.</p>
+              <p className="font-semibold">Nenhum evento carregado corresponde aos filtros atuais.</p>
               <p className="text-amber-800">
-                Existem {events.length} evento{events.length !== 1 ? 's' : ''} na base, porém nenhum ficou visível com a filtragem atual.
+                Foram carregados {events.length} evento{events.length !== 1 ? 's' : ''}, porém nenhum corresponde à filtragem atual.
               </p>
             </div>
             {hasActiveFilters && (

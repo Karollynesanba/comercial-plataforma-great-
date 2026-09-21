@@ -230,46 +230,6 @@ function matchPerson(recordPhone?: string | null, recordName?: string | null, ta
   return Boolean(recordName && targetName && recordName.trim().toLowerCase() === targetName.trim().toLowerCase());
 }
 
-function mergeAgendaRows(primaryRows: any[], legacyRows: any[]) {
-  const merged = new Map<string, any>();
-  const put = (row: any, preferredSource: string) => {
-    if (!row?.id) return;
-    const current = merged.get(row.id);
-    const next = {
-      ...current,
-      ...row,
-      source_table: row.source_table || preferredSource,
-    };
-
-    if (!current) {
-      merged.set(row.id, next);
-      return;
-    }
-
-    const currentUpdatedAt = new Date(current.updated_at || current.created_at || 0).getTime();
-    const nextUpdatedAt = new Date(next.updated_at || next.created_at || 0).getTime();
-
-    if (preferredSource === 'nova_agenda' && current.source_table !== 'nova_agenda') {
-      merged.set(row.id, next);
-      return;
-    }
-
-    if (nextUpdatedAt >= currentUpdatedAt) {
-      merged.set(row.id, next);
-    }
-  };
-
-  for (const row of legacyRows) {
-    put(row, 'agenda_events');
-  }
-
-  for (const row of primaryRows) {
-    put(row, 'nova_agenda');
-  }
-
-  return Array.from(merged.values());
-}
-
 function dbPipelineToLocal(row: any): PipelineClient {
   return {
     id: row.id,
@@ -852,7 +812,6 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       closerLogs,
       reminders,
       criativos,
-      primaryAgendaEvents,
       legacyAgendaEvents,
       agendamentoLeads,
       settings,
@@ -865,7 +824,6 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       (supabase as any).from('closer_daily_logs').select('*').order('date', { ascending: false }),
       supabase.from('payment_reminders').select('*').order('payment_deadline', { ascending: true }),
       supabase.from('criativos').select('*').eq('is_active', true).order('name', { ascending: true }),
-      fetchAllRows((from, to) => supabase.from('nova_agenda').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }).order('id').range(from, to)),
       fetchAllRows((from, to) => supabase.from('agenda_events').select('*').order('event_date', { ascending: false }).order('event_time', { ascending: false }).order('id').range(from, to)),
       fetchAllRows((from, to) => supabase.from('agendamento_leads').select('*').order('created_at', { ascending: false }).order('id').range(from, to)),
       supabase.from('commercial_settings').select('setting_key, setting_value, updated_at, updated_by_user_id'),
@@ -892,7 +850,6 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
     const closerLogsData = readResult(closerLogs, 'closer_daily_logs');
     const remindersData = readResult(reminders, 'payment_reminders');
     const criativosData = readResult(criativos, 'criativos');
-    const primaryAgendaData = readResult(primaryAgendaEvents, 'nova_agenda');
     const legacyAgendaData = readResult(legacyAgendaEvents, 'agenda_events');
     const agendamentoLeadsData = readResult(agendamentoLeads, 'agendamento_leads');
     const settingsRows = readResult(settings, 'commercial_settings') || [];
@@ -917,7 +874,7 @@ export async function fetchCommercialCloudState(userId?: string | null): Promise
       funis: cloudFunis,
       catalogVersion,
       teamPointer: teamPointerValue,
-      agendaEvents: mergeAgendaRows(primaryAgendaData || [], legacyAgendaData || []),
+      agendaEvents: (legacyAgendaData || []).map((row: any) => ({ ...row, source_table: 'agenda_events' })),
       agendamentoLeads: (agendamentoLeadsData || []),
     };
   } catch (error) {
