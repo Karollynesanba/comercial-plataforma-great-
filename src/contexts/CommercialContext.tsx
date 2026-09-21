@@ -40,7 +40,7 @@ export type TemSocio = CommercialYesNoMaybe;
 export type TemMkt = CommercialYesNoMaybe;
 export type TemSecretaria = CommercialYesNoMaybe;
 export type SalaoOuClinica = string;
-export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'ALAN' | 'CLED' | 'CAETANO' | 'XAVIER' | 'JOAO_VITOR';
+export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'ALAN' | 'CLED' | 'CAETANO' | 'XAVIER' | 'JOAO_VITOR' | 'CLERISTON';
 export type PodeInvestir = 'SIM' | 'NAO';
 export type Funil = string;
 
@@ -79,6 +79,7 @@ export const AGENDADOR_OPTIONS = [
   { value: 'CLED' as Agendador, label: 'Cled' },
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
   { value: 'ALAN' as Agendador, label: 'Alan' },
+  { value: 'CLERISTON' as Agendador, label: 'Cleriston' },
   { value: 'XAVIER' as Agendador, label: 'Xavier' },
   { value: 'JOAO_VITOR' as Agendador, label: 'João Vitor' },
   { value: 'CAETANO' as Agendador, label: 'Bruno' },
@@ -87,6 +88,7 @@ export const AGENDADOR_OPTIONS = [
 export const OFFICIAL_SDR_OPTIONS = [
   { value: 'HEBERT' as Agendador, label: 'Herbert' },
   { value: 'ALAN' as Agendador, label: 'Alan' },
+  { value: 'CLERISTON' as Agendador, label: 'Cleriston' },
   { value: 'XAVIER' as Agendador, label: 'Xavier' },
   { value: 'JOAO_VITOR' as Agendador, label: 'João Vitor' },
 ];

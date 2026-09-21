@@ -291,7 +291,7 @@ export default function RaioXSDR() {
               Pré venda
             </h1>
             <p className="text-muted-foreground mt-2 max-w-3xl">
-              Análise individual dos SDRs oficiais: Herbert, Alan, Xavier e João Vitor. Os outros usuários podem agendar no pipeline, mas não entram como SDR oficial nesta leitura.
+              Análise individual dos SDRs oficiais: Herbert, Alan, Cleriston, Xavier e João Vitor. Os outros usuários podem agendar no pipeline, mas não entram como SDR oficial nesta leitura.
             </p>
           </div>
           <RaioXFilters value={filter} onChange={setFilter} />
@@ -315,7 +315,7 @@ export default function RaioXSDR() {
                 Daily SDR | 2026
               </CardTitle>
               <CardDescription>
-                Grade separada por semana e dia: Herbert, Alan, Xavier, João Vitor e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
+                Grade separada por semana e dia: Herbert, Alan, Cleriston, Xavier, João Vitor e Total calculado automaticamente. Edite as células do SDR e salve ao sair do campo ou em lote.
               </CardDescription>
             </div>
             <Button className="gap-2" onClick={() => void saveAllVisibleRows()}>
@@ -428,7 +428,7 @@ export default function RaioXSDR() {
             Agendadores do pipeline
           </CardTitle>
           <CardDescription>
-            Todos que podem marcar reuniÃ£o aparecem aqui. Herbert, Alan, Xavier e João Vitor continuam destacados como SDRs oficiais, mas Pedro, Cled e Bruno tambÃ©m tÃªm leitura de agendamentos e vendas geradas pelos leads que agendaram.
+            Todos que podem marcar reuniÃ£o aparecem aqui. Herbert, Alan, Cleriston, Xavier e João Vitor continuam destacados como SDRs oficiais, mas Pedro, Cled e Bruno tambÃ©m tÃªm leitura de agendamentos e vendas geradas pelos leads que agendaram.
           </CardDescription>
         </CardHeader>
         <CardContent>
