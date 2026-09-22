@@ -4,6 +4,7 @@
   role?: string;
   userId?: string;
   localData?: CommercialLocalDataSeed;
+  databaseFormulario?: Record<string, 'S1' | 'S2' | null>;
 };
 
 type CommercialLocalDataSeed = {
@@ -232,6 +233,14 @@ export function visitCommercial(
 
       if (req.method === 'GET' || req.method === 'HEAD') {
         if (tableName === 'pipeline_clients') {
+          if (requestUrl.searchParams.get('select') === 'id,formulario' && options.databaseFormulario) {
+            req.alias = 'formularioFromDb';
+            replyRows(seededState.pipelineClients.map((client: any) => ({
+              id: client.id,
+              formulario: options.databaseFormulario?.[client.id] ?? null,
+            })));
+            return;
+          }
           replyRows(seededState.pipelineClients);
           return;
         }

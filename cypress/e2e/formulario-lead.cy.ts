@@ -180,18 +180,46 @@ describe('Formulário na Agenda', () => {
     };
   }
 
-  it('exibe responsável e formulário em preto no card', () => {
-    const seed = agendaSeed('S1');
-    visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
+  it('busca S1 no banco e exibe no card e no painel após recarregar', () => {
+    cy.viewport(1280, 700);
+    const seed = agendaSeed();
+    visitCommercial(cy, '/comercial/agenda-great', {
+      localData: seed,
+      databaseFormulario: { [seed.pipelineClients[0].id]: 'S1' },
+    });
+    cy.wait('@formularioFromDb');
     cy.window().then((win) => {
       const local = JSON.parse(win.localStorage.getItem('great_commercial_local_data_v1') || '{}');
-      expect(local.pipelineClients.find((client: any) => client.id === seed.pipelineClients[0].id)?.formulario).to.eq('S1');
+      expect(local.pipelineClients.find((client: any) => client.id === seed.pipelineClients[0].id)?.formulario).to.be.undefined;
     });
 
     cy.contains('p', 'Alan S1', { timeout: 10000 })
       .should('be.visible')
       .and('have.class', 'text-black');
     cy.screenshot('agenda-card-alan-s1', { capture: 'viewport' });
+    cy.contains('p', 'Alan S1').click();
+    cy.contains('p', 'Quem agendou').parent().contains(/^Alan$/).should('be.visible');
+    cy.contains('p', 'Formulário').parent().contains(/^S1$/).scrollIntoView().should('be.visible');
+    cy.get('[role="dialog"] .overflow-y-auto').scrollTo('bottom');
+    cy.screenshot('agenda-painel-formulario-s1', { capture: 'viewport' });
+
+    visitCommercial(cy, '/comercial/agenda-great', {
+      localData: seed,
+      databaseFormulario: { [seed.pipelineClients[0].id]: 'S1' },
+    });
+    cy.wait('@formularioFromDb');
+    cy.contains('p', 'Alan S1', { timeout: 10000 }).should('be.visible');
+  });
+
+  it('busca S2 no banco e exibe no card e no painel', () => {
+    const seed = agendaSeed();
+    visitCommercial(cy, '/comercial/agenda-great', {
+      localData: seed,
+      databaseFormulario: { [seed.pipelineClients[0].id]: 'S2' },
+    });
+    cy.wait('@formularioFromDb');
+    cy.contains('p', 'Alan S2', { timeout: 10000 }).should('be.visible').click();
+    cy.contains('p', 'Formulário').parent().contains(/^S2$/).should('be.visible');
   });
 
   it('mantém apenas o responsável em registros antigos', () => {
@@ -200,7 +228,7 @@ describe('Formulário na Agenda', () => {
 
     cy.contains('p', /^Alan$/, { timeout: 10000 }).should('be.visible').click();
     cy.contains('p', 'Quem agendou').parent().contains('Alan').should('be.visible');
-    cy.contains('p', 'Quem agendou').parent().contains(/S1|S2/).should('not.exist');
+    cy.contains('p', 'Formulário').parent().contains('Não informado').should('be.visible');
     cy.contains(/undefined|null|Alan\s*•\s*$/i).should('not.exist');
   });
 
@@ -222,7 +250,8 @@ describe('Formulário na Agenda', () => {
       .should('be.visible')
       .and('have.class', 'text-black')
       .click();
-    cy.contains('p', 'Quem agendou').parent().contains('Bruno S1').should('be.visible');
+    cy.contains('p', 'Quem agendou').parent().contains(/^Bruno$/).should('be.visible');
+    cy.contains('p', 'Formulário').parent().contains(/^S1$/).should('be.visible');
   });
 
   it('mantém o campo utilizável em tela pequena', () => {

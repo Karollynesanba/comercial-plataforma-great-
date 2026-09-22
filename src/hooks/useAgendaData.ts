@@ -456,6 +456,38 @@ async function fetchAgendaTable(tableName: string) {
   return data.map((row) => enrichEvent(normalizeAgendaRecord(row, tableName)));
 }
 
+async function attachPersistedPipelineFormulario(events: AgendaEvent[]) {
+  const clientIds = [...new Set(
+    events.map((event) => event.pipeline_client_id).filter((id): id is string => Boolean(id))
+  )];
+  if (clientIds.length === 0) return events;
+
+  const formularioByClientId = new Map<string, 'S1' | 'S2' | null>();
+  try {
+    for (let index = 0; index < clientIds.length; index += 100) {
+      const { data, error } = await supabase
+        .from('pipeline_clients')
+        .select('id, formulario')
+        .in('id', clientIds.slice(index, index + 100));
+      if (error) throw error;
+      for (const client of data || []) {
+        formularioByClientId.set(
+          client.id,
+          client.formulario === 'S1' || client.formulario === 'S2' ? client.formulario : null
+        );
+      }
+    }
+  } catch (error) {
+    console.warn('Agenda formulario lookup skipped', error);
+    return events;
+  }
+
+  return events.map((event) => event.pipeline_client_id && formularioByClientId.has(event.pipeline_client_id)
+    ? { ...event, formulario: formularioByClientId.get(event.pipeline_client_id) ?? null }
+    : event
+  );
+}
+
 function attachPipelineFormulario(events: AgendaEvent[], pipelineClients: Array<{ id: string; formulario?: 'S1' | 'S2' }>) {
   const formularioByClientId = new Map(
     pipelineClients
@@ -492,11 +524,14 @@ export function useAgendaData() {
         return fallbackEvents;
       }
 
-      return sortAgendaEvents(await fetchAgendaTable(AGENDA_TABLE));
+      const agendaEvents = await fetchAgendaTable(AGENDA_TABLE);
+      return sortAgendaEvents(await attachPersistedPipelineFormulario(agendaEvents));
     },
   });
 
-  const events = attachPipelineFormulario(queriedEvents, pipelineClientsForFormulario);
+  const events = isSupabaseConfigured
+    ? queriedEvents
+    : attachPipelineFormulario(queriedEvents, pipelineClientsForFormulario);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -514,6 +549,7 @@ export function useAgendaData() {
     const channel = (supabase as any)
       .channel(agendaChannelNameRef.current)
       .on('postgres_changes', { event: '*', schema: 'public', table: AGENDA_TABLE }, refreshAgenda)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pipeline_clients' }, refreshAgenda)
       .subscribe();
 
     window.addEventListener('focus', refreshAgenda);

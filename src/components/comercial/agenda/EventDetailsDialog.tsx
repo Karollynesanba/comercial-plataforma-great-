@@ -266,7 +266,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     pipelineClientRecord?.assignedSDR,
     event?.scheduled_by,
   );
-  const formularioValue = pipelineClient?.formulario || event?.formulario;
+  const formularioValue = event?.formulario || pipelineClient?.formulario;
   const areaAtuacaoValue = pickFirstNonEmpty(
     leadDataRecord?.salao_ou_clinica,
     leadDataRecord?.salaoOuClinica,
@@ -292,9 +292,9 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   );
   const agendadoViaLabel = formatAgendadoViaLabel(agendadoViaValue);
   const agendadorLabel = formatOptionLabel(agendadorValue, AGENDADOR_OPTIONS);
-  const agendadorComFormularioLabel = agendadorValue && (formularioValue === 'S1' || formularioValue === 'S2')
-    ? `${agendadorLabel} ${formularioValue}`
-    : agendadorLabel;
+  const formularioLabel = formularioValue === 'S1' || formularioValue === 'S2'
+    ? formularioValue
+    : 'Não informado';
   const areaAtuacaoLabel = formatOptionLabel(areaAtuacaoValue, SALAO_OU_CLINICA_OPTIONS);
   const faturamentoLabel = formatOptionLabel(
     faturamentoValue === 'PERSONALIZADO'
@@ -717,7 +717,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Quem agendou</p>
-                    <p className="mt-2 text-base font-black text-slate-950">{agendadorComFormularioLabel}</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{agendadorLabel}</p>
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Ligação ou mensagem</p>
@@ -750,6 +750,10 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Funil / criativo</p>
                     <p className="mt-2 text-base font-black text-slate-950">{funilLabel}</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Formulário</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{formularioLabel}</p>
                   </div>
                 </div>
 
