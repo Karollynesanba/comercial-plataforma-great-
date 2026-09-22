@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -68,6 +70,9 @@ const formSchema = z.object({
   agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'CLERISTON', 'CLED', 'CAETANO', 'XAVIER', 'JOAO_VITOR'] as const, {
     required_error: 'Informe quem agendou',
   }),
+  formulario: z.enum(['S1', 'S2'] as const, {
+    required_error: 'Selecione o formulario',
+  }),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
   temSocio: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem socio' }),
   temMkt: z.enum(['SIM', 'NAO'] as const, { required_error: 'Informe se tem marketing' }),
@@ -107,6 +112,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
       faturamento: undefined,
       podeInvestir: undefined,
       agendadoPor: undefined,
+      formulario: undefined,
       agendadoVia: undefined,
       temSocio: undefined,
       temMkt: undefined,
@@ -155,6 +161,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         periodo: 'MENSAL',
         indicacao: undefined,
         agendadoPor: data.agendadoPor as Agendador | undefined,
+        formulario: data.formulario,
         agendadoVia: data.agendadoVia,
         temSocio: data.temSocio as TemSocio,
         temMkt: data.temMkt as TemMkt,
@@ -177,6 +184,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         criativo: data.criativo || null,
         faturamento: data.faturamento,
         agendadoPor: data.agendadoPor,
+        formulario: data.formulario,
         agendadoVia: data.agendadoVia,
         meetingDate: data.meetingDate,
         meetingTime: data.meetingTime,
@@ -471,6 +479,33 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="formulario"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Formulário</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      className="flex gap-6 rounded-lg border bg-muted/20 px-4 py-3"
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      {(['S1', 'S2'] as const).map((option) => (
+                        <div key={option} className="flex items-center gap-2">
+                          <RadioGroupItem id={`formulario-${option.toLowerCase()}`} value={option} />
+                          <Label htmlFor={`formulario-${option.toLowerCase()}`} className="cursor-pointer font-medium">
+                            {option}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

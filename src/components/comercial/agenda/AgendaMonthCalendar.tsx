@@ -21,6 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { EventCardTooltip } from './EventCardTooltip';
 import { resolveAgendaDateKey, resolveAgendaTimeKey } from '@/lib/agendaDate';
 import { cn } from '@/lib/utils';
+import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 
 interface AgendaMonthCalendarProps {
   events: AgendaEvent[];
@@ -32,6 +33,13 @@ interface AgendaMonthCalendarProps {
 }
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+function getResponsibleLabel(event: AgendaEvent) {
+  const responsible = event.scheduled_by
+    ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
+    : null;
+  return [responsible, event.formulario].filter(Boolean).join(' • ');
+}
 
 export function AgendaMonthCalendar({
   events,
@@ -225,6 +233,7 @@ export function AgendaMonthCalendar({
               )}
 
               {selectedDayEvents.map((event) => {
+                const responsibleLabel = getResponsibleLabel(event);
                 return (
                   <div
                     key={event.id}
@@ -242,6 +251,11 @@ export function AgendaMonthCalendar({
                           {resolveAgendaTimeKey(event).slice(0, 5)}
                         </p>
                         <p className="truncate text-xs text-slate-500">{event.client_name}</p>
+                        {responsibleLabel && (
+                          <p className="truncate text-xs font-semibold uppercase tracking-wide text-black">
+                            {responsibleLabel}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

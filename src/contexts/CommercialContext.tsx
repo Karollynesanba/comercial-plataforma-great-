@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { COMMERCIAL_YES_NO_MAYBE_OPTIONS, coerceCommercialAnswer, type CommercialYesNoMaybe } from '@/lib/commercialAnswer';
 
 export type PipelineStage = 'NOVO' | 'NO_SHOW' | 'TAXA_INTERESSE' | 'NEGOCIACAO' | 'PERDIDO' | 'FECHADO';
+export type Formulario = 'S1' | 'S2';
 export type Vendedor = 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDRO_JUAN' | 'CAETANO';
 export type Equipe = string;
 export type Faturamento =
@@ -151,6 +152,7 @@ export interface PipelineClient {
   noShowReason?: string;
   notes?: string;
   agendadoPor?: Agendador;
+  formulario?: Formulario;
   agendadoVia?: string;
   pagadorAnuncio?: PagadorAnuncio;
   temSocio?: TemSocio;

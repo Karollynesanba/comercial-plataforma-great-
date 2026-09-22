@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -117,6 +119,7 @@ const formSchema = z.object({
   periodo: z.enum(['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'TAXA_INTERESSE'] as const),
   indicacao: z.string().optional(),
   agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'CLERISTON', 'CLED', 'CAETANO', 'XAVIER', 'JOAO_VITOR'] as const).optional().nullable(),
+  formulario: z.enum(['S1', 'S2'] as const).optional(),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
   meetingDate: z.string().min(1, 'Data da reuniao e obrigatoria').regex(/^\d{4}-\d{2}-\d{2}$/, 'Data da reuniao invalida'),
   meetingTime: z.string().min(1, 'Horario da reuniao e obrigatorio').regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horario da reuniao invalido'),
@@ -166,6 +169,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
       periodo: 'MENSAL',
       indicacao: 'NAO',
       agendadoPor: undefined,
+      formulario: undefined,
       agendadoVia: undefined,
       meetingDate: '',
       meetingTime: '',
@@ -219,6 +223,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         periodo: client.periodo,
         indicacao: client.indicacao || 'NAO',
         agendadoPor: client.agendadoPor || undefined,
+        formulario: client.formulario,
         agendadoVia: (client.agendadoVia as 'LIGACAO' | 'MENSAGEM' | 'CALENDLY') || undefined,
         meetingDate: client.meetingDate || '',
         meetingTime: client.meetingTime || '',
@@ -262,6 +267,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
         periodo: data.periodo as Periodo,
         indicacao: data.indicacao,
         agendadoPor: data.agendadoPor as Agendador | undefined,
+        formulario: data.formulario,
         agendadoVia: data.agendadoVia,
         meetingDate: data.meetingDate,
         meetingTime: data.meetingTime,
@@ -696,6 +702,33 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="formulario"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Formulário</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      className="flex gap-6 rounded-lg border bg-muted/20 px-4 py-3"
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      {(['S1', 'S2'] as const).map((option) => (
+                        <div key={option} className="flex items-center gap-2">
+                          <RadioGroupItem id={`edit-formulario-${option.toLowerCase()}`} value={option} />
+                          <Label htmlFor={`edit-formulario-${option.toLowerCase()}`} className="cursor-pointer font-medium">
+                            {option}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Row 5.5: Agendado Via */}
             <FormField

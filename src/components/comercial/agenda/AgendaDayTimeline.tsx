@@ -49,6 +49,9 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent, currentDat
       ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
       : null;
 
+  const getResponsibleLabel = (event: AgendaEvent) =>
+    [getScheduledByLabel(event), event.formulario].filter(Boolean).join(' • ');
+
   const positionedEvents = useMemo(() => {
     if (dayEvents.length === 0) return [];
 
@@ -257,7 +260,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent, currentDat
                   addMinutes(parseISO(`2000-01-01T${resolveAgendaTimeKey(event)}`), event.duration_minutes || 60),
                   'HH:mm'
                 );
-                const scheduledByLabel = getScheduledByLabel(event);
+                const responsibleLabel = getResponsibleLabel(event);
 
                 return (
                   <EventCardTooltip key={event.id} event={event}>
@@ -283,9 +286,9 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent, currentDat
                         <p className="text-xs font-medium opacity-90">
                           {resolveAgendaTimeKey(event).slice(0, 5)} – {endTime}
                         </p>
-                        {scheduledByLabel && (
-                          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
-                            {scheduledByLabel}
+                        {responsibleLabel && (
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-black">
+                            {responsibleLabel}
                           </p>
                         )}
                       </div>

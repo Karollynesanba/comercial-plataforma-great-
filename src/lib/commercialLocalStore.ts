@@ -316,6 +316,7 @@ export function syncPipelineClientAutomations(current: CommercialLocalData, clie
     duration_minutes: existingAgendaEvent?.duration_minutes || 60,
     meeting_link: existingAgendaEvent?.meeting_link || null,
     scheduled_by: existingAgendaEvent?.scheduled_by || client.agendadoPor || client.assignedSDR || null,
+    formulario: client.formulario || existingAgendaEvent?.formulario || null,
     lead_stage: existingAgendaEvent?.lead_stage || client.stage || 'NOVO',
     creative_source: existingAgendaEvent?.creative_source || getStoredLeadOrigin({ criativo: client.criativo, funil: client.funil }) || null,
     color: existingAgendaEvent?.color || agendaColorForStage(client.stage),

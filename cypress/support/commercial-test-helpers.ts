@@ -97,6 +97,7 @@ export function seedCommercialLocalData(win: Window, seed: CommercialLocalDataSe
   };
 
   win.localStorage.setItem('great_commercial_local_data_v1', JSON.stringify(next));
+  win.localStorage.setItem('great_local_backup_seed_version', 'agenda-backup-local-20260630_225500');
 }
 
 export function visitCommercial(
@@ -120,6 +121,7 @@ export function visitCommercial(
     equipe: client.equipe || null,
     faturamento: client.faturamento || null,
     faturamento_personalizado: client.faturamento_personalizado || client.faturamentoPersonalizado || null,
+    formulario: client.formulario || null,
     pode_investir: client.pode_investir || client.podeInvestir || null,
     pacote: client.pacote || null,
     periodo: client.periodo || null,
@@ -208,9 +210,23 @@ export function visitCommercial(
       };
 
       const replyRows = (rows: unknown[]) => {
+        const range = String(req.headers.range || '0-999');
+        const [fromValue, toValue] = range.split('-').map((value) => Number.parseInt(value, 10));
+        const offsetValue = Number.parseInt(requestUrl.searchParams.get('offset') || '', 10);
+        const limitValue = Number.parseInt(requestUrl.searchParams.get('limit') || '', 10);
+        const from = Number.isFinite(offsetValue) ? offsetValue : Number.isFinite(fromValue) ? fromValue : 0;
+        const to = Number.isFinite(limitValue)
+          ? from + limitValue - 1
+          : Number.isFinite(toValue)
+            ? toValue
+            : from + 999;
+        const page = rows.slice(from, to + 1);
         req.reply({
           statusCode: 200,
-          body: rows,
+          headers: {
+            'content-range': `${from}-${Math.max(from, from + page.length - 1)}/${rows.length}`,
+          },
+          body: page,
         });
       };
 
@@ -224,7 +240,8 @@ export function visitCommercial(
           return;
         }
         if (tableName === 'agenda_events') {
-          replyRows(seededState.agendaEvents);
+          const id = eqValue('id');
+          replyRows(id ? seededState.agendaEvents.filter((item: any) => item.id === id) : seededState.agendaEvents);
           return;
         }
         if (tableName === 'agendamento_leads') {
@@ -429,12 +446,13 @@ export function visitCommercial(
     }
   );
 
-  cy.visit('/login');
-  cy.window().then((win) => {
-    seedCommercialAuth(win, options);
-    if (options.localData) {
-      seedCommercialLocalData(win, options.localData);
-    }
+  cy.visit('/login', {
+    onBeforeLoad(win) {
+      seedCommercialAuth(win, options);
+      if (options.localData) {
+        seedCommercialLocalData(win, options.localData);
+      }
+    },
   });
   cy.reload();
 

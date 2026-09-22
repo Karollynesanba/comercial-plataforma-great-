@@ -27,6 +27,7 @@ const CORE_EVENT_KEYS = new Set([
   'duration_minutes',
   'meeting_link',
   'scheduled_by',
+  'formulario',
   'lead_stage',
   'creative_source',
   'color',
@@ -63,6 +64,7 @@ export interface AgendaEvent {
   duration_minutes: number;
   meeting_link: string | null;
   scheduled_by: string | null;
+  formulario: 'S1' | 'S2' | null;
   lead_stage: string | null;
   creative_source: string | null;
   color: string;
@@ -94,6 +96,7 @@ export type AgendaEventInsert = Omit<
   | 'assigned_closer'
   | 'clinic_name'
   | 'scheduled_by'
+  | 'formulario'
   | 'lead_stage'
   | 'creative_source'
   | 'raw_record'
@@ -101,6 +104,7 @@ export type AgendaEventInsert = Omit<
 > & {
   clinic_name?: string | null;
   scheduled_by?: string | null;
+  formulario?: 'S1' | 'S2' | null;
   lead_stage?: string | null;
   creative_source?: string | null;
   pipeline_client_id?: string | null;
@@ -263,6 +267,9 @@ function normalizeAgendaRecord(record: AgendaRow, sourceTable: string): AgendaEv
     ),
     meeting_link: toOptionalString(pickValue(record, ['meeting_link', 'link', 'meeting_url', 'url'])),
     scheduled_by: toOptionalString(pickValue(record, ['scheduled_by', 'agendado_por', 'responsavel', 'responsável'])),
+    formulario: ['S1', 'S2'].includes(toTrimmedString(record.formulario))
+      ? toTrimmedString(record.formulario) as 'S1' | 'S2'
+      : null,
     lead_stage: toOptionalString(pickValue(record, ['lead_stage', 'stage', 'status'])),
     creative_source: toOptionalString(pickValue(record, ['creative_source', 'criativo', 'origin', 'origem'])),
     color: color || '#3B82F6',
@@ -449,6 +456,19 @@ async function fetchAgendaTable(tableName: string) {
   return data.map((row) => enrichEvent(normalizeAgendaRecord(row, tableName)));
 }
 
+function attachPipelineFormulario(events: AgendaEvent[], pipelineClients: Array<{ id: string; formulario?: 'S1' | 'S2' }>) {
+  const formularioByClientId = new Map(
+    pipelineClients
+      .filter((client) => client.formulario === 'S1' || client.formulario === 'S2')
+      .map((client) => [client.id, client.formulario] as const)
+  );
+
+  return events.map((event) => ({
+    ...event,
+    formulario: (event.pipeline_client_id ? formularioByClientId.get(event.pipeline_client_id) : null) || event.formulario || null,
+  }));
+}
+
 export function useAgendaData() {
   const queryClient = useQueryClient();
   const commercial = useCommercialSafe();
@@ -459,9 +479,13 @@ export function useAgendaData() {
   const localFallbackEvents = (readCommercialLocalData().agendaEvents || []).map((event: any) =>
     enrichEvent(normalizeAgendaRecord(event, AGENDA_TABLE))
   );
+  const localPipelineClients = readCommercialLocalData().pipelineClients || [];
+  const pipelineClientsForFormulario = commercial?.pipelineClients?.length
+    ? commercial.pipelineClients
+    : localPipelineClients;
   const fallbackEvents = commercialFallbackEvents.length > 0 ? commercialFallbackEvents : localFallbackEvents;
 
-  const { data: events = [], isLoading, error } = useQuery({
+  const { data: queriedEvents = [], isLoading, error } = useQuery({
     queryKey: AGENDA_QUERY_KEY,
     queryFn: async () => {
       if (!isSupabaseConfigured) {
@@ -471,6 +495,8 @@ export function useAgendaData() {
       return sortAgendaEvents(await fetchAgendaTable(AGENDA_TABLE));
     },
   });
+
+  const events = attachPipelineFormulario(queriedEvents, pipelineClientsForFormulario);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;

@@ -47,6 +47,7 @@ function mapPipelineClient(row: BackupRow) {
     noShowReason: row.no_show_reason || undefined,
     notes: row.notes || undefined,
     agendadoPor: row.agendado_por || undefined,
+    formulario: row.formulario === 'S1' || row.formulario === 'S2' ? row.formulario : undefined,
     agendadoVia: row.agendado_via || undefined,
     pagadorAnuncio: row.pagador_anuncio || undefined,
     temSocio: row.tem_socio || undefined,

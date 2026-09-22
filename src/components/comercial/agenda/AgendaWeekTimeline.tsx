@@ -46,6 +46,9 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent, currentDa
       ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
       : null;
 
+  const getResponsibleLabel = (event: AgendaEvent) =>
+    [getScheduledByLabel(event), event.formulario].filter(Boolean).join(' • ');
+
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     const end = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -280,7 +283,7 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent, currentDa
                   {positionedEvents.map(({ event, column, totalColumns, top, height }) => {
                     const width = `calc((100% - 8px) / ${totalColumns})`;
                     const left = `calc(4px + (100% - 8px) / ${totalColumns} * ${column})`;
-                    const scheduledByLabel = getScheduledByLabel(event);
+                    const responsibleLabel = getResponsibleLabel(event);
 
                     return (
                       <EventCardTooltip key={event.id} event={event}>
@@ -308,9 +311,9 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent, currentDa
                                 {event.event_time.slice(0, 5)}
                               </p>
                             )}
-                            {height >= 36 && scheduledByLabel && (
-                              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-white/90">
-                                {scheduledByLabel}
+                            {height >= 36 && responsibleLabel && (
+                              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-black">
+                                {responsibleLabel}
                               </p>
                             )}
                           </div>

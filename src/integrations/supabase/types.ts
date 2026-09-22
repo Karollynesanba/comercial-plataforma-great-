@@ -1749,6 +1749,7 @@ export type Database = {
           equipe: string | null
           faturamento: string | null
           faturamento_personalizado: string | null
+          formulario: string | null
           followup_done: boolean | null
           id: string
           indicacao: string | null
@@ -1790,6 +1791,7 @@ export type Database = {
           equipe?: string | null
           faturamento?: string | null
           faturamento_personalizado?: string | null
+          formulario?: string | null
           followup_done?: boolean | null
           id?: string
           indicacao?: string | null
@@ -1831,6 +1833,7 @@ export type Database = {
           equipe?: string | null
           faturamento?: string | null
           faturamento_personalizado?: string | null
+          formulario?: string | null
           followup_done?: boolean | null
           id?: string
           indicacao?: string | null

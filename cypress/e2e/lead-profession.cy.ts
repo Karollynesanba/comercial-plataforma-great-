@@ -184,6 +184,7 @@ describe('Profissão do lead', () => {
       selectOptionByLabel(/Tem MKT\?/i, 'Nao');
       selectOptionByLabel(/Tem secret[aá]ria\?/i, 'Nao sei');
       selectOptionByLabel(/Quem agendou\?/i, 'Herbert');
+      cy.get('#formulario-s1').click();
       selectOptionByLabel(/Agendado por/i, 'Mensagem');
       fillInputByLabel(/Data da Reuniao/i, formatLocalDate());
       fillInputByLabel(/Horario da Reuniao/i, '14:30');

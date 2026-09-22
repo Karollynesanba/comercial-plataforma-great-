@@ -34,6 +34,7 @@ export interface PipelineClientDB {
   no_show_reason: string | null;
   notes: string | null;
   agendado_por: string | null;
+  formulario: 'S1' | 'S2' | null;
   pagador_anuncio: string | null;
   tem_socio: string | null;
   tem_mkt: string | null;
@@ -70,6 +71,7 @@ function localToDb(client: any): PipelineClientDB {
     no_show_reason: client.noShowReason || null,
     notes: client.notes || null,
     agendado_por: client.agendadoPor || null,
+    formulario: client.formulario || null,
     pagador_anuncio: client.pagadorAnuncio || null,
     tem_socio: commercialAnswerToDb(client.temSocio),
     tem_mkt: commercialAnswerToDb(client.temMkt),
@@ -103,6 +105,7 @@ function dbToLocal(client: Partial<PipelineClientDB>, userId?: string | null) {
     noShowReason: client.no_show_reason || undefined,
     notes: client.notes || undefined,
     agendadoPor: client.agendado_por || undefined,
+    formulario: client.formulario || undefined,
     pagadorAnuncio: client.pagador_anuncio || undefined,
     temSocio: coerceCommercialAnswer(client.tem_socio, 'NAO') || undefined,
     temMkt: coerceCommercialAnswer(client.tem_mkt, 'NAO') || undefined,
