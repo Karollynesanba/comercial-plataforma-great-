@@ -181,6 +181,12 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
 
   const pipelineClient = useMemo(() => {
     if (!event) return null;
+    const linkedClientId = event.pipeline_client_id || leadData?.pipeline_client_id;
+    const linkedClient = linkedClientId
+      ? pipelineClients.find((client) => client.id === linkedClientId)
+      : null;
+    if (linkedClient) return linkedClient;
+    if (!eventPhoneDigits) return null;
     return pipelineClients.find((client) => {
       const clientPhoneDigits = client.telefone?.replace(/\D/g, '') || '';
       const clientMeetingTime = (client.meetingTime || '').slice(0, 5);
@@ -190,7 +196,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
         (!eventSlotTime || clientMeetingTime === eventSlotTime)
       );
     }) || null;
-  }, [event, eventPhoneDigits, pipelineClients]);
+  }, [event, eventPhoneDigits, leadData?.pipeline_client_id, pipelineClients]);
 
   const [eventForm, setEventForm] = useState({
     title: '',
@@ -258,7 +264,9 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
     pipelineClientRecord?.agendadoPor,
     pipelineClientRecord?.agendado_por,
     pipelineClientRecord?.assignedSDR,
+    event?.scheduled_by,
   );
+  const formularioValue = pipelineClient?.formulario || event?.formulario;
   const areaAtuacaoValue = pickFirstNonEmpty(
     leadDataRecord?.salao_ou_clinica,
     leadDataRecord?.salaoOuClinica,
@@ -284,6 +292,9 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
   );
   const agendadoViaLabel = formatAgendadoViaLabel(agendadoViaValue);
   const agendadorLabel = formatOptionLabel(agendadorValue, AGENDADOR_OPTIONS);
+  const agendadorComFormularioLabel = agendadorValue && (formularioValue === 'S1' || formularioValue === 'S2')
+    ? `${agendadorLabel} ${formularioValue}`
+    : agendadorLabel;
   const areaAtuacaoLabel = formatOptionLabel(areaAtuacaoValue, SALAO_OU_CLINICA_OPTIONS);
   const faturamentoLabel = formatOptionLabel(
     faturamentoValue === 'PERSONALIZADO'
@@ -706,7 +717,7 @@ export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: E
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Quem agendou</p>
-                    <p className="mt-2 text-base font-black text-slate-950">{agendadorLabel}</p>
+                    <p className="mt-2 text-base font-black text-slate-950">{agendadorComFormularioLabel}</p>
                   </div>
                   <div className="rounded-[1.2rem] border border-slate-100 bg-slate-50 p-4 shadow-sm">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Ligação ou mensagem</p>

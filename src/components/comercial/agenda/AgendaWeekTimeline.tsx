@@ -47,7 +47,7 @@ export function AgendaWeekTimeline({ events, onEventClick, onAddEvent, currentDa
       : null;
 
   const getResponsibleLabel = (event: AgendaEvent) =>
-    [getScheduledByLabel(event), event.formulario].filter(Boolean).join(' • ');
+    [getScheduledByLabel(event), event.formulario].filter(Boolean).join(' ');
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });

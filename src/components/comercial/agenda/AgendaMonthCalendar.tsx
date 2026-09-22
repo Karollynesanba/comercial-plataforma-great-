@@ -38,7 +38,7 @@ function getResponsibleLabel(event: AgendaEvent) {
   const responsible = event.scheduled_by
     ? AGENDADOR_OPTIONS.find((option) => option.value === event.scheduled_by)?.label || event.scheduled_by
     : null;
-  return [responsible, event.formulario].filter(Boolean).join(' • ');
+  return [responsible, event.formulario].filter(Boolean).join(' ');
 }
 
 export function AgendaMonthCalendar({

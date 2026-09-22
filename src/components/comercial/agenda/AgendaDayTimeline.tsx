@@ -50,7 +50,7 @@ export function AgendaDayTimeline({ events, onEventClick, onAddEvent, currentDat
       : null;
 
   const getResponsibleLabel = (event: AgendaEvent) =>
-    [getScheduledByLabel(event), event.formulario].filter(Boolean).join(' • ');
+    [getScheduledByLabel(event), event.formulario].filter(Boolean).join(' ');
 
   const positionedEvents = useMemo(() => {
     if (dayEvents.length === 0) return [];

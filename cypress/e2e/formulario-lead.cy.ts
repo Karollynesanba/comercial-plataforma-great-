@@ -188,7 +188,7 @@ describe('Formulário na Agenda', () => {
       expect(local.pipelineClients.find((client: any) => client.id === seed.pipelineClients[0].id)?.formulario).to.eq('S1');
     });
 
-    cy.contains('p', 'Alan • S1', { timeout: 10000 })
+    cy.contains('p', 'Alan S1', { timeout: 10000 })
       .should('be.visible')
       .and('have.class', 'text-black');
     cy.screenshot('agenda-card-alan-s1', { capture: 'viewport' });
@@ -198,7 +198,9 @@ describe('Formulário na Agenda', () => {
     const seed = agendaSeed();
     visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
 
-    cy.contains('p', /^Alan$/, { timeout: 10000 }).should('be.visible');
+    cy.contains('p', /^Alan$/, { timeout: 10000 }).should('be.visible').click();
+    cy.contains('p', 'Quem agendou').parent().contains('Alan').should('be.visible');
+    cy.contains('p', 'Quem agendou').parent().contains(/S1|S2/).should('not.exist');
     cy.contains(/undefined|null|Alan\s*•\s*$/i).should('not.exist');
   });
 
@@ -206,8 +208,21 @@ describe('Formulário na Agenda', () => {
     const seed = agendaSeed('S2', 'S1');
     visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
 
-    cy.contains('p', 'Alan • S2', { timeout: 10000 }).should('be.visible');
-    cy.contains('p', 'Alan • S1').should('not.exist');
+    cy.contains('p', 'Alan S2', { timeout: 10000 }).should('be.visible');
+    cy.contains('p', 'Alan S1').should('not.exist');
+  });
+
+  it('mostra BRUNO S1 no card quando Bruno fez o agendamento', () => {
+    const seed = agendaSeed('S1');
+    seed.pipelineClients[0].agendadoPor = 'CAETANO';
+    seed.agendaEvents[0].scheduled_by = 'CAETANO';
+    visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
+
+    cy.contains('p', 'Bruno S1', { timeout: 10000 })
+      .should('be.visible')
+      .and('have.class', 'text-black')
+      .click();
+    cy.contains('p', 'Quem agendou').parent().contains('Bruno S1').should('be.visible');
   });
 
   it('mantém o campo utilizável em tela pequena', () => {
