@@ -37,6 +37,7 @@ export default function AgendaGreat() {
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFormularios, setSelectedFormularios] = useState<string[]>([]);
   const [duplicatingEvent, setDuplicatingEvent] = useState<AgendaEvent | null>(null);
   const [selectedColors, setSelectedColors] = useState<string[]>(() => {
     try {
@@ -77,11 +78,15 @@ export default function AgendaGreat() {
       result = result.filter((e) => selectedColors.includes(e.color));
     }
 
+    if (selectedFormularios.length > 0) {
+      result = result.filter((e) => e.formulario != null && selectedFormularios.includes(e.formulario));
+    }
+
     return result;
-  }, [events, selectedTeamId, searchQuery, selectedColors]);
+  }, [events, selectedTeamId, searchQuery, selectedColors, selectedFormularios]);
 
   const hasActiveFilters =
-    selectedTeamId !== 'all' || Boolean(searchQuery.trim()) || selectedColors.length > 0;
+    selectedTeamId !== 'all' || Boolean(searchQuery.trim()) || selectedColors.length > 0 || selectedFormularios.length > 0;
 
   const toggleColorFilter = (colorValue: string) => {
     setSelectedColors((current) =>
@@ -238,6 +243,46 @@ export default function AgendaGreat() {
             })}
           </div>
         </div>
+
+        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50/70 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-slate-500" />
+              <span id="agenda-formulario-filter-label" className="text-sm font-semibold text-slate-700">Formulário</span>
+            </div>
+            {selectedFormularios.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-2 rounded-full px-3 text-xs text-slate-500 hover:bg-white hover:text-slate-950"
+                onClick={() => setSelectedFormularios([])}
+                aria-label="Limpar filtro de formulário"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Limpar filtro
+              </Button>
+            )}
+          </div>
+
+          <ToggleGroup
+            type="multiple"
+            value={selectedFormularios}
+            onValueChange={setSelectedFormularios}
+            aria-labelledby="agenda-formulario-filter-label"
+            className="flex flex-wrap justify-start gap-2"
+          >
+            {['S1', 'S2'].map((formulario) => (
+              <ToggleGroupItem
+                key={formulario}
+                value={formulario}
+                aria-label={`Filtrar por formulário ${formulario}`}
+                className="h-9 rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md data-[state=on]:border-red-500 data-[state=on]:bg-red-50 data-[state=on]:text-red-700 data-[state=on]:ring-2 data-[state=on]:ring-red-500/15"
+              >
+                {formulario}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
       </div>
 
       {error && (
@@ -262,6 +307,7 @@ export default function AgendaGreat() {
                   setSelectedTeamId('all');
                   setSearchQuery('');
                   setSelectedColors([]);
+                  setSelectedFormularios([]);
                 }}
               >
                 Limpar filtros
