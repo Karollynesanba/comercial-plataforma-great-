@@ -160,6 +160,28 @@ export default function AgendaGreat() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex flex-col gap-1">
+              <span id="agenda-formulario-filter-label" className="text-xs font-semibold text-slate-500">Formulário</span>
+              <ToggleGroup
+                type="multiple"
+                value={selectedFormularios}
+                onValueChange={setSelectedFormularios}
+                aria-labelledby="agenda-formulario-filter-label"
+                className="justify-start gap-2"
+              >
+                {['S1', 'S2'].map((formulario) => (
+                  <ToggleGroupItem
+                    key={formulario}
+                    value={formulario}
+                    aria-label={`Filtrar por formulário ${formulario}`}
+                    className="h-7 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm data-[state=on]:border-red-500 data-[state=on]:bg-red-50 data-[state=on]:text-red-700 data-[state=on]:ring-2 data-[state=on]:ring-red-500/15"
+                  >
+                    {formulario}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
           </div>
 
           <ToggleGroup
@@ -244,45 +266,6 @@ export default function AgendaGreat() {
           </div>
         </div>
 
-        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50/70 p-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-500" />
-              <span id="agenda-formulario-filter-label" className="text-sm font-semibold text-slate-700">Formulário</span>
-            </div>
-            {selectedFormularios.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-2 rounded-full px-3 text-xs text-slate-500 hover:bg-white hover:text-slate-950"
-                onClick={() => setSelectedFormularios([])}
-                aria-label="Limpar filtro de formulário"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Limpar filtro
-              </Button>
-            )}
-          </div>
-
-          <ToggleGroup
-            type="multiple"
-            value={selectedFormularios}
-            onValueChange={setSelectedFormularios}
-            aria-labelledby="agenda-formulario-filter-label"
-            className="flex flex-wrap justify-start gap-2"
-          >
-            {['S1', 'S2'].map((formulario) => (
-              <ToggleGroupItem
-                key={formulario}
-                value={formulario}
-                aria-label={`Filtrar por formulário ${formulario}`}
-                className="h-9 rounded-full border border-slate-200 bg-white px-4 text-xs font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md data-[state=on]:border-red-500 data-[state=on]:bg-red-50 data-[state=on]:text-red-700 data-[state=on]:ring-2 data-[state=on]:ring-red-500/15"
-              >
-                {formulario}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
       </div>
 
       {error && (
