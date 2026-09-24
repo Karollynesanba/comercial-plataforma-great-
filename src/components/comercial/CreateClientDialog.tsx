@@ -67,7 +67,7 @@ const formSchema = z.object({
     required_error: 'Faturamento e obrigatorio',
   }),
   podeInvestir: z.enum(['SIM', 'NAO'] as const).optional(),
-  agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'CLERISTON', 'CLED', 'CAETANO', 'XAVIER', 'JOAO_VITOR'] as const, {
+  agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'RAUL', 'CLERISTON', 'CLED', 'CAETANO', 'XAVIER', 'JOAO_VITOR'] as const, {
     required_error: 'Informe quem agendou',
   }),
   formulario: z.enum(['S1', 'S2'] as const, {

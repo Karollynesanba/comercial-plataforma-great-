@@ -20,6 +20,7 @@ const DAILY_GOAL = 8;
 const SDR_NAMES: Record<string, string> = {
 HEBERT: 'Herbert',
 ALAN: 'Alan',
+RAUL: 'Raul',
 CLERISTON: 'Cleriston',
 XAVIER: 'Xavier',
 JOAO_VITOR: 'João Vitor',

@@ -118,7 +118,7 @@ const formSchema = z.object({
   pacote: z.enum(['COMPLETO', 'TRAFEGO_E_CRIATIVOS', 'ATENDIMENTO', 'TRAFEGO', 'COMPLETO_NOVA_ERA', 'TRAFEGO_ARTES_IA', 'TRAFEGO_CONSULTORIA', 'IA', 'TRAFEGO_ROTEIRO', 'TRAFEGO_IA'] as const),
   periodo: z.enum(['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'TAXA_INTERESSE'] as const),
   indicacao: z.string().optional(),
-  agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'CLERISTON', 'CLED', 'CAETANO', 'XAVIER', 'JOAO_VITOR'] as const).optional().nullable(),
+  agendadoPor: z.enum(['MIGUEL', 'PEDRO_H', 'PEDRO_JUAN', 'HEBERT', 'ALAN', 'RAUL', 'CLERISTON', 'CLED', 'CAETANO', 'XAVIER', 'JOAO_VITOR'] as const).optional().nullable(),
   formulario: z.enum(['S1', 'S2'] as const).optional(),
   agendadoVia: z.enum(['LIGACAO', 'MENSAGEM', 'CALENDLY'] as const, { required_error: 'Informe como foi realizado o agendamento' }),
   meetingDate: z.string().min(1, 'Data da reuniao e obrigatoria').regex(/^\d{4}-\d{2}-\d{2}$/, 'Data da reuniao invalida'),
