@@ -43,6 +43,7 @@ import {
   LOST_REASON_OPTIONS,
   PAGADOR_ANUNCIO_OPTIONS,
   AGENDADOR_OPTIONS,
+  OFFICIAL_SDR_OPTIONS,
   Vendedor,
   Equipe,
   Faturamento,
@@ -194,7 +195,7 @@ export function PipelineSpreadsheet({
   } = useCommercial();
   
   const { data: sdrProfiles, isLoading: sdrLoading, isError: sdrError, refetch: refetchSdrs } = useCrmSdrProfiles();
-  const sdrOptions = useMemo(() => buildCrmSdrOptions(sdrProfiles || [], AGENDADOR_OPTIONS), [sdrProfiles]);
+  const sdrOptions = useMemo(() => buildCrmSdrOptions(sdrProfiles || [], OFFICIAL_SDR_OPTIONS), [sdrProfiles]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('dataEntrada');
@@ -615,8 +616,8 @@ export function PipelineSpreadsheet({
             {sdrOptions.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
-            {sdrLoading && <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">Carregando SDRs...</div>}
-            {sdrError && <div role="status" className="px-2 py-1.5 text-sm text-destructive">Não foi possível carregar os SDRs. Reabra o filtro para tentar novamente.</div>}
+            {sdrLoading && sdrOptions.length === 0 && <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">Carregando SDRs...</div>}
+            {sdrError && <div role="status" className="px-2 py-1.5 text-sm text-destructive">Não foi possível atualizar os perfis. Reabra o filtro para tentar novamente.</div>}
             {!sdrLoading && !sdrError && sdrOptions.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum SDR visível. Verifique o cadastro e o acesso aos perfis.</div>}
           </SelectContent>
         </Select>

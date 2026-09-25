@@ -11,7 +11,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { useCommercial, PipelineStage, STAGE_ORDER, STAGE_LABELS, PipelineClient, VENDEDOR_OPTIONS, EQUIPE_OPTIONS, AGENDADOR_OPTIONS, Pacote, Periodo, PagadorAnuncio, Equipe, Vendedor } from '@/contexts/CommercialContext';
+import { useCommercial, PipelineStage, STAGE_ORDER, STAGE_LABELS, PipelineClient, VENDEDOR_OPTIONS, EQUIPE_OPTIONS, OFFICIAL_SDR_OPTIONS, Pacote, Periodo, PagadorAnuncio, Equipe, Vendedor } from '@/contexts/CommercialContext';
 import { PipelineColumn } from '@/components/comercial/PipelineColumn';
 import { PipelineCard } from '@/components/comercial/PipelineCard';
 import { CreateClientDialog } from '@/components/comercial/CreateClientDialog';
@@ -612,8 +612,8 @@ export default function PipelinePage() {
                         <SelectValue placeholder="SDR" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover">
-                        <SelectItem value="all">Todos SDRs</SelectItem>
-                        {AGENDADOR_OPTIONS.map(opt => (
+                        <SelectItem value="all">Todos os SDRs</SelectItem>
+                        {OFFICIAL_SDR_OPTIONS.map(opt => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>
