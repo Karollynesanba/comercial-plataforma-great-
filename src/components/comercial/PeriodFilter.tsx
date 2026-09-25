@@ -140,7 +140,7 @@ export function PeriodFilter({
                 )}
               >
                 <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                {customStart ? format(customStart, 'dd/MM/yyyy') : 'Data início'}
+                {customStart ? format(customStart, 'dd/MM/yyyy') : 'Data de início'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -171,7 +171,7 @@ export function PeriodFilter({
                 )}
               >
                 <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                {customEnd ? format(customEnd, 'dd/MM/yyyy') : 'Data fim'}
+                {customEnd ? format(customEnd, 'dd/MM/yyyy') : 'Data de fim'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">

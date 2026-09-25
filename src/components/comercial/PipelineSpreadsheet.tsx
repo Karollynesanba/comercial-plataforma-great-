@@ -33,13 +33,13 @@ import {
   useCommercial, 
   PipelineClient, 
   PipelineStage, 
-  STAGE_LABELS,
+  STAGE_LABELS as BASE_STAGE_LABELS,
   VENDEDOR_OPTIONS,
   EQUIPE_OPTIONS,
   FATURAMENTO_OPTIONS,
-  PACOTE_OPTIONS,
-  PERIODO_OPTIONS,
-  INDICACAO_OPTIONS,
+  PACOTE_OPTIONS as BASE_PACOTE_OPTIONS,
+  PERIODO_OPTIONS as BASE_PERIODO_OPTIONS,
+  INDICACAO_OPTIONS as BASE_INDICACAO_OPTIONS,
   LOST_REASON_OPTIONS,
   PAGADOR_ANUNCIO_OPTIONS,
   AGENDADOR_OPTIONS,
@@ -81,6 +81,8 @@ import { DeleteClientDialog } from './DeleteClientDialog';
 import { EditClientDialog } from './EditClientDialog';
 import { CelebrationAnimation } from './CelebrationAnimation';
 import { toast } from 'sonner';
+import { useCrmSdrProfiles } from '@/hooks/useCrmSdrProfiles';
+import { buildCrmSdrOptions, matchesCrmSdr } from '@/lib/crmSdrFilter';
 
 interface PipelineSpreadsheetProps {
   onEditClient?: (client: PipelineClient) => void;
@@ -90,6 +92,12 @@ interface PipelineSpreadsheetProps {
 
 type SortField = 'clientName' | 'vendedor' | 'entrada' | 'stage' | 'dataEntrada' | 'equipe';
 type SortDirection = 'asc' | 'desc';
+
+// Presentation-only labels: stored values and shared options stay unchanged.
+const STAGE_LABELS = { ...BASE_STAGE_LABELS, NEGOCIACAO: 'Negociação' };
+const PACOTE_OPTIONS = BASE_PACOTE_OPTIONS.map(option => ({ ...option, label: option.label.replace(/Trafego/g, 'Tráfego') }));
+const PERIODO_OPTIONS = BASE_PERIODO_OPTIONS.map(option => ({ ...option, label: option.label.replace('Dias', 'dias').replace('Taxa de Interesse', 'Taxa de interesse') }));
+const INDICACAO_OPTIONS = BASE_INDICACAO_OPTIONS.map(option => ({ ...option, label: option.value === 'NAO' ? 'Não' : option.label }));
 
 const TIME_FILTER_OPTIONS = Array.from({ length: 24 }, (_, hour) => {
   const value = `${String(hour).padStart(2, '0')}:00`;
@@ -185,12 +193,14 @@ export function PipelineSpreadsheet({
     addCriativo,
   } = useCommercial();
   
+  const { data: sdrProfiles, isLoading: sdrLoading, isError: sdrError, refetch: refetchSdrs } = useCrmSdrProfiles();
+  const sdrOptions = useMemo(() => buildCrmSdrOptions(sdrProfiles || [], AGENDADOR_OPTIONS), [sdrProfiles]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('dataEntrada');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [stageFilter, setStageFilter] = useState<string>('all');
-  const [vendedorFilter, setVendedorFilter] = useState<string>('all');
-  const [equipeFilter, setEquipeFilter] = useState<string>('all');
+  const [sdrFilter, setSdrFilter] = useState<string>('all');
   const [periodoFilter, setPeriodoFilter] = useState<string>('all');
   const [pacoteFilter, setPacoteFilter] = useState<string>('all');
   const [horarioFilter, setHorarioFilter] = useState<string>('all');
@@ -278,14 +288,10 @@ export function PipelineSpreadsheet({
       result = result.filter(c => c.stage === stageFilter);
     }
 
-    // Vendedor filter
-    if (vendedorFilter !== 'all') {
-      result = result.filter(c => c.vendedor === vendedorFilter);
-    }
-
-    // Equipe filter
-    if (equipeFilter !== 'all') {
-      result = result.filter(c => c.equipe === equipeFilter);
+    // SDR filter: agendadoPor/assignedSDR both originate from agendado_por.
+    if (sdrFilter !== 'all') {
+      const selectedSdr = sdrOptions.find((option) => option.value === sdrFilter);
+      result = result.filter(c => matchesCrmSdr(c, selectedSdr));
     }
 
     // Periodo filter
@@ -337,7 +343,7 @@ export function PipelineSpreadsheet({
     });
 
     return result;
-  }, [pipelineClients, searchQuery, sortField, sortDirection, stageFilter, vendedorFilter, equipeFilter, periodoFilter, pacoteFilter, horarioFilter, periodFilter, customStart, customEnd, showInactive, filterByPeriod]);
+  }, [pipelineClients, searchQuery, sortField, sortDirection, stageFilter, sdrFilter, sdrOptions, periodoFilter, pacoteFilter, horarioFilter, periodFilter, customStart, customEnd, showInactive, filterByPeriod]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -488,6 +494,7 @@ export function PipelineSpreadsheet({
   };
 
   const exportToCSV = () => {
+    const headers = ['Ativo', 'Cliente', 'Vendedor', 'Funil', 'Criativo', 'Equipe', 'Faturamento', 'Período', 'Data de entrada', 'Dias no pipeline', 'Status', 'Motivo da perda'];
     const rows = filteredClients.map(c => [
       c.ativo ? 'ATIVO' : 'INATIVO',
       c.clientName,
@@ -518,8 +525,7 @@ export function PipelineSpreadsheet({
 
   const clearFilters = () => {
     setStageFilter('all');
-    setVendedorFilter('all');
-    setEquipeFilter('all');
+    setSdrFilter('all');
     setPeriodoFilter('all');
     setPacoteFilter('all');
     setHorarioFilter('all');
@@ -529,7 +535,7 @@ export function PipelineSpreadsheet({
     setSearchQuery('');
   };
 
-  const hasActiveFilters = stageFilter !== 'all' || vendedorFilter !== 'all' || equipeFilter !== 'all' || periodoFilter !== 'all' || pacoteFilter !== 'all' || horarioFilter !== 'all' || periodFilter !== 'current_month' || searchQuery !== '';
+  const hasActiveFilters = stageFilter !== 'all' || sdrFilter !== 'all' || periodoFilter !== 'all' || pacoteFilter !== 'all' || horarioFilter !== 'all' || periodFilter !== 'current_month' || searchQuery !== '';
 
   return (
     <div className={cn(
@@ -586,24 +592,12 @@ export function PipelineSpreadsheet({
             setCustomEnd(end);
           }}
         />
-        <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
-          <SelectTrigger className="h-10 w-[170px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
-            <SelectValue placeholder="Vendedor" />
-          </SelectTrigger>
-          <SelectContent className="bg-popover">
-            <SelectItem value="all">Todos vendedores</SelectItem>
-            {VENDEDOR_OPTIONS.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select value={horarioFilter} onValueChange={setHorarioFilter}>
-          <SelectTrigger className="h-10 w-[130px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
+          <SelectTrigger className="h-10 w-[180px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
             <SelectValue placeholder="Horário" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
-            <SelectItem value="all">Todos horários</SelectItem>
+            <SelectItem value="all">Todos os horários</SelectItem>
             {TIME_FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
@@ -612,24 +606,27 @@ export function PipelineSpreadsheet({
           </SelectContent>
         </Select>
 
-        <Select value={equipeFilter} onValueChange={setEquipeFilter}>
-          <SelectTrigger className="h-10 w-[160px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
-            <SelectValue placeholder="Equipe" />
+        <Select value={sdrFilter} onValueChange={setSdrFilter} onOpenChange={(open) => { if (open) void refetchSdrs(); }}>
+          <SelectTrigger aria-label="Filtrar por SDR" className="h-10 w-[190px] rounded-xl border-slate-200 bg-white text-sm shadow-sm">
+            <SelectValue placeholder="Todos os SDRs" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
-            <SelectItem value="all">Todas equipes</SelectItem>
-            {EQUIPE_OPTIONS.map(opt => (
+            <SelectItem value="all">Todos os SDRs</SelectItem>
+            {sdrOptions.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
+            {sdrLoading && <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">Carregando SDRs...</div>}
+            {sdrError && <div role="status" className="px-2 py-1.5 text-sm text-destructive">Não foi possível carregar os SDRs. Reabra o filtro para tentar novamente.</div>}
+            {!sdrLoading && !sdrError && sdrOptions.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum SDR visível. Verifique o cadastro e o acesso aos perfis.</div>}
           </SelectContent>
         </Select>
 
         <Select value={periodoFilter} onValueChange={setPeriodoFilter}>
-          <SelectTrigger className="w-[150px] h-10 text-sm">
-            <SelectValue placeholder="PerÃ­odo" />
+          <SelectTrigger className="w-[190px] h-10 text-sm">
+            <SelectValue placeholder="Período" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
-            <SelectItem value="all">Todos perÃ­odos</SelectItem>
+            <SelectItem value="all">Todos os períodos</SelectItem>
             {PERIODO_OPTIONS.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
@@ -641,7 +638,7 @@ export function PipelineSpreadsheet({
             <SelectValue placeholder="Pacote" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
-            <SelectItem value="all">Todos pacotes</SelectItem>
+            <SelectItem value="all">Todos os pacotes</SelectItem>
             {PACOTE_OPTIONS.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
@@ -653,7 +650,7 @@ export function PipelineSpreadsheet({
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent className="bg-popover">
-            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="all">Todos os status</SelectItem>
             {Object.entries(STAGE_LABELS).map(([value, label]) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
@@ -704,7 +701,7 @@ export function PipelineSpreadsheet({
                   <TableHead className="w-[130px] text-sm font-semibold">PERÍODO</TableHead>
                   <TableHead className="w-[110px] text-sm font-semibold">INDICAÇÃO</TableHead>
                   <TableHead className="w-[130px] text-sm font-semibold">AGENDADO POR</TableHead>
-                  <TableHead className="w-[130px] text-sm font-semibold">HORARIO AGEND.</TableHead>
+                  <TableHead className="w-[130px] text-sm font-semibold">HORÁRIO AGEND.</TableHead>
                   <TableHead className="w-[130px] text-sm font-semibold text-right">
                     <button 
                       className="flex items-center gap-2 hover:text-foreground transition-colors ml-auto"
@@ -723,7 +720,7 @@ export function PipelineSpreadsheet({
                 </TableHead>
                 <TableHead className="w-[92px] text-xs font-semibold">STATUS</TableHead>
                 {showInactive && <TableHead className="w-[110px] text-xs font-semibold">MOTIVO</TableHead>}
-                <TableHead className="w-[68px] text-xs font-semibold text-center">AÃ‡Ã•ES</TableHead>
+                <TableHead className="w-[68px] text-xs font-semibold text-center">AÇÕES</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -920,7 +917,7 @@ export function PipelineSpreadsheet({
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      {/* PERÃODO */}
+                      {/* PERÍODO */}
                       <TableCell className="p-2">
                         <Select
                           value={client.periodo}
@@ -945,7 +942,7 @@ export function PipelineSpreadsheet({
 
 
                       {/* AGENDADO POR */}
-                      {/* INDICA��O */}
+                      {/* INDICAÇÃO */}
                       <TableCell className="p-2">
                         <Select
                           value={client.indicacao || 'NAO'}
@@ -953,7 +950,7 @@ export function PipelineSpreadsheet({
                         >
                           <SelectTrigger className="h-8 w-full border-0 p-0">
                             <Badge className={cn('text-[11px] px-2.5 py-0.5 rounded-full', client.indicacao === 'SIM' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200')}>
-                              {client.indicacao || 'N�o'}
+                              {INDICACAO_OPTIONS.find(option => option.value === client.indicacao)?.label || client.indicacao || 'Não'}
                             </Badge>
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
@@ -990,7 +987,7 @@ export function PipelineSpreadsheet({
                       </TableCell>
 
 
-                      {/* HORARIO AGENDADO */}
+                      {/* HORÁRIO AGENDADO */}
                       <TableCell className="p-2">
                         <span className="text-xs font-medium text-slate-700">
                           {getAppointmentTime(client)}
@@ -1058,7 +1055,7 @@ export function PipelineSpreadsheet({
                         </TableCell>
                       )}
 
-                      {/* AÃ‡Ã•ES */}
+                      {/* AÇÕES */}
                       <TableCell className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Button
@@ -1096,7 +1093,7 @@ export function PipelineSpreadsheet({
 
       {/* Summary */}
       <div className="flex items-center justify-between text-base text-muted-foreground px-3 py-2">
-        <span>{filteredClients.length} leads {showInactive ? '(incluindo inativos)' : ''}</span>
+        <span>{filteredClients.length} {filteredClients.length === 1 ? 'lead' : 'leads'} {showInactive ? '(incluindo inativos)' : ''}</span>
         <span>
           Total: <strong className="text-foreground text-base">R$ {filteredClients.reduce((sum, c) => sum + c.entrada, 0).toLocaleString('pt-BR')}</strong>
         </span>
@@ -1152,7 +1149,7 @@ export function PipelineSpreadsheet({
       <CelebrationAnimation
         show={showCelebration}
         type="sale"
-        title={celebrationData ? `ðŸŽ‰ ${celebrationData.clientName} fechou!` : undefined}
+        title={celebrationData ? `🎉 ${celebrationData.clientName} fechou!` : undefined}
         subtitle={celebrationData ? `Valor: ${formatBRL(celebrationData.value)}` : undefined}
         onComplete={() => setShowCelebration(false)}
       />
