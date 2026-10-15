@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, CalendarDays, CalendarRange, Search, Users, X, Filter, Trash2 } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarRange, ExternalLink, Search, Users, X, Filter, Trash2 } from 'lucide-react';
 import { AgendaDayTimeline } from '@/components/comercial/agenda/AgendaDayTimeline';
 import { AgendaMonthCalendar } from '@/components/comercial/agenda/AgendaMonthCalendar';
 import { AgendaWeekTimeline } from '@/components/comercial/agenda/AgendaWeekTimeline';
@@ -123,6 +123,17 @@ export default function AgendaGreat() {
       <div className="rounded-[28px] border border-slate-200/70 bg-white/90 p-4 shadow-[0_12px_36px_rgba(15,23,42,0.06)] backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
+            <Button asChild className="h-11 rounded-2xl">
+              <a
+                href="https://agenda-geral-great.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Agenda Geral (abre em nova aba)"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                Agenda Geral
+              </a>
+            </Button>
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
