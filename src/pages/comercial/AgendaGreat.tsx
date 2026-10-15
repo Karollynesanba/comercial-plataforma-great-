@@ -128,10 +128,10 @@ export default function AgendaGreat() {
                 href="https://agenda-geral-great.vercel.app/"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Agenda Geral (abre em nova aba)"
+                aria-label="SALA VERMELHA (abre em nova aba)"
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                Agenda Geral
+                SALA VERMELHA
               </a>
             </Button>
             <div className="relative">
