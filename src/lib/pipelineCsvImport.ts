@@ -77,6 +77,9 @@ const AGENDADOR_BY_VALUE: Record<string, string | undefined> = {
   'JOAO VITOR': 'JOAO_VITOR',
   'JOÃO VITOR': 'JOAO_VITOR',
   'João Vitor': 'JOAO_VITOR',
+  THIAGO_HENRIQUE: 'THIAGO_HENRIQUE',
+  'THIAGO HENRIQUE': 'THIAGO_HENRIQUE',
+  'Thiago Henrique': 'THIAGO_HENRIQUE',
   CLED: 'CLED',
   CAETANO: 'CAETANO',
 };

@@ -4,7 +4,7 @@ export interface UserMapping {
   email: string;
   role: 'ADMIN' | 'COORDENADOR_COMERCIAL' | 'CLOSER' | 'SDR';
   vendedorKey?: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDRO_JUAN' | 'CAETANO';
-  agendadorKey?: 'FELIPE' | 'HERBERT' | 'ALAN' | 'RAUL' | 'CLERISTON' | 'XAVIER' | 'JOAO_VITOR';
+  agendadorKey?: 'FELIPE' | 'HERBERT' | 'ALAN' | 'RAUL' | 'CLERISTON' | 'XAVIER' | 'JOAO_VITOR' | 'THIAGO_HENRIQUE';
 }
 
 export const COMMERCIAL_LOGIN_PASSWORD = 'Great2026!';
@@ -15,6 +15,7 @@ export const COMMERCIAL_LOGIN_EMAILS = [
   'alanribeiropessoal@gmail.com',
   'cleristonfelipe711@gmail.com',
   'raulcadena.eng@gmail.com',
+  'th1627272627@gmail.com',
   'ph283a@gmail.com',
   'joaovitordasilvacintra@gmail.com',
   'pedroojuann1@gmail.com',
@@ -70,6 +71,12 @@ export const TEAM_USERS: Record<string, UserMapping> = {
     agendadorKey: 'JOAO_VITOR',
     role: 'SDR',
   },
+  THIAGO_HENRIQUE: {
+    name: 'Thiago Henrique',
+    email: 'th1627272627@gmail.com',
+    agendadorKey: 'THIAGO_HENRIQUE',
+    role: 'SDR',
+  },
   PEDRO_JUAN: {
     name: 'Pedro Juan',
     email: 'pedroojuann1@gmail.com',
@@ -111,7 +118,7 @@ export function getUserByVendedorKey(key: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PEDR
 }
 
 // Get user mapping by agendador key
-export function getUserByAgendadorKey(key: 'FELIPE' | 'HERBERT' | 'ALAN' | 'RAUL' | 'CLERISTON' | 'XAVIER' | 'JOAO_VITOR'): UserMapping | undefined {
+export function getUserByAgendadorKey(key: 'FELIPE' | 'HERBERT' | 'ALAN' | 'RAUL' | 'CLERISTON' | 'XAVIER' | 'JOAO_VITOR' | 'THIAGO_HENRIQUE'): UserMapping | undefined {
   return Object.values(TEAM_USERS).find(u => u.agendadorKey === key);
 }
 
@@ -165,7 +172,7 @@ export function getVendedorDisplayName(key: 'HERBERT' | 'CLED' | 'PEDRO_H' | 'PE
 }
 
 // Get display name for agendador key
-export function getAgendadorDisplayName(key: 'FELIPE' | 'HERBERT' | 'ALAN' | 'RAUL' | 'CLERISTON' | 'XAVIER' | 'JOAO_VITOR'): string {
+export function getAgendadorDisplayName(key: 'FELIPE' | 'HERBERT' | 'ALAN' | 'RAUL' | 'CLERISTON' | 'XAVIER' | 'JOAO_VITOR' | 'THIAGO_HENRIQUE'): string {
   const user = getUserByAgendadorKey(key);
   return user?.name || key;
 }

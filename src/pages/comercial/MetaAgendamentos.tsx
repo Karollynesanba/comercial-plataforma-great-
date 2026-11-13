@@ -24,6 +24,7 @@ RAUL: 'Raul',
 CLERISTON: 'Cleriston',
 XAVIER: 'Xavier',
 JOAO_VITOR: 'João Vitor',
+THIAGO_HENRIQUE: 'Thiago Henrique',
 };
 
 function normalizeLeadKey(lead: any) {

@@ -41,7 +41,7 @@ export type TemSocio = CommercialYesNoMaybe;
 export type TemMkt = CommercialYesNoMaybe;
 export type TemSecretaria = CommercialYesNoMaybe;
 export type SalaoOuClinica = string;
-export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'ALAN' | 'RAUL' | 'CLED' | 'CAETANO' | 'XAVIER' | 'JOAO_VITOR' | 'CLERISTON';
+export type Agendador = 'PEDRO' | 'PEDRO_H' | 'PEDRO_JUAN' | 'HEBERT' | 'ALAN' | 'RAUL' | 'CLED' | 'CAETANO' | 'XAVIER' | 'JOAO_VITOR' | 'CLERISTON' | 'THIAGO_HENRIQUE';
 export type PodeInvestir = 'SIM' | 'NAO';
 export type Funil = string;
 
@@ -84,6 +84,7 @@ export const AGENDADOR_OPTIONS = [
   { value: 'CLERISTON' as Agendador, label: 'Cleriston' },
   { value: 'XAVIER' as Agendador, label: 'Xavier' },
   { value: 'JOAO_VITOR' as Agendador, label: 'João Vitor' },
+  { value: 'THIAGO_HENRIQUE' as Agendador, label: 'Thiago Henrique' },
   { value: 'CAETANO' as Agendador, label: 'Bruno' },
 ];
 
@@ -94,6 +95,7 @@ export const OFFICIAL_SDR_OPTIONS = [
   { value: 'CLERISTON' as Agendador, label: 'Cleriston' },
   { value: 'XAVIER' as Agendador, label: 'Xavier' },
   { value: 'JOAO_VITOR' as Agendador, label: 'João Vitor' },
+  { value: 'THIAGO_HENRIQUE' as Agendador, label: 'Thiago Henrique' },
 ];
 
 export const OFFICIAL_SDR_VALUES = OFFICIAL_SDR_OPTIONS.map((option) => option.value);
