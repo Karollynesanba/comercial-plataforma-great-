@@ -454,13 +454,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-export function useAgendamentoData() {
+export function useAgendamentoData(enabled = true) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const commercial = useCommercialSafe();
 
   const { data: leads = [], isLoading, error } = useQuery({
     queryKey: ['agendamento-leads'],
+    enabled,
     queryFn: async () => {
       if (!isSupabaseConfigured) {
         return (readCommercialLocalData().agendamentoLeads || []).map((lead: any) =>

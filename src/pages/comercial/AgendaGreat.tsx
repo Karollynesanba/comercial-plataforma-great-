@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
+import { AGENDA_GREAT_START_DATE, AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 
@@ -27,7 +27,7 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
 };
 
 export default function AgendaGreat() {
-  const { events, error } = useAgendaData();
+  const { events, error, isRefetchError, isFetching, refetch } = useAgendaData(AGENDA_GREAT_START_DATE);
 
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -280,8 +280,15 @@ export default function AgendaGreat() {
       </div>
 
       {error && (
-        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          Não foi possível atualizar a agenda. Os últimos eventos carregados foram mantidos. Tente novamente em instantes.
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          <p role="alert">
+            {isRefetchError
+              ? 'Não foi possível atualizar a agenda. A tela mostra o resultado da última consulta bem-sucedida.'
+              : 'Não foi possível carregar a agenda. A disponibilidade dos eventos ainda não pôde ser verificada.'}
+          </p>
+          <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
+            {isFetching ? 'Carregando…' : 'Tentar novamente'}
+          </Button>
         </div>
       )}
       {events.length > 0 && filteredEvents.length === 0 && (

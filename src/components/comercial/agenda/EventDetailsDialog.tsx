@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
+import { AGENDA_GREAT_START_DATE, AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
 import { useAgendamentoData, FATURAMENTO_OPTIONS, SALAO_OU_CLINICA_OPTIONS, STATUS_OPTIONS, TEM_MKT_OPTIONS, TEM_SECRETARIA_OPTIONS, TEM_SOCIO_OPTIONS } from '@/hooks/useAgendamentoData';
 import { useCommercialSafe, AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 import { BadgeInfo, Bell, CalendarDays, Copy, Edit3, Loader2, Phone, StickyNote, Target, Trash2, User2, ChevronDown } from 'lucide-react';
@@ -148,8 +148,8 @@ interface EventDetailsDialogProps {
 }
 
 export function EventDetailsDialog({ open, onOpenChange, event, onDuplicate }: EventDetailsDialogProps) {
-  const { updateEvent, deleteEvent } = useAgendaData();
-  const { leads, updateLead } = useAgendamentoData();
+  const { updateEvent, deleteEvent } = useAgendaData(AGENDA_GREAT_START_DATE);
+  const { leads, updateLead } = useAgendamentoData(open);
   const commercial = useCommercialSafe();
   const pipelineClients = commercial?.pipelineClients || [];
   const updatePipelineClient = commercial?.updatePipelineClient;

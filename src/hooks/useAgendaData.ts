@@ -12,6 +12,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 const AGENDA_TABLE = 'agenda_events';
 const AGENDA_QUERY_KEY = ['agenda-events'];
 const AGENDA_SYNC_CHANNEL = 'agenda-events-sync';
+export const AGENDA_GREAT_START_DATE = '2026-11-25';
 
 const CORE_EVENT_KEYS = new Set([
   'id',
@@ -305,7 +306,7 @@ function samePersonFilter(name: string, phone: string) {
   return { formattedPhone, digits, name };
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => {
@@ -444,16 +445,13 @@ async function syncRelatedRecords(event: AgendaEvent) {
   }
 }
 
-async function fetchAgendaTable(tableName: string) {
-  const supabaseAny = supabase as any;
-  const { data } = await fetchAllRows<AgendaRow>((from, to) =>
-    withTimeout(
-      supabaseAny.from(tableName).select('*').order('id').range(from, to),
-      8000,
-      tableName
-    )
-  );
-  return data.map((row) => enrichEvent(normalizeAgendaRecord(row, tableName)));
+async function fetchAgendaTable(startDate?: string) {
+  const { data } = await fetchAllRows<AgendaRow>((from, to) => {
+    const query = supabase.from(AGENDA_TABLE).select('*');
+    if (startDate) query.gte('event_date', startDate);
+    return withTimeout(query.order('id').range(from, to), 8000, AGENDA_TABLE);
+  });
+  return data.map((row) => enrichEvent(normalizeAgendaRecord(row, AGENDA_TABLE)));
 }
 
 async function attachPersistedPipelineFormulario(events: AgendaEvent[]) {
@@ -501,7 +499,7 @@ function attachPipelineFormulario(events: AgendaEvent[], pipelineClients: Array<
   }));
 }
 
-export function useAgendaData() {
+export function useAgendaData(startDate?: string) {
   const queryClient = useQueryClient();
   const commercial = useCommercialSafe();
   const agendaChannelNameRef = useRef(`agenda-events-sync-${Math.random().toString(36).slice(2)}`);
@@ -517,14 +515,14 @@ export function useAgendaData() {
     : localPipelineClients;
   const fallbackEvents = commercialFallbackEvents.length > 0 ? commercialFallbackEvents : localFallbackEvents;
 
-  const { data: queriedEvents = [], isLoading, error } = useQuery({
-    queryKey: AGENDA_QUERY_KEY,
+  const { data: queriedEvents = [], isLoading, error, isRefetchError, isFetching, refetch } = useQuery({
+    queryKey: startDate ? [...AGENDA_QUERY_KEY, startDate] : AGENDA_QUERY_KEY,
     queryFn: async () => {
       if (!isSupabaseConfigured) {
-        return fallbackEvents;
+        return startDate ? fallbackEvents.filter((event) => event.event_date >= startDate) : fallbackEvents;
       }
 
-      const agendaEvents = await fetchAgendaTable(AGENDA_TABLE);
+      const agendaEvents = await fetchAgendaTable(startDate);
       return sortAgendaEvents(await attachPersistedPipelineFormulario(agendaEvents));
     },
   });
@@ -730,6 +728,9 @@ export function useAgendaData() {
     events,
     isLoading,
     error,
+    isRefetchError,
+    isFetching,
+    refetch,
     createEvent,
     updateEvent,
     deleteEvent,

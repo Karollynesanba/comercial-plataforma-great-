@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAgendaData, AgendaEvent, EVENT_COLORS } from '@/hooks/useAgendaData';
+import { AGENDA_GREAT_START_DATE, useAgendaData, AgendaEvent, EVENT_COLORS } from '@/hooks/useAgendaData';
 import { Loader2, UserPlus, Users, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useCommercialSafe } from '@/contexts/CommercialContext';
@@ -37,9 +37,9 @@ interface LeadOption {
 }
 
 export function AddEventDialog({ open, onOpenChange, selectedDate, selectedTime, editingEvent, duplicateFrom }: AddEventDialogProps) {
-  const { createEvent, updateEvent, deleteEvent } = useAgendaData();
+  const { createEvent, updateEvent, deleteEvent } = useAgendaData(AGENDA_GREAT_START_DATE);
   const commercial = useCommercialSafe();
-  const { leads: agendamentoLeads } = useAgendamentoData();
+  const { leads: agendamentoLeads } = useAgendamentoData(open);
   const defaultColor = EVENT_COLORS[0]?.value || '#3B82F6';
   
   const [leadSearchOpen, setLeadSearchOpen] = useState(false);
