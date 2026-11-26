@@ -188,6 +188,7 @@ describe('Formulário na Agenda', () => {
       databaseFormulario: { [seed.pipelineClients[0].id]: 'S1' },
     });
     cy.wait('@formularioFromDb');
+    cy.contains('button', /^Dia$/).click();
     cy.window().then((win) => {
       const local = JSON.parse(win.localStorage.getItem('great_commercial_local_data_v1') || '{}');
       expect(local.pipelineClients.find((client: any) => client.id === seed.pipelineClients[0].id)?.formulario).to.be.undefined;
@@ -208,6 +209,7 @@ describe('Formulário na Agenda', () => {
       databaseFormulario: { [seed.pipelineClients[0].id]: 'S1' },
     });
     cy.wait('@formularioFromDb');
+    cy.contains('button', /^Dia$/).click();
     cy.contains('p', 'Alan S1', { timeout: 10000 }).should('be.visible');
   });
 
@@ -218,6 +220,7 @@ describe('Formulário na Agenda', () => {
       databaseFormulario: { [seed.pipelineClients[0].id]: 'S2' },
     });
     cy.wait('@formularioFromDb');
+    cy.contains('button', /^Dia$/).click();
     cy.contains('p', 'Alan S2', { timeout: 10000 }).should('be.visible').click();
     cy.contains('p', 'Formulário').parent().contains(/^S2$/).should('be.visible');
   });
@@ -225,6 +228,7 @@ describe('Formulário na Agenda', () => {
   it('mantém apenas o responsável em registros antigos', () => {
     const seed = agendaSeed();
     visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
+    cy.contains('button', /^Dia$/).click();
 
     cy.contains('p', /^Alan$/, { timeout: 10000 }).should('be.visible').click();
     cy.contains('p', 'Quem agendou').parent().contains('Alan').should('be.visible');
@@ -235,6 +239,7 @@ describe('Formulário na Agenda', () => {
   it('mostra o valor atual do lead após mudar de S1 para S2', () => {
     const seed = agendaSeed('S2', 'S1');
     visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
+    cy.contains('button', /^Dia$/).click();
 
     cy.contains('p', 'Alan S2', { timeout: 10000 }).should('be.visible');
     cy.contains('p', 'Alan S1').should('not.exist');
@@ -245,6 +250,7 @@ describe('Formulário na Agenda', () => {
     seed.pipelineClients[0].agendadoPor = 'CAETANO';
     seed.agendaEvents[0].scheduled_by = 'CAETANO';
     visitCommercial(cy, '/comercial/agenda-great', { localData: seed });
+    cy.contains('button', /^Dia$/).click();
 
     cy.contains('p', 'Bruno S1', { timeout: 10000 })
       .should('be.visible')

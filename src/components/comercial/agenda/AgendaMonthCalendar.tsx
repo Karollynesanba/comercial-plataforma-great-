@@ -95,13 +95,14 @@ export function AgendaMonthCalendar({
   }, [selectedDay, eventsByDay]);
 
   return (
-    <div className="flex h-[calc(100vh-200px)] flex-col overflow-hidden rounded-[32px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-white/60">
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200/70 px-6 py-4">
-        <div className="flex items-center gap-4">
+    <div className="flex flex-col overflow-hidden rounded-[32px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ring-1 ring-white/60">
+      <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-6 py-4">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon"
+              aria-label="Mês anterior"
               className="h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
               onClick={goToPreviousMonth}
             >
@@ -118,6 +119,7 @@ export function AgendaMonthCalendar({
             <Button
               variant="outline"
               size="icon"
+              aria-label="Próximo mês"
               className="h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
               onClick={goToNextMonth}
             >
@@ -137,17 +139,14 @@ export function AgendaMonthCalendar({
         </Button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-1 flex-col p-5">
-          <div className="mb-3 grid grid-cols-7 gap-2">
+      <div className="flex flex-col lg:flex-row">
+        <div className="min-w-0 flex-1 overflow-x-auto p-5">
+          <div className="grid min-w-[770px] grid-cols-7 gap-2">
             {WEEKDAYS.map((day) => (
               <div key={day} className="py-2 text-center text-sm font-semibold tracking-wide text-slate-500">
                 {day}
               </div>
             ))}
-          </div>
-
-          <div className="grid flex-1 grid-cols-7 gap-2">
             {calendarDays.map((day) => {
               const dateKey = format(day, 'yyyy-MM-dd');
               const dayEvents = eventsByDay.get(dateKey) || [];
@@ -183,24 +182,22 @@ export function AgendaMonthCalendar({
                     )}
                   </div>
 
-                  <div className="mt-2 space-y-1 overflow-hidden">
-                    {dayEvents.slice(0, 3).map((event) => (
+                  <div className="mt-2 space-y-1">
+                    {dayEvents.map((event) => (
                       <EventCardTooltip key={event.id} event={event}>
-                        <div
+                        <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             onEventClick(event);
                           }}
-                          className="truncate rounded-lg px-2 py-1 text-[10px] font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                          className="block w-full break-words rounded-lg px-2 py-1 text-left text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                           style={{ backgroundColor: event.color || '#3b82f6' }}
                         >
                           {resolveAgendaTimeKey(event).slice(0, 5)} {event.title}
-                        </div>
+                        </button>
                       </EventCardTooltip>
                     ))}
-                    {dayEvents.length > 3 && (
-                      <div className="px-2 text-[10px] font-medium text-slate-500">+{dayEvents.length - 3} mais</div>
-                    )}
                   </div>
                 </div>
               );
@@ -208,7 +205,10 @@ export function AgendaMonthCalendar({
           </div>
         </div>
 
-        <div className="flex w-80 flex-col border-l border-slate-200/70 bg-slate-50/70">
+        <div className={cn(
+          'flex max-h-[75vh] flex-col border-slate-200/70 bg-slate-50/70 lg:w-80 lg:border-l',
+          !selectedDay && 'hidden'
+        )}>
           <div className="border-b border-slate-200/70 p-5">
             <h3 className="text-base font-bold text-slate-950">
               {selectedDay ? format(selectedDay, "EEEE, d 'de' MMMM", { locale: ptBR }) : 'Selecione um dia'}

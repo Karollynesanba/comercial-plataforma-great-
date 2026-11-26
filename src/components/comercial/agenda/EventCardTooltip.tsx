@@ -44,18 +44,18 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
   
   // Get pipeline clients to access custom faturamento values
   const { pipelineClients } = useCommercialSafe();
-  const { leads: agendamentoLeads } = useAgendamentoData();
+  const { leads: agendamentoLeads } = useAgendamentoData(showTooltip);
 
   const agendamentoLead = useMemo(() => {
-    if (!event.client_phone) return null;
+    if (!showTooltip || !event.client_phone) return null;
     const candidates = getPhoneMatchCandidates(event.client_phone);
     if (candidates.length === 0) return null;
     return agendamentoLeads.find((lead) => candidates.includes(lead.telefone)) || null;
-  }, [agendamentoLeads, event.client_phone]);
+  }, [agendamentoLeads, event.client_phone, showTooltip]);
   
   // Find matching pipeline client to get custom faturamento
   const pipelineClient = useMemo(() => {
-    if (!event.client_phone || !pipelineClients) return null;
+    if (!showTooltip || !event.client_phone || !pipelineClients) return null;
     
     const normalizePhone = (phone: string) => phone.replace(/\D/g, '').replace(/^55/, '');
     const eventPhone = normalizePhone(event.client_phone);
@@ -65,7 +65,7 @@ export function EventCardTooltip({ event, children, className }: EventCardToolti
       const clientPhone = normalizePhone(client.telefone);
       return clientPhone === eventPhone || eventPhone.endsWith(clientPhone) || clientPhone.endsWith(eventPhone);
     }) || null;
-  }, [event.client_phone, pipelineClients]);
+  }, [event.client_phone, pipelineClients, showTooltip]);
 
   // Recalculate position when tooltip is shown or data changes
   useEffect(() => {

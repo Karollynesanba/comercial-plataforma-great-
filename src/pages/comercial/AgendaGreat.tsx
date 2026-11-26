@@ -29,7 +29,7 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
 export default function AgendaGreat() {
   const { events, error, isRefetchError, isFetching, refetch } = useAgendaData(AGENDA_GREAT_START_DATE);
 
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
