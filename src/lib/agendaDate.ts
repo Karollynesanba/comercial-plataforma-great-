@@ -1,4 +1,11 @@
-import { format } from 'date-fns';
+import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns';
+
+export function getAgendaMonthCalendarRange(date: Date) {
+  return {
+    start: startOfWeek(startOfMonth(date), { weekStartsOn: 1 }),
+    end: endOfWeek(endOfMonth(date), { weekStartsOn: 1 }),
+  };
+}
 
 export function normalizeAgendaDateKey(value?: string | null) {
   if (!value) return '';

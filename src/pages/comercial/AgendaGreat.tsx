@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, CalendarDays, CalendarRange, ExternalLink, Search, Users, X, Filter, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
 import { AgendaDayTimeline } from '@/components/comercial/agenda/AgendaDayTimeline';
 import { AgendaMonthCalendar } from '@/components/comercial/agenda/AgendaMonthCalendar';
 import { AgendaWeekTimeline } from '@/components/comercial/agenda/AgendaWeekTimeline';
@@ -9,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { AGENDA_GREAT_START_DATE, AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
+import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
+import { getAgendaMonthCalendarRange } from '@/lib/agendaDate';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
 import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
 
@@ -27,12 +29,13 @@ const COLOR_FILTER_LABELS: Record<string, string> = {
 };
 
 export default function AgendaGreat() {
-  const { events, error, isRefetchError, isFetching, refetch } = useAgendaData(AGENDA_GREAT_START_DATE);
-
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const { start, end } = getAgendaMonthCalendarRange(selectedDate);
+  const agendaDateRange = { startDate: format(start, 'yyyy-MM-dd'), endDate: format(end, 'yyyy-MM-dd') };
+  const { events, isLoading, error, isRefetchError, isFetching, refetch } = useAgendaData(agendaDateRange);
   const [selectedTime, setSelectedTime] = useState<string | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all');
@@ -291,6 +294,9 @@ export default function AgendaGreat() {
           </Button>
         </div>
       )}
+      {isLoading && (
+        <p role="status" className="px-4 text-sm text-slate-600">Carregando agendamentos…</p>
+      )}
       {events.length > 0 && filteredEvents.length === 0 && (
         <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -353,6 +359,7 @@ export default function AgendaGreat() {
       )}
 
       <AddEventDialog
+        agendaDateRange={agendaDateRange}
         open={addDialogOpen}
         onOpenChange={(open) => {
           setAddDialogOpen(open);
@@ -364,6 +371,7 @@ export default function AgendaGreat() {
       />
 
       <EventDetailsDialog
+        agendaDateRange={agendaDateRange}
         open={detailsDialogOpen}
         onOpenChange={setDetailsDialogOpen}
         event={selectedEvent}

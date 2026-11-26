@@ -3,33 +3,35 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
-function setup(respond, useAgendaGreatStartDate = false) {
+function setup(respond, dateRange) {
  const calls=[]; let query;
  const row={id:'medic',client_name:'Medic Endos',title:'Reuniao com Medic Endos',client_phone:'5521975727924',event_date:'2026-09-21',event_time:'13:30:00',color:'#3B82F6',team_id:null};
- const db={from(table){const call={table,action:'select'};calls.push(call);const b={};for(const k of ['select','order','eq','gte','range','insert','update','delete','single','maybeSingle'])b[k]=(...args)=>{if(['insert','update','delete'].includes(k)){call.action=k;call.payload=args[0];}if(k==='range')call.from=args[0];if(k==='gte')call.gte=args;return b;};b.then=(ok,bad)=>Promise.resolve(respond?.(call,row) ?? {data:call.from!==undefined?(call.from===0?[row]:[]):row,error:null}).then(ok,bad);return b;}};
+ const db={from(table){const call={table,action:'select'};calls.push(call);const b={};for(const k of ['select','order','eq','gte','lte','range','insert','update','delete','single','maybeSingle'])b[k]=(...args)=>{if(['insert','update','delete'].includes(k)){call.action=k;call.payload=args[0];}if(k==='range')call.from=args[0];if(k==='gte'||k==='lte')call[k]=args;return b;};b.then=(ok,bad)=>Promise.resolve(respond?.(call,row) ?? {data:call.from!==undefined?(call.from===0?[row]:[]):row,error:null}).then(ok,bad);return b;}};
  const mods={react:{useEffect(){},useRef:v=>({current:v})},'@tanstack/react-query':{useQuery:c=>(query=c,{data:[row]}),useMutation:c=>c,useQueryClient:()=>({invalidateQueries(){}})},sonner:{toast:{}},'@/contexts/CommercialContext':{useCommercialSafe:()=>null},'@/integrations/supabase/client':{supabase:db,isSupabaseConfigured:true},'@/lib/commercialLocalStore':{readCommercialLocalData:()=>({agendaEvents:[]})},'@/lib/phoneUtils':{formatPhoneForWhatsApp:v=>v},'@/lib/agendaTitle':{},'@/lib/agendaDate':{normalizeAgendaDateKey:v=>v,normalizeAgendaTimeKey:v=>v,normalizeAgendaColor:v=>v},'@/lib/fetchAllRows':{async fetchAllRows(fetch){const data=[];while(true){const r=await fetch(data.length,data.length+999);if(r.error)throw r.error;if(!r.data?.length)return {data};data.push(...r.data);}}}};
  const output=ts.transpileModule(fs.readFileSync('src/hooks/useAgendaData.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
  const exports={};vm.runInNewContext(output,{exports,require:n=>{if(!mods[n])throw Error(n);return mods[n];},console,crypto:require('node:crypto').webcrypto,setTimeout:(cb,ms)=>{const t=setTimeout(cb,ms);t.unref();return t;}});
- const hook=exports.useAgendaData(useAgendaGreatStartDate ? exports.AGENDA_GREAT_START_DATE : undefined);return {calls,query,hook};
+ const hook=exports.useAgendaData(dateRange);return {calls,query,hook};
 }
-test('applies the inclusive Agenda Great start date to each page without changing the historical query', async () => {
- const startDate = '2026-11-01';
+test('applies both dates of an earlier month to each agenda page and keeps calendar months separate', async () => {
+ const dateRange = { startDate: '2026-08-31', endDate: '2026-10-04' };
+ const november = setup(undefined, { startDate: '2026-10-26', endDate: '2026-12-06' });
  const agenda = setup((call, row) => ({
-  data: call.from === 0 ? [{ ...row, event_date: startDate }] : [],
+  data: call.from === 0 ? [row] : [],
   error: null,
- }), true);
+ }), dateRange);
  const history = setup();
 
  const [event] = await agenda.query.queryFn();
  await history.query.queryFn();
 
- assert.equal(event.event_date, startDate);
+ assert.equal(event.event_date, '2026-09-21');
  assert.notDeepEqual(agenda.query.queryKey, history.query.queryKey);
- assert.deepEqual(agenda.calls.map(call => call.gte), [
-  ['event_date', startDate],
-  ['event_date', startDate],
+ assert.notDeepEqual(agenda.query.queryKey, november.query.queryKey);
+ assert.deepEqual(agenda.calls.map(call => [call.gte, call.lte]), [
+  [['event_date', dateRange.startDate], ['event_date', dateRange.endDate]],
+  [['event_date', dateRange.startDate], ['event_date', dateRange.endDate]],
  ]);
- assert.ok(history.calls.every(call => call.gte === undefined));
+ assert.ok(history.calls.every(call => call.gte === undefined && call.lte === undefined));
 });
 test('loads Medic Endos from agenda_events with null team and all pages',async()=>{const h=setup();const rows=await h.query.queryFn();assert.equal(rows[0].client_name,'Medic Endos');assert.equal(rows[0].event_date,'2026-09-21');assert.equal(rows[0].team_id,null);assert.deepEqual(h.calls.map(c=>c.table),['agenda_events','agenda_events']);});
 test('failed agenda read rejects instead of replacing events with another table',async()=>{const failure=Error('offline');const h=setup(()=>({data:null,error:failure}));await assert.rejects(h.query.queryFn(),failure);assert.equal(h.calls.length,1);});

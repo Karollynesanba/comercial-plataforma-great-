@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   addMonths,
   eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
   format,
   isSameDay,
   isSameMonth,
   isToday,
-  startOfMonth,
-  startOfWeek,
+  parseISO,
   subMonths,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,7 +17,7 @@ import { AgendaEvent } from '@/hooks/useAgendaData';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EventCardTooltip } from './EventCardTooltip';
-import { resolveAgendaDateKey, resolveAgendaTimeKey } from '@/lib/agendaDate';
+import { getAgendaMonthCalendarRange, resolveAgendaDateKey, resolveAgendaTimeKey } from '@/lib/agendaDate';
 import { cn } from '@/lib/utils';
 import { AGENDADOR_OPTIONS } from '@/contexts/CommercialContext';
 
@@ -52,11 +50,7 @@ export function AgendaMonthCalendar({
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+    return eachDayOfInterval(getAgendaMonthCalendarRange(currentDate));
   }, [currentDate]);
 
   const eventsByDay = useMemo(() => {
@@ -75,8 +69,12 @@ export function AgendaMonthCalendar({
     return map;
   }, [events]);
 
-  const goToPreviousMonth = () => onCurrentDateChange(subMonths(currentDate, 1));
-  const goToNextMonth = () => onCurrentDateChange(addMonths(currentDate, 1));
+  const changeMonth = (date: Date) => {
+    setSelectedDay(null);
+    onCurrentDateChange(date);
+  };
+  const goToPreviousMonth = () => changeMonth(subMonths(currentDate, 1));
+  const goToNextMonth = () => changeMonth(addMonths(currentDate, 1));
   const goToToday = () => {
     const today = new Date();
     onCurrentDateChange(today);
@@ -129,9 +127,19 @@ export function AgendaMonthCalendar({
           <h2 className="text-xl font-extrabold capitalize tracking-tight text-slate-950">
             {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
           </h2>
+          <Input
+            type="month"
+            aria-label="Ir para mês e ano"
+            className="h-10 w-auto rounded-xl border-slate-200 bg-white"
+            value={format(currentDate, 'yyyy-MM')}
+            onChange={(event) => {
+              const month = parseISO(`${event.currentTarget.value}-01`);
+              if (!Number.isNaN(month.getTime())) changeMonth(month);
+            }}
+          />
         </div>
         <Button
-          onClick={() => onAddEvent(selectedDay || new Date())}
+          onClick={() => onAddEvent(selectedDay || currentDate)}
           className="rounded-xl bg-red-600 px-4 py-2.5 font-semibold shadow-[0_8px_24px_rgba(220,38,38,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-[0_12px_28px_rgba(220,38,38,0.28)]"
         >
           <Plus className="mr-2 h-4 w-4" />

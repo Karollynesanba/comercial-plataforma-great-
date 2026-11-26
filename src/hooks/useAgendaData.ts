@@ -12,7 +12,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 const AGENDA_TABLE = 'agenda_events';
 const AGENDA_QUERY_KEY = ['agenda-events'];
 const AGENDA_SYNC_CHANNEL = 'agenda-events-sync';
-export const AGENDA_GREAT_START_DATE = '2026-11-01';
+export type AgendaDateRange = { startDate: string; endDate: string };
 
 const CORE_EVENT_KEYS = new Set([
   'id',
@@ -445,10 +445,12 @@ async function syncRelatedRecords(event: AgendaEvent) {
   }
 }
 
-async function fetchAgendaTable(startDate?: string) {
+async function fetchAgendaTable(dateRange?: AgendaDateRange) {
   const { data } = await fetchAllRows<AgendaRow>((from, to) => {
     const query = supabase.from(AGENDA_TABLE).select('*');
-    if (startDate) query.gte('event_date', startDate);
+    if (dateRange) {
+      query.gte('event_date', dateRange.startDate).lte('event_date', dateRange.endDate);
+    }
     return withTimeout(query.order('id').range(from, to), 8000, AGENDA_TABLE);
   });
   return data.map((row) => enrichEvent(normalizeAgendaRecord(row, AGENDA_TABLE)));
@@ -499,7 +501,7 @@ function attachPipelineFormulario(events: AgendaEvent[], pipelineClients: Array<
   }));
 }
 
-export function useAgendaData(startDate?: string) {
+export function useAgendaData(dateRange?: AgendaDateRange) {
   const queryClient = useQueryClient();
   const commercial = useCommercialSafe();
   const agendaChannelNameRef = useRef(`agenda-events-sync-${Math.random().toString(36).slice(2)}`);
@@ -516,13 +518,17 @@ export function useAgendaData(startDate?: string) {
   const fallbackEvents = commercialFallbackEvents.length > 0 ? commercialFallbackEvents : localFallbackEvents;
 
   const { data: queriedEvents = [], isLoading, error, isRefetchError, isFetching, refetch } = useQuery({
-    queryKey: startDate ? [...AGENDA_QUERY_KEY, startDate] : AGENDA_QUERY_KEY,
+    queryKey: dateRange ? [...AGENDA_QUERY_KEY, dateRange.startDate, dateRange.endDate] : AGENDA_QUERY_KEY,
     queryFn: async () => {
       if (!isSupabaseConfigured) {
-        return startDate ? fallbackEvents.filter((event) => event.event_date >= startDate) : fallbackEvents;
+        return dateRange
+          ? fallbackEvents.filter((event) =>
+            event.event_date >= dateRange.startDate && event.event_date <= dateRange.endDate
+          )
+          : fallbackEvents;
       }
 
-      const agendaEvents = await fetchAgendaTable(startDate);
+      const agendaEvents = await fetchAgendaTable(dateRange);
       return sortAgendaEvents(await attachPersistedPipelineFormulario(agendaEvents));
     },
   });
