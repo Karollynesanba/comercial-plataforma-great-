@@ -293,11 +293,10 @@ describe('Agendamentos', () => {
 
     cy.contains('button', 'Tropa de Elite').should('be.visible');
 
-    cy.contains('button', 'Call Feita').click();
-    cy.window().then((win) => {
-      const raw = win.localStorage.getItem('great_agenda_color_filters');
-      expect(raw).to.include('#66FF00');
-    });
+    cy.contains('button', 'Call Feita').click().should('have.attr', 'aria-pressed', 'true');
+    cy.contains('button', 'Limpar filtros').click();
+    cy.contains('button', 'Todas as Equipes').should('be.visible');
+    cy.contains('button', 'Call Feita').should('have.attr', 'aria-pressed', 'false');
   });
 
   it('mostra erro ao tentar criar evento manualmente', () => {

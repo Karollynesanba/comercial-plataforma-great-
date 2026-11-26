@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Calendar, CalendarDays, CalendarRange, ExternalLink, Search, Users, X, Filter, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { AgendaDayTimeline } from '@/components/comercial/agenda/AgendaDayTimeline';
@@ -13,9 +13,6 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AgendaEvent, EVENT_COLORS, useAgendaData } from '@/hooks/useAgendaData';
 import { getAgendaMonthCalendarRange } from '@/lib/agendaDate';
 import { AGENDA_TEAM_IDS } from '@/lib/teamMapping';
-import { safeGetItem, safeSetItem } from '@/lib/safeStorage';
-
-const AGENDA_COLOR_FILTER_STORAGE_KEY = 'great_agenda_color_filters';
 
 const COLOR_FILTER_LABELS: Record<string, string> = {
   '#3B82F6': 'Reunião Marcada',
@@ -42,23 +39,12 @@ export default function AgendaGreat() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFormularios, setSelectedFormularios] = useState<string[]>([]);
   const [duplicatingEvent, setDuplicatingEvent] = useState<AgendaEvent | null>(null);
-  const [selectedColors, setSelectedColors] = useState<string[]>(() => {
-    try {
-      const stored = safeGetItem(AGENDA_COLOR_FILTER_STORAGE_KEY);
-      return stored ? (JSON.parse(stored) as string[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
 
   const teams = [
     { id: AGENDA_TEAM_IDS.TROPA_DE_ELITE, name: 'Tropa de Elite' },
     { id: AGENDA_TEAM_IDS.EQUIPE_7, name: 'Equipe 7' },
   ];
-
-  useEffect(() => {
-    safeSetItem(AGENDA_COLOR_FILTER_STORAGE_KEY, JSON.stringify(selectedColors));
-  }, [selectedColors]);
 
   const filteredEvents = useMemo(() => {
     let result = events;
@@ -90,6 +76,17 @@ export default function AgendaGreat() {
 
   const hasActiveFilters =
     selectedTeamId !== 'all' || Boolean(searchQuery.trim()) || selectedColors.length > 0 || selectedFormularios.length > 0;
+
+  const monthPrefix = format(selectedDate, 'yyyy-MM-');
+  const countMonthEvents = (items: AgendaEvent[]) =>
+    items.filter((event) => event.event_date.startsWith(monthPrefix)).length;
+
+  const clearFilters = () => {
+    setSelectedTeamId('all');
+    setSearchQuery('');
+    setSelectedColors([]);
+    setSelectedFormularios([]);
+  };
 
   const toggleColorFilter = (colorValue: string) => {
     setSelectedColors((current) =>
@@ -237,15 +234,15 @@ export default function AgendaGreat() {
               <Filter className="h-4 w-4 text-slate-500" />
               <span className="text-sm font-semibold text-slate-700">Cor</span>
             </div>
-            {selectedColors.length > 0 && (
+            {hasActiveFilters && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 gap-2 rounded-full px-3 text-xs text-slate-500 hover:bg-white hover:text-slate-950"
-                onClick={() => setSelectedColors([])}
+                onClick={clearFilters}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Limpar filtro
+                Limpar filtros
               </Button>
             )}
           </div>
@@ -260,6 +257,7 @@ export default function AgendaGreat() {
                   key={color.value}
                   type="button"
                   variant="outline"
+                  aria-pressed={isActive}
                   onClick={() => toggleColorFilter(color.value)}
                   className={[
                     'h-9 rounded-full border px-4 text-xs font-medium shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
@@ -299,29 +297,15 @@ export default function AgendaGreat() {
       )}
       {events.length > 0 && filteredEvents.length === 0 && (
         <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold">Nenhum evento carregado corresponde aos filtros atuais.</p>
-              <p className="text-amber-800">
-                Foram carregados {events.length} evento{events.length !== 1 ? 's' : ''}, porém nenhum corresponde à filtragem atual.
-              </p>
-            </div>
-            {hasActiveFilters && (
-              <Button
-                variant="outline"
-                className="rounded-full border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-                onClick={() => {
-                  setSelectedTeamId('all');
-                  setSearchQuery('');
-                  setSelectedColors([]);
-                  setSelectedFormularios([]);
-                }}
-              >
-                Limpar filtros
-              </Button>
-            )}
-          </div>
+          <p className="font-semibold">Nenhum evento carregado corresponde aos filtros atuais.</p>
         </div>
+      )}
+      {viewMode === 'month' && !isLoading && !error && (
+        <p className="px-4 text-sm font-medium text-slate-700">
+          {hasActiveFilters
+            ? `Exibindo ${countMonthEvents(filteredEvents)} de ${countMonthEvents(events)} agendamentos no mês`
+            : `Agendamentos no mês: ${countMonthEvents(events)}`}
+        </p>
       )}
 
       {viewMode === 'day' && (
