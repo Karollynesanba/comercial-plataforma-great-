@@ -12,7 +12,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 const AGENDA_TABLE = 'agenda_events';
 const AGENDA_QUERY_KEY = ['agenda-events'];
 const AGENDA_SYNC_CHANNEL = 'agenda-events-sync';
-export const AGENDA_GREAT_START_DATE = '2026-11-25';
+export const AGENDA_GREAT_START_DATE = '2026-11-01';
 
 const CORE_EVENT_KEYS = new Set([
   'id',
